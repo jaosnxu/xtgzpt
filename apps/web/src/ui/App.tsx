@@ -47,6 +47,45 @@ const menuIcon = {
   settings: Settings
 } as const;
 
+const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
+  dashboard: {
+    stage: "DEV-002 已完成",
+    summary: "当前阶段只验证登录、角色、组织范围、菜单权限和数据范围。"
+  },
+  workbench: {
+    stage: "DEV-005 待开发",
+    summary: "我的工作台将在项目、任务、审批真实数据接入后形成待办。"
+  },
+  projects: {
+    stage: "DEV-005 待开发",
+    summary: "项目创建、成员、任务拆解和归档流程尚未进入代码开发。"
+  },
+  tasks: {
+    stage: "DEV-005 待开发",
+    summary: "任务创建、提交完成、确认和取消流程尚未进入代码开发。"
+  },
+  chat: {
+    stage: "DEV-006 待开发",
+    summary: "聊天、AI 整理草稿和群组可见性尚未进入代码开发。"
+  },
+  knowledge: {
+    stage: "DEV-008 待开发",
+    summary: "知识库问答、发布审核和权限过滤尚未进入代码开发。"
+  },
+  contracts: {
+    stage: "DEV-009 待开发",
+    summary: "合同上传、AI 审查、人工确认、二次审查和执行跟踪尚未进入代码开发。"
+  },
+  approvals: {
+    stage: "DEV-010 待开发",
+    summary: "审批发起、当前节点审批人、同意、驳回、退回、转交和加签尚未进入代码开发。"
+  },
+  settings: {
+    stage: "DEV-002 已完成",
+    summary: "当前阶段已验证管理员可见配置入口，且业务数据范围不默认放大。"
+  }
+};
+
 const priorityItems = [
   { title: "合同待二次审查", owner: "法务 / 负责人", status: "待处理", level: "P0" },
   { title: "任务完成确认", owner: "项目经理", status: "审批中", level: "P1" },
@@ -63,6 +102,7 @@ const auditEvents = [
 
 export function App() {
   const [session, setSession] = useState<SessionState | null>(null);
+  const [activeModule, setActiveModule] = useState<ModuleKey>("dashboard");
   const activeUser = session?.user ?? null;
 
   async function handleLogin(username: string, password: string) {
@@ -89,6 +129,9 @@ export function App() {
   }
 
   const visibleModules = platformModules.filter((item) => session.visibleModules.includes(item.key));
+  const activeModuleAllowed = visibleModules.some((item) => item.key === activeModule);
+  const currentModule = activeModuleAllowed ? activeModule : "dashboard";
+  const currentModuleName = platformModules.find((item) => item.key === currentModule)?.name ?? "首页";
   const dataOrganizations = session.dataOrganizations;
   const canOpenSettings = canManageOrganizations(activeUser.role) || canManageRoles(activeUser.role);
 
@@ -107,7 +150,11 @@ export function App() {
           {visibleModules.map((item) => {
             const Icon = menuIcon[item.key];
             return (
-              <button className={item.key === "dashboard" ? "nav-item active" : "nav-item"} key={item.key}>
+              <button
+                className={item.key === currentModule ? "nav-item active" : "nav-item"}
+                key={item.key}
+                onClick={() => setActiveModule(item.key)}
+              >
                 <Icon size={18} />
                 <span>{item.name}</span>
               </button>
@@ -120,7 +167,7 @@ export function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">已进入 DEV-002：账号、角色、组织、权限</p>
-            <h1>首页工作台</h1>
+            <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
             <div className="account-chip">
@@ -140,108 +187,184 @@ export function App() {
           </div>
         </header>
 
-        <section className="metric-grid" aria-label="核心指标">
-          <MetricCard title="我的待办" value="18" helper="审批、任务、合同确认" />
-          <MetricCard title="进行中项目" value="12" helper="按成员权限裁剪" />
-          <MetricCard title="可见组织" value={String(dataOrganizations.length)} helper={rolePolicies[activeUser.role].dataScope} />
-          <MetricCard title="审计事件" value="246" helper="关键动作不可删除" />
-        </section>
-
-        <section className="content-grid">
-          <div className="panel work-panel">
-            <div className="panel-header">
-              <div>
-                <h2>当前处理队列</h2>
-                <p>按冻结原型的工作台结构进入开发，后续 DEV-002 接入真实权限。</p>
-              </div>
-              <button className="primary-button">
-                <ClipboardList size={17} />
-                新建审批
-              </button>
-            </div>
-            <div className="table" role="table" aria-label="处理队列">
-              <div className="table-row table-head" role="row">
-                <span>事项</span>
-                <span>当前处理人</span>
-                <span>状态</span>
-                <span>级别</span>
-              </div>
-              {priorityItems.map((item) => (
-                <div className="table-row" role="row" key={item.title}>
-                  <span>{item.title}</span>
-                  <span>{item.owner}</span>
-                  <span>{item.status}</span>
-                  <strong>{item.level}</strong>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <aside className="panel guard-panel">
-            <div className="panel-header compact">
-              <div>
-                <h2>权限边界</h2>
-                <p>系统管理员可配置系统，但不默认拥有全部业务数据。</p>
-              </div>
-              <ShieldCheck size={22} />
-            </div>
-            <ul className="guard-list">
-              <li>审批必须人工完成</li>
-              <li>配置入口仅管理员角色可见</li>
-              <li>业务数据按授权范围裁剪</li>
-              <li>审计记录只追加不删除</li>
-            </ul>
-          </aside>
-
-          <div className="panel">
-            <div className="panel-header compact">
-              <div>
-                <h2>组织与角色</h2>
-                <p>当前账号只能看到被授权的组织范围。</p>
-              </div>
-              <Users size={22} />
-            </div>
-            <div className="role-strip">
-              {dataOrganizations.map((organization) => (
-                <span key={organization.id}>{organization.name}</span>
-              ))}
-            </div>
-          </div>
-
-          <div className="panel">
-            <div className="panel-header compact">
-              <div>
-                <h2>最近审计</h2>
-                <p>所有关键动作必须可追溯。</p>
-              </div>
-            </div>
-            <ol className="audit-list">
-              {auditEvents.map((event) => (
-                <li key={event}>{event}</li>
-              ))}
-            </ol>
-          </div>
-
-          {canOpenSettings ? (
-            <div className="panel settings-panel">
-              <div className="panel-header compact">
-                <div>
-                  <h2>系统设置</h2>
-                  <p>组织、角色和菜单权限进入配置管理。</p>
-                </div>
-                <Settings size={22} />
-              </div>
-              <div className="settings-grid">
-                <SettingsItem title="组织管理" value={`${seedOrganizations.length} 个组织`} enabled={canManageOrganizations(activeUser.role)} />
-                <SettingsItem title="角色管理" value={`${Object.keys(rolePolicies).length} 个角色`} enabled={canManageRoles(activeUser.role)} />
-                <SettingsItem title="菜单权限" value={`${visibleModules.length} 个可见菜单`} enabled />
-                <SettingsItem title="数据范围" value={rolePolicies[activeUser.role].dataScope} enabled />
-              </div>
-            </div>
-          ) : null}
-        </section>
+        {currentModule === "dashboard" ? (
+          <DashboardView
+            activeUser={activeUser}
+            canOpenSettings={canOpenSettings}
+            dataOrganizations={dataOrganizations}
+            onOpenApprovals={() => setActiveModule("approvals")}
+            visibleModuleCount={visibleModules.length}
+          />
+        ) : currentModule === "settings" && canOpenSettings ? (
+          <SettingsView activeUser={activeUser} visibleModuleCount={visibleModules.length} />
+        ) : (
+          <ModuleStatusView moduleKey={currentModule} moduleName={currentModuleName} />
+        )}
       </main>
     </div>
+  );
+}
+
+function DashboardView({
+  activeUser,
+  canOpenSettings,
+  dataOrganizations,
+  onOpenApprovals,
+  visibleModuleCount
+}: {
+  activeUser: PublicUser;
+  canOpenSettings: boolean;
+  dataOrganizations: Organization[];
+  onOpenApprovals: () => void;
+  visibleModuleCount: number;
+}) {
+  return (
+    <>
+      <section className="metric-grid" aria-label="核心指标">
+        <MetricCard title="当前阶段" value="DEV-002" helper="认证、角色、组织、权限" />
+        <MetricCard title="可见菜单" value={String(visibleModuleCount)} helper="按角色裁剪" />
+        <MetricCard title="可见组织" value={String(dataOrganizations.length)} helper={rolePolicies[activeUser.role].dataScope} />
+        <MetricCard title="审计事件" value="待 DEV-004" helper="当前仅保留审计边界" />
+      </section>
+
+      <section className="content-grid">
+        <div className="panel work-panel">
+          <div className="panel-header">
+            <div>
+              <h2>阶段处理队列</h2>
+              <p>当前只展示阶段样例，不代表真实审批流程已完成。</p>
+            </div>
+            <button className="secondary-button" onClick={onOpenApprovals}>
+              <ClipboardList size={17} />
+              查看审批阶段
+            </button>
+          </div>
+          <div className="table" role="table" aria-label="处理队列">
+            <div className="table-row table-head" role="row">
+              <span>事项</span>
+              <span>当前处理人</span>
+              <span>状态</span>
+              <span>级别</span>
+            </div>
+            {priorityItems.map((item) => (
+              <div className="table-row" role="row" key={item.title}>
+                <span>{item.title}</span>
+                <span>{item.owner}</span>
+                <span>{item.status}</span>
+                <strong>{item.level}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <BoundaryPanel />
+        <OrganizationPanel dataOrganizations={dataOrganizations} />
+        <AuditPreviewPanel />
+
+        {canOpenSettings ? <SettingsView activeUser={activeUser} visibleModuleCount={visibleModuleCount} /> : null}
+      </section>
+    </>
+  );
+}
+
+function BoundaryPanel() {
+  return (
+    <aside className="panel guard-panel">
+      <div className="panel-header compact">
+        <div>
+          <h2>权限边界</h2>
+          <p>系统管理员可配置系统，但不默认拥有全部业务数据。</p>
+        </div>
+        <ShieldCheck size={22} />
+      </div>
+      <ul className="guard-list">
+        <li>审批必须人工完成</li>
+        <li>配置入口仅管理员角色可见</li>
+        <li>业务数据按授权范围裁剪</li>
+        <li>审计记录只追加不删除</li>
+      </ul>
+    </aside>
+  );
+}
+
+function OrganizationPanel({ dataOrganizations }: { dataOrganizations: Organization[] }) {
+  return (
+    <div className="panel">
+      <div className="panel-header compact">
+        <div>
+          <h2>组织与角色</h2>
+          <p>当前账号只能看到被授权的组织范围。</p>
+        </div>
+        <Users size={22} />
+      </div>
+      <div className="role-strip">
+        {dataOrganizations.length > 0 ? (
+          dataOrganizations.map((organization) => <span key={organization.id}>{organization.name}</span>)
+        ) : (
+          <span>仅本人相关数据</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AuditPreviewPanel() {
+  return (
+    <div className="panel">
+      <div className="panel-header compact">
+        <div>
+          <h2>最近审计</h2>
+          <p>真实审计写入将在 DEV-004 接入。</p>
+        </div>
+      </div>
+      <ol className="audit-list">
+        {auditEvents.map((event) => (
+          <li key={event}>{event}</li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function SettingsView({ activeUser, visibleModuleCount }: { activeUser: PublicUser; visibleModuleCount: number }) {
+  return (
+    <div className="panel settings-panel">
+      <div className="panel-header compact">
+        <div>
+          <h2>系统设置</h2>
+          <p>组织、角色和菜单权限进入配置管理。</p>
+        </div>
+        <Settings size={22} />
+      </div>
+      <div className="settings-grid">
+        <SettingsItem title="组织管理" value={`${seedOrganizations.length} 个组织`} enabled={canManageOrganizations(activeUser.role)} />
+        <SettingsItem title="角色管理" value={`${Object.keys(rolePolicies).length} 个角色`} enabled={canManageRoles(activeUser.role)} />
+        <SettingsItem title="菜单权限" value={`${visibleModuleCount} 个可见菜单`} enabled />
+        <SettingsItem title="数据范围" value={rolePolicies[activeUser.role].dataScope} enabled />
+      </div>
+    </div>
+  );
+}
+
+function ModuleStatusView({ moduleKey, moduleName }: { moduleKey: ModuleKey; moduleName: string }) {
+  const status = moduleStatus[moduleKey];
+
+  return (
+    <section className="module-status">
+      <div className="panel module-status-panel">
+        <p className="eyebrow">{status.stage}</p>
+        <h2>{moduleName}</h2>
+        <p>{status.summary}</p>
+        {moduleKey === "approvals" ? (
+          <div className="stage-checklist">
+            <span>审批发起：未开发</span>
+            <span>当前节点审批人：未开发</span>
+            <span>同意 / 驳回 / 退回：未开发</span>
+            <span>AI 建议：未开发且不能自动审批</span>
+          </div>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
