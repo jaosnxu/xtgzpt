@@ -121,6 +121,18 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - `V2 / 审批闭环`
 - `V2 / 管理员权限设置`
 
+### 08 Role And Settings Detail
+
+用于补齐角色切换演示和系统设置字段级配置。
+
+主要 frame：
+
+- `Role switch demo`
+- `Settings Detail / 组织管理`
+- `Settings Detail / 权限管理字段`
+- `Settings Detail / 流程配置`
+- `Settings Detail / AI框架`
+
 ## 4. 已覆盖验收点
 
 已覆盖：
@@ -157,13 +169,14 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - V2 主流程：按 QA 标准重做首页、项目任务、聊天知识、合同、审批、管理员权限
 - V2 文件权限弹窗
 - V2 主流程点击连线
+- 角色切换演示
+- 设置详情：组织管理、权限管理、流程配置、AI 框架
 - 原型冻结话术规则
 
 ## 5. 当前未完成项
 
 仍需继续补齐：
 
-- 角色切换演示
 - 系统设置每个子模块的完整表单字段
 - 更多边缘状态点击连线
 
@@ -179,8 +192,9 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - `05 Edge States`：8 个主要 frame
 - `06 QA Fixed Screens`：4 个主要 frame
 - `07 V2 Main Prototype`：6 个主要 frame
+- `08 Role And Settings Detail`：5 个主要 frame
 
-合计：52 个主要 frame。
+合计：57 个主要 frame。
 
 已添加第一批按钮连线：
 
@@ -214,6 +228,13 @@ V2 主流程已通过结构化审计：
 - fake table spacing：0
 - text width risk：0
 
+角色与设置详情页已通过结构化审计：
+
+- P1：0
+- P2：0
+- fake table spacing：0
+- text width risk：0
+
 当前原型可用于第一轮方向审查和主流程测试，但还不能冻结。
 
-冻结前必须完成角色切换演示，并由用户完成测试。
+冻结前必须补齐剩余系统设置子模块字段，并由用户完成测试。
