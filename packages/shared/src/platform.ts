@@ -33,6 +33,35 @@ export type DataScope = "all_organizations" | "assigned_organizations" | "own_re
 
 export type OrganizationStatus = "active" | "disabled";
 
+export type OperationPermission =
+  | "create_project"
+  | "edit_project"
+  | "close_project"
+  | "create_task"
+  | "assign_task"
+  | "complete_task"
+  | "upload_file"
+  | "archive_file"
+  | "initiate_approval"
+  | "approval_decision"
+  | "publish_knowledge"
+  | "manage_permissions";
+
+export type FilePermission = "view" | "preview" | "download" | "upload" | "archive" | "reference_ai";
+
+export type AiCapability =
+  | "chat_summarize"
+  | "task_draft"
+  | "knowledge_query"
+  | "contract_review"
+  | "approval_suggestion"
+  | "risk_hint"
+  | "configure_ai_frameworks";
+
+export type PermissionDimension = "menu" | "data" | "operation" | "file" | "ai";
+
+export const permissionPolicyVersion = "seed-dev-003";
+
 export interface Organization {
   id: string;
   name: string;
@@ -61,6 +90,26 @@ export interface RolePolicy {
   canManageSettings: boolean;
   canManageOrganizations: boolean;
   canManageRoles: boolean;
+  operations: OperationPermission[];
+  files: FilePermission[];
+  ai: AiCapability[];
+}
+
+export interface ResourceAccessContext {
+  organizationId?: string;
+  ownerUserId?: string;
+  participantUserIds?: string[];
+}
+
+export interface PermissionSummary {
+  policyVersion: typeof permissionPolicyVersion;
+  role: RoleKey;
+  menu: ModuleKey[];
+  dataScope: DataScope;
+  operations: OperationPermission[];
+  files: FilePermission[];
+  ai: AiCapability[];
+  organizationIds: string[];
 }
 
 const coreWorkModules: ModuleKey[] = [
@@ -82,7 +131,31 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     dataScope: "all_organizations",
     canManageSettings: true,
     canManageOrganizations: true,
-    canManageRoles: true
+    canManageRoles: true,
+    operations: [
+      "create_project",
+      "edit_project",
+      "close_project",
+      "create_task",
+      "assign_task",
+      "complete_task",
+      "upload_file",
+      "archive_file",
+      "initiate_approval",
+      "approval_decision",
+      "publish_knowledge",
+      "manage_permissions"
+    ],
+    files: ["view", "preview", "download", "upload", "archive", "reference_ai"],
+    ai: [
+      "chat_summarize",
+      "task_draft",
+      "knowledge_query",
+      "contract_review",
+      "approval_suggestion",
+      "risk_hint",
+      "configure_ai_frameworks"
+    ]
   },
   admin: {
     role: "admin",
@@ -91,7 +164,10 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     dataScope: "assigned_organizations",
     canManageSettings: true,
     canManageOrganizations: true,
-    canManageRoles: true
+    canManageRoles: true,
+    operations: ["manage_permissions", "upload_file", "archive_file"],
+    files: ["view", "preview", "download", "upload", "archive", "reference_ai"],
+    ai: ["chat_summarize", "knowledge_query", "risk_hint", "configure_ai_frameworks"]
   },
   project_owner: {
     role: "project_owner",
@@ -100,7 +176,20 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     dataScope: "assigned_organizations",
     canManageSettings: false,
     canManageOrganizations: false,
-    canManageRoles: false
+    canManageRoles: false,
+    operations: [
+      "create_project",
+      "edit_project",
+      "close_project",
+      "create_task",
+      "assign_task",
+      "complete_task",
+      "upload_file",
+      "archive_file",
+      "initiate_approval"
+    ],
+    files: ["view", "preview", "download", "upload", "archive", "reference_ai"],
+    ai: ["chat_summarize", "task_draft", "knowledge_query", "approval_suggestion", "risk_hint"]
   },
   member: {
     role: "member",
@@ -109,7 +198,10 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     dataScope: "own_records",
     canManageSettings: false,
     canManageOrganizations: false,
-    canManageRoles: false
+    canManageRoles: false,
+    operations: ["create_task", "complete_task", "upload_file", "initiate_approval"],
+    files: ["view", "preview", "download", "upload", "reference_ai"],
+    ai: ["chat_summarize", "task_draft", "knowledge_query", "approval_suggestion"]
   }
 };
 
@@ -228,8 +320,12 @@ export function canManageSettings(role: RoleKey) {
   return rolePolicies[role].canManageSettings;
 }
 
-export function canViewOrganizationData(user: UserAccount, organizationId: string) {
+export function canViewOrganizationData(user: UserAccount, organizationId: string | undefined) {
   const scope = rolePolicies[user.role].dataScope;
+
+  if (!organizationId) {
+    return false;
+  }
 
   if (scope === "all_organizations") {
     return true;
@@ -242,8 +338,65 @@ export function canViewOrganizationData(user: UserAccount, organizationId: strin
   return user.organizationIds.includes(organizationId);
 }
 
+export function canAccessResourceData(user: UserAccount, resource: ResourceAccessContext) {
+  const scope = rolePolicies[user.role].dataScope;
+
+  if (scope === "all_organizations") {
+    return true;
+  }
+
+  if (resource.ownerUserId === user.id || resource.participantUserIds?.includes(user.id)) {
+    return true;
+  }
+
+  return canViewOrganizationData(user, resource.organizationId);
+}
+
 export function visibleOrganizationsForUser(user: UserAccount, organizations = seedOrganizations) {
   return organizations.filter((organization) => canViewOrganizationData(user, organization.id));
+}
+
+export function canPerformOperation(user: UserAccount, operation: OperationPermission, resource?: ResourceAccessContext) {
+  if (!rolePolicies[user.role].operations.includes(operation)) {
+    return false;
+  }
+
+  if (!resource) {
+    return true;
+  }
+
+  return canAccessResourceData(user, resource);
+}
+
+export function canAccessFileAction(user: UserAccount, action: FilePermission, resource: ResourceAccessContext) {
+  return rolePolicies[user.role].files.includes(action) && canAccessResourceData(user, resource);
+}
+
+export function canUseAiCapability(user: UserAccount, capability: AiCapability, resource?: ResourceAccessContext) {
+  if (!rolePolicies[user.role].ai.includes(capability)) {
+    return false;
+  }
+
+  if (!resource) {
+    return capability === "configure_ai_frameworks";
+  }
+
+  return canAccessResourceData(user, resource);
+}
+
+export function getPermissionSummary(user: UserAccount): PermissionSummary {
+  const policy = rolePolicies[user.role];
+
+  return {
+    policyVersion: permissionPolicyVersion,
+    role: user.role,
+    menu: policy.menu,
+    dataScope: policy.dataScope,
+    operations: policy.operations,
+    files: policy.files,
+    ai: policy.ai,
+    organizationIds: visibleOrganizationsForUser(user).map((organization) => organization.id)
+  };
 }
 
 export function getPublicUser(user: UserAccount) {

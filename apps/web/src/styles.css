@@ -336,6 +336,22 @@ h2 {
   font-weight: 700;
 }
 
+.permission-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.permission-stack span {
+  min-height: 38px;
+  padding: 9px 10px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #fbfcfe;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .settings-panel {
   grid-column: 1 / -1;
 }

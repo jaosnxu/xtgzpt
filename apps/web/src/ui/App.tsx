@@ -23,6 +23,7 @@ import {
   platformModules,
   type ModuleKey,
   type Organization,
+  type PermissionSummary,
   type PublicUser
 } from "@xtgzpt/shared";
 
@@ -33,6 +34,7 @@ interface SessionState {
   user: PublicUser;
   visibleModules: ModuleKey[];
   dataOrganizations: Organization[];
+  permissions: PermissionSummary;
 }
 
 const menuIcon = {
@@ -49,8 +51,8 @@ const menuIcon = {
 
 const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
   dashboard: {
-    stage: "DEV-002 已完成",
-    summary: "当前阶段只验证登录、角色、组织范围、菜单权限和数据范围。"
+    stage: "DEV-003 进行中",
+    summary: "当前阶段验证菜单、数据、操作、文件和 AI 权限统一受控。"
   },
   workbench: {
     stage: "DEV-005 待开发",
@@ -81,8 +83,8 @@ const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
     summary: "审批发起、当前节点审批人、同意、驳回、退回、转交和加签尚未进入代码开发。"
   },
   settings: {
-    stage: "DEV-002 已完成",
-    summary: "当前阶段已验证管理员可见配置入口，且业务数据范围不默认放大。"
+    stage: "DEV-003 进行中",
+    summary: "当前阶段已接入权限策略摘要，后续配置写入仍待真实后台持久化。"
   }
 };
 
@@ -90,11 +92,13 @@ const stageGateItems = [
   { scope: "认证登录", owner: "API / Web", status: "已验证", stage: "DEV-002" },
   { scope: "角色与菜单权限", owner: "API / Web", status: "已验证", stage: "DEV-002" },
   { scope: "组织数据范围", owner: "API", status: "已验证", stage: "DEV-002" },
+  { scope: "统一权限中间层", owner: "API / Web", status: "已验证", stage: "DEV-003" },
+  { scope: "文件与 AI 权限", owner: "API", status: "已验证", stage: "DEV-003" },
   { scope: "审批真实流程", owner: "未开发", status: "待开发", stage: "DEV-010" }
 ];
 
 const auditReadinessItems = [
-  "当前阶段只完成权限矩阵自检，不展示业务审计事实",
+  "当前阶段记录无权限访问拒绝，不展示业务审计事实",
   "真实审计写入基础设施待 DEV-004 接入",
   "项目、合同、任务、审批事件未开发前不能出现在最近审计",
   "后续所有失败与修复必须继续写入 dev-log 和 Issue"
@@ -166,7 +170,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">已进入 DEV-002：账号、角色、组织、权限</p>
+            <p className="eyebrow">已进入 DEV-003：统一权限中间层</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
@@ -193,10 +197,11 @@ export function App() {
             canOpenSettings={canOpenSettings}
             dataOrganizations={dataOrganizations}
             onOpenApprovals={() => setActiveModule("approvals")}
+            permissions={session.permissions}
             visibleModuleCount={visibleModules.length}
           />
         ) : currentModule === "settings" && canOpenSettings ? (
-          <SettingsView activeUser={activeUser} visibleModuleCount={visibleModules.length} />
+          <SettingsView activeUser={activeUser} permissions={session.permissions} visibleModuleCount={visibleModules.length} />
         ) : (
           <ModuleStatusView moduleKey={currentModule} moduleName={currentModuleName} />
         )}
@@ -210,21 +215,23 @@ function DashboardView({
   canOpenSettings,
   dataOrganizations,
   onOpenApprovals,
+  permissions,
   visibleModuleCount
 }: {
   activeUser: PublicUser;
   canOpenSettings: boolean;
   dataOrganizations: Organization[];
   onOpenApprovals: () => void;
+  permissions: PermissionSummary;
   visibleModuleCount: number;
 }) {
   return (
     <>
       <section className="metric-grid" aria-label="核心指标">
-        <MetricCard title="当前阶段" value="DEV-002" helper="认证、角色、组织、权限" />
+        <MetricCard title="当前阶段" value="DEV-003" helper="统一权限中间层" />
         <MetricCard title="可见菜单" value={String(visibleModuleCount)} helper="按角色裁剪" />
         <MetricCard title="可见组织" value={String(dataOrganizations.length)} helper={rolePolicies[activeUser.role].dataScope} />
-        <MetricCard title="审计事件" value="待 DEV-004" helper="当前仅保留审计边界" />
+        <MetricCard title="策略版本" value={permissions.policyVersion} helper="后端返回权限摘要" />
       </section>
 
       <section className="content-grid">
@@ -259,9 +266,12 @@ function DashboardView({
 
         <BoundaryPanel />
         <OrganizationPanel dataOrganizations={dataOrganizations} />
+        <PermissionPanel permissions={permissions} />
         <AuditPreviewPanel />
 
-        {canOpenSettings ? <SettingsView activeUser={activeUser} visibleModuleCount={visibleModuleCount} /> : null}
+        {canOpenSettings ? (
+          <SettingsView activeUser={activeUser} permissions={permissions} visibleModuleCount={visibleModuleCount} />
+        ) : null}
       </section>
     </>
   );
@@ -281,7 +291,7 @@ function BoundaryPanel() {
         <li>审批必须人工完成</li>
         <li>配置入口仅管理员角色可见</li>
         <li>业务数据按授权范围裁剪</li>
-        <li>审计记录只追加不删除</li>
+        <li>文件和 AI 必须继承来源对象权限</li>
       </ul>
     </aside>
   );
@@ -308,6 +318,25 @@ function OrganizationPanel({ dataOrganizations }: { dataOrganizations: Organizat
   );
 }
 
+function PermissionPanel({ permissions }: { permissions: PermissionSummary }) {
+  return (
+    <div className="panel">
+      <div className="panel-header compact">
+        <div>
+          <h2>权限摘要</h2>
+          <p>来自 API 会话上下文，前端只负责展示与裁剪。</p>
+        </div>
+        <ShieldCheck size={22} />
+      </div>
+      <div className="permission-stack">
+        <span>操作权限：{permissions.operations.length}</span>
+        <span>文件权限：{permissions.files.length}</span>
+        <span>AI 权限：{permissions.ai.length}</span>
+      </div>
+    </div>
+  );
+}
+
 function AuditPreviewPanel() {
   return (
     <div className="panel">
@@ -326,13 +355,21 @@ function AuditPreviewPanel() {
   );
 }
 
-function SettingsView({ activeUser, visibleModuleCount }: { activeUser: PublicUser; visibleModuleCount: number }) {
+function SettingsView({
+  activeUser,
+  permissions,
+  visibleModuleCount
+}: {
+  activeUser: PublicUser;
+  permissions: PermissionSummary;
+  visibleModuleCount: number;
+}) {
   return (
     <div className="panel settings-panel">
       <div className="panel-header compact">
         <div>
           <h2>系统设置</h2>
-          <p>组织、角色和菜单权限进入配置管理。</p>
+          <p>组织、角色、菜单、操作、文件和 AI 权限进入统一策略。</p>
         </div>
         <Settings size={22} />
       </div>
@@ -340,7 +377,11 @@ function SettingsView({ activeUser, visibleModuleCount }: { activeUser: PublicUs
         <SettingsItem title="组织管理" value={`${seedOrganizations.length} 个组织`} enabled={canManageOrganizations(activeUser.role)} />
         <SettingsItem title="角色管理" value={`${Object.keys(rolePolicies).length} 个角色`} enabled={canManageRoles(activeUser.role)} />
         <SettingsItem title="菜单权限" value={`${visibleModuleCount} 个可见菜单`} enabled />
-        <SettingsItem title="数据范围" value={rolePolicies[activeUser.role].dataScope} enabled />
+        <SettingsItem title="操作权限" value={`${permissions.operations.length} 项`} enabled />
+        <SettingsItem title="文件权限" value={`${permissions.files.length} 项`} enabled />
+        <SettingsItem title="AI 权限" value={`${permissions.ai.length} 项`} enabled />
+        <SettingsItem title="数据范围" value={permissions.dataScope} enabled />
+        <SettingsItem title="策略版本" value={permissions.policyVersion} enabled />
       </div>
     </div>
   );

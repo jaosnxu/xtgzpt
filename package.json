@@ -12,6 +12,11 @@
     "apps/*",
     "packages/*"
   ],
+  "overrides": {
+    "vite": {
+      "esbuild": "^0.28.1"
+    }
+  },
   "scripts": {
     "dev": "npm run dev:web",
     "dev:web": "npm run dev -w @xtgzpt/web",
