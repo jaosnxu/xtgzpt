@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@xtgzpt/shared": ["packages/shared/src/index.ts"]
+    },
+    "noEmit": true
+  },
+  "include": [
+    "apps/**/*.ts",
+    "apps/**/*.tsx",
+    "packages/**/*.ts",
+    "*.config.ts"
+  ],
+  "exclude": ["**/dist/**", "**/dist-types/**", "node_modules/**"]
+}
