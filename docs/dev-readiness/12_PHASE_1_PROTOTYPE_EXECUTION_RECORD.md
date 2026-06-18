@@ -82,6 +82,21 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - `P009 设置 / 分模块`
 - `P001 首页 / 1280 Standard`
 
+### 05 Edge States
+
+用于测试异常状态、权限失败、AI 失败和设置字段级配置。
+
+主要 frame：
+
+- `Edge States Cover`
+- `项目异常状态`
+- `任务异常状态`
+- `聊天附件与关联对象`
+- `知识审核与发布`
+- `系统设置字段级配置`
+- `AI 失败与权限阻断`
+- `无权限页面模板`
+
 ## 4. 已覆盖验收点
 
 已覆盖：
@@ -107,17 +122,22 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - 审批列表和退回/转交/加签异常动作
 - 系统设置分模块
 - 第一批 Figma 原型点击连线
+- 项目 Empty / NoPermission / Archived / AI Failed 状态
+- 任务 Blocked / Overdue / Cancelled / Submitted 状态
+- 聊天附件与关联对象
+- 知识审核与发布状态
+- AI permission_blocked / policy_blocked / network_error 状态
+- 无权限页面模板
+- 系统设置字段级配置
 - 原型冻结话术规则
 
 ## 5. 当前未完成项
 
 仍需继续补齐：
 
-- 项目详情更多空状态/无权限状态
-- 任务详情更多异常状态
-- 聊天附件和关联对象细节
-- 知识审核/发布细节
-- 系统设置组织、角色、权限、流程、AI 框架、审计配置更细字段
+- 系统设置每个子模块的完整表单字段
+- 角色切换演示
+- 文件权限独立弹窗
 - 更多 Figma 原型点击连线
 
 ## 6. 验证记录
@@ -129,8 +149,9 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - `02 Core Modules`：4 个主要 frame
 - `03 States And Acceptance`：6 个主要 frame
 - `04 Deep Flows`：6 个主要 frame
+- `05 Edge States`：8 个主要 frame
 
-合计：34 个主要 frame。
+合计：42 个主要 frame。
 
 已添加第一批按钮连线：
 
