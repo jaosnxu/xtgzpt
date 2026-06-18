@@ -86,18 +86,18 @@ const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
   }
 };
 
-const priorityItems = [
-  { title: "合同待二次审查", owner: "法务 / 负责人", status: "待处理", level: "P0" },
-  { title: "任务完成确认", owner: "项目经理", status: "审批中", level: "P1" },
-  { title: "AI 草稿待人工确认", owner: "运营组", status: "草稿", level: "P1" },
-  { title: "知识库发布复核", owner: "管理员", status: "待确认", level: "P2" }
+const stageGateItems = [
+  { scope: "认证登录", owner: "API / Web", status: "已验证", stage: "DEV-002" },
+  { scope: "角色与菜单权限", owner: "API / Web", status: "已验证", stage: "DEV-002" },
+  { scope: "组织数据范围", owner: "API", status: "已验证", stage: "DEV-002" },
+  { scope: "审批真实流程", owner: "未开发", status: "待开发", stage: "DEV-010" }
 ];
 
-const auditEvents = [
-  "项目 A 新增成员，已写审计",
-  "合同 OCR 完成，等待人工确认",
-  "任务状态从 submitted 进入 completed",
-  "管理员更新角色菜单权限"
+const auditReadinessItems = [
+  "当前阶段只完成权限矩阵自检，不展示业务审计事实",
+  "真实审计写入基础设施待 DEV-004 接入",
+  "项目、合同、任务、审批事件未开发前不能出现在最近审计",
+  "后续所有失败与修复必须继续写入 dev-log 和 Issue"
 ];
 
 export function App() {
@@ -231,27 +231,27 @@ function DashboardView({
         <div className="panel work-panel">
           <div className="panel-header">
             <div>
-              <h2>阶段处理队列</h2>
-              <p>当前只展示阶段样例，不代表真实审批流程已完成。</p>
+              <h2>阶段门检查</h2>
+              <p>这里只展示已验证范围和明确未开发范围，不展示模拟业务单据。</p>
             </div>
             <button className="secondary-button" onClick={onOpenApprovals}>
               <ClipboardList size={17} />
               查看审批阶段
             </button>
           </div>
-          <div className="table" role="table" aria-label="处理队列">
+          <div className="table" role="table" aria-label="阶段门检查">
             <div className="table-row table-head" role="row">
-              <span>事项</span>
-              <span>当前处理人</span>
+              <span>范围</span>
+              <span>责任边界</span>
               <span>状态</span>
-              <span>级别</span>
+              <span>阶段</span>
             </div>
-            {priorityItems.map((item) => (
-              <div className="table-row" role="row" key={item.title}>
-                <span>{item.title}</span>
+            {stageGateItems.map((item) => (
+              <div className="table-row" role="row" key={item.scope}>
+                <span>{item.scope}</span>
                 <span>{item.owner}</span>
-                <span>{item.status}</span>
-                <strong>{item.level}</strong>
+                <span className={item.status === "已验证" ? "status-pass" : "status-pending"}>{item.status}</span>
+                <strong>{item.stage}</strong>
               </div>
             ))}
           </div>
@@ -313,12 +313,12 @@ function AuditPreviewPanel() {
     <div className="panel">
       <div className="panel-header compact">
         <div>
-          <h2>最近审计</h2>
-          <p>真实审计写入将在 DEV-004 接入。</p>
+          <h2>审计边界</h2>
+          <p>真实业务审计尚未接入，当前仅展示阶段约束。</p>
         </div>
       </div>
       <ol className="audit-list">
-        {auditEvents.map((event) => (
+        {auditReadinessItems.map((event) => (
           <li key={event}>{event}</li>
         ))}
       </ol>

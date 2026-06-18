@@ -299,7 +299,17 @@ h2 {
 }
 
 .table-row strong {
-  color: #b42318;
+  color: #175b66;
+}
+
+.status-pass {
+  color: #067647;
+  font-weight: 800;
+}
+
+.status-pending {
+  color: #b54708;
+  font-weight: 800;
 }
 
 .guard-list,
