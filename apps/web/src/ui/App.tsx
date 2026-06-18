@@ -13,9 +13,18 @@ import {
   ShieldCheck,
   Users
 } from "lucide-react";
-import { ROLE_MENU, type RoleKey, platformModules } from "@xtgzpt/shared";
-
-const activeRole: RoleKey = "admin";
+import { useMemo, useState } from "react";
+import {
+  canManageOrganizations,
+  canManageRoles,
+  getVisibleModules,
+  roles,
+  rolePolicies,
+  seedOrganizations,
+  seedUsers,
+  visibleOrganizationsForUser,
+  type UserAccount
+} from "@xtgzpt/shared";
 
 const menuIcon = {
   dashboard: Home,
@@ -44,7 +53,19 @@ const auditEvents = [
 ];
 
 export function App() {
-  const visibleModules = platformModules.filter((item) => ROLE_MENU[activeRole].includes(item.key));
+  const [activeUserId, setActiveUserId] = useState<string | null>(null);
+  const activeUser = useMemo(
+    () => seedUsers.find((user) => user.id === activeUserId) ?? null,
+    [activeUserId]
+  );
+
+  if (!activeUser) {
+    return <LoginScreen onLogin={setActiveUserId} />;
+  }
+
+  const visibleModules = getVisibleModules(activeUser.role);
+  const dataOrganizations = visibleOrganizationsForUser(activeUser);
+  const canOpenSettings = canManageOrganizations(activeUser.role) || canManageRoles(activeUser.role);
 
   return (
     <div className="app-shell">
@@ -53,7 +74,7 @@ export function App() {
           <span className="brand-mark">XT</span>
           <div>
             <strong>协同工作平台</strong>
-            <span>Phase 1 Development</span>
+            <span>{roles[activeUser.role]}</span>
           </div>
         </div>
 
@@ -73,10 +94,14 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">已按冻结原型进入开发</p>
+            <p className="eyebrow">已进入 DEV-002：账号、角色、组织、权限</p>
             <h1>首页工作台</h1>
           </div>
           <div className="top-actions">
+            <div className="account-chip">
+              <span>{activeUser.displayName}</span>
+              <strong>{roles[activeUser.role]}</strong>
+            </div>
             <label className="search-box">
               <Search size={17} />
               <input placeholder="搜索项目、任务、合同" />
@@ -90,7 +115,7 @@ export function App() {
         <section className="metric-grid" aria-label="核心指标">
           <MetricCard title="我的待办" value="18" helper="审批、任务、合同确认" />
           <MetricCard title="进行中项目" value="12" helper="按成员权限裁剪" />
-          <MetricCard title="待审合同" value="5" helper="必须人工二次确认" />
+          <MetricCard title="可见组织" value={String(dataOrganizations.length)} helper={rolePolicies[activeUser.role].dataScope} />
           <MetricCard title="审计事件" value="246" helper="关键动作不可删除" />
         </section>
 
@@ -128,14 +153,14 @@ export function App() {
             <div className="panel-header compact">
               <div>
                 <h2>权限边界</h2>
-                <p>AI 只能建议，不能替人确认。</p>
+                <p>系统管理员可配置系统，但不默认拥有全部业务数据。</p>
               </div>
               <ShieldCheck size={22} />
             </div>
             <ul className="guard-list">
               <li>审批必须人工完成</li>
-              <li>系统设置仅管理员可见</li>
-              <li>合同详情按项目成员裁剪</li>
+              <li>配置入口仅管理员角色可见</li>
+              <li>业务数据按组织授权裁剪</li>
               <li>审计记录只追加不删除</li>
             </ul>
           </aside>
@@ -144,15 +169,14 @@ export function App() {
             <div className="panel-header compact">
               <div>
                 <h2>组织与角色</h2>
-                <p>DEV-002 将进入账号、角色、组织范围。</p>
+                <p>当前账号只能看到被授权的组织范围。</p>
               </div>
               <Users size={22} />
             </div>
             <div className="role-strip">
-              <span>超级管理员</span>
-              <span>系统管理员</span>
-              <span>项目负责人</span>
-              <span>普通成员</span>
+              {dataOrganizations.map((organization) => (
+                <span key={organization.id}>{organization.name}</span>
+              ))}
             </div>
           </div>
 
@@ -169,9 +193,50 @@ export function App() {
               ))}
             </ol>
           </div>
+
+          {canOpenSettings ? (
+            <div className="panel settings-panel">
+              <div className="panel-header compact">
+                <div>
+                  <h2>系统设置</h2>
+                  <p>组织、角色和菜单权限进入配置管理。</p>
+                </div>
+                <Settings size={22} />
+              </div>
+              <div className="settings-grid">
+                <SettingsItem title="组织管理" value={`${seedOrganizations.length} 个组织`} enabled={canManageOrganizations(activeUser.role)} />
+                <SettingsItem title="角色管理" value={`${Object.keys(rolePolicies).length} 个角色`} enabled={canManageRoles(activeUser.role)} />
+                <SettingsItem title="菜单权限" value={`${visibleModules.length} 个可见菜单`} enabled />
+                <SettingsItem title="数据范围" value={rolePolicies[activeUser.role].dataScope} enabled />
+              </div>
+            </div>
+          ) : null}
         </section>
       </main>
     </div>
+  );
+}
+
+function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
+  return (
+    <main className="login-page">
+      <section className="login-shell">
+        <div>
+          <p className="eyebrow">协同工作平台</p>
+          <h1>账号登录</h1>
+          <p className="login-copy">选择一个 DEV-002 账号进入系统。所有账号密码为 113113。</p>
+        </div>
+        <div className="login-list">
+          {seedUsers.map((user) => (
+            <button className="login-account" key={user.id} onClick={() => onLogin(user.id)}>
+              <span>{user.displayName}</span>
+              <strong>{roles[user.role]}</strong>
+              <small>{describeAccess(user)}</small>
+            </button>
+          ))}
+        </div>
+      </section>
+    </main>
   );
 }
 
@@ -183,4 +248,27 @@ function MetricCard({ title, value, helper }: { title: string; value: string; he
       <p>{helper}</p>
     </article>
   );
+}
+
+function SettingsItem({ title, value, enabled }: { title: string; value: string; enabled: boolean }) {
+  return (
+    <div className={enabled ? "settings-item" : "settings-item disabled"}>
+      <span>{title}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function describeAccess(user: UserAccount) {
+  const policy = rolePolicies[user.role];
+
+  if (policy.dataScope === "all_organizations") {
+    return "可查看全部组织业务数据";
+  }
+
+  if (policy.canManageSettings) {
+    return "可配置系统，仅看授权组织业务数据";
+  }
+
+  return `可见 ${user.organizationIds.length} 个授权组织`;
 }
