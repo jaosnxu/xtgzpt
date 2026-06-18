@@ -48,11 +48,10 @@ export interface UserAccount {
   role: RoleKey;
   organizationIds: string[];
   defaultOrganizationId: string;
-  password: string;
   status: "active" | "disabled";
 }
 
-export type PublicUser = Omit<UserAccount, "password">;
+export type PublicUser = UserAccount;
 
 export interface RolePolicy {
   role: RoleKey;
@@ -178,7 +177,6 @@ export const seedUsers: UserAccount[] = [
     role: "super_admin",
     organizationIds: seedOrganizations.map((item) => item.id),
     defaultOrganizationId: "org-group",
-    password: "113113",
     status: "active"
   },
   {
@@ -188,7 +186,6 @@ export const seedUsers: UserAccount[] = [
     role: "admin",
     organizationIds: ["org-group"],
     defaultOrganizationId: "org-group",
-    password: "113113",
     status: "active"
   },
   {
@@ -198,7 +195,6 @@ export const seedUsers: UserAccount[] = [
     role: "project_owner",
     organizationIds: ["org-product", "org-operation"],
     defaultOrganizationId: "org-product",
-    password: "113113",
     status: "active"
   },
   {
@@ -208,7 +204,6 @@ export const seedUsers: UserAccount[] = [
     role: "member",
     organizationIds: ["org-store-a"],
     defaultOrganizationId: "org-store-a",
-    password: "113113",
     status: "active"
   }
 ];
@@ -252,6 +247,5 @@ export function visibleOrganizationsForUser(user: UserAccount, organizations = s
 }
 
 export function getPublicUser(user: UserAccount) {
-  const { password: _password, ...publicUser } = user;
-  return publicUser;
+  return user;
 }

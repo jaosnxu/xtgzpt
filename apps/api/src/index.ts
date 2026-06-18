@@ -18,6 +18,12 @@ interface LoginBody {
 }
 
 const sessionPrefix = "dev-session";
+const devCredentials: Record<string, string> = {
+  super: "113113",
+  admin: "113113",
+  owner: "113113",
+  member: "113113"
+};
 
 function createSessionToken(user: UserAccount) {
   return `${sessionPrefix}:${user.id}:${randomUUID()}`;
@@ -60,7 +66,7 @@ export function buildServer() {
     const user = seedUsers.find(
       (account) =>
         account.username === request.body?.username &&
-        account.password === request.body?.password &&
+        devCredentials[account.username] === request.body?.password &&
         account.status === "active"
     );
 

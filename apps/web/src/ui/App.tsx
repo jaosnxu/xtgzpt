@@ -35,13 +35,6 @@ interface SessionState {
   dataOrganizations: Organization[];
 }
 
-const loginAccounts = [
-  { username: "super", displayName: "超级管理员", role: "super_admin" },
-  { username: "admin", displayName: "系统管理员", role: "admin" },
-  { username: "owner", displayName: "项目负责人", role: "project_owner" },
-  { username: "member", displayName: "普通成员", role: "member" }
-] as const;
-
 const menuIcon = {
   dashboard: Home,
   workbench: LayoutDashboard,
@@ -253,10 +246,11 @@ export function App() {
 }
 
 function LoginScreen({ onLogin }: { onLogin: (username: string, password: string) => Promise<void> }) {
-  const [password, setPassword] = useState("113113");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  async function submit(username: string) {
+  async function submit() {
     setError(null);
 
     try {
@@ -269,24 +263,42 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
   return (
     <main className="login-page">
       <section className="login-shell">
-        <div>
+        <form
+          className="login-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
           <p className="eyebrow">协同工作平台</p>
           <h1>账号登录</h1>
-          <p className="login-copy">输入密码后选择账号进入系统。登录必须由 API 签发会话。</p>
+          <p className="login-copy">输入用户名和密码进入系统。登录必须由 API 签发会话。</p>
+          <label className="password-field">
+            <span>用户名</span>
+            <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
+          </label>
           <label className="password-field">
             <span>密码</span>
-            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" />
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              autoComplete="current-password"
+            />
           </label>
           {error ? <p className="login-error">{error}</p> : null}
-        </div>
-        <div className="login-list">
-          {loginAccounts.map((user) => (
-            <button className="login-account" key={user.username} onClick={() => void submit(user.username)}>
-              <span>{user.displayName}</span>
-              <strong>{roles[user.role]}</strong>
-              <small>{describeAccess(user.role)}</small>
-            </button>
-          ))}
+          <button className="primary-button login-submit" type="submit">
+            登录
+          </button>
+        </form>
+        <div className="login-policy">
+          <h2>访问边界</h2>
+          <ul className="guard-list">
+            <li>认证由 API 签发会话</li>
+            <li>菜单按角色裁剪</li>
+            <li>业务数据按授权范围裁剪</li>
+            <li>高权限账号不在登录页暴露</li>
+          </ul>
         </div>
       </section>
     </main>
@@ -310,22 +322,4 @@ function SettingsItem({ title, value, enabled }: { title: string; value: string;
       <strong>{value}</strong>
     </div>
   );
-}
-
-function describeAccess(role: keyof typeof roles) {
-  const policy = rolePolicies[role];
-
-  if (policy.dataScope === "all_organizations") {
-    return "可查看全部组织业务数据";
-  }
-
-  if (policy.canManageSettings) {
-    return "可配置系统，仅看授权组织业务数据";
-  }
-
-  if (policy.dataScope === "own_records") {
-    return "仅看本人相关数据";
-  }
-
-  return "仅看授权组织业务数据";
 }

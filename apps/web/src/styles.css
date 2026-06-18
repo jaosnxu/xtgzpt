@@ -377,6 +377,14 @@ h2 {
   line-height: 1.7;
 }
 
+.login-form,
+.login-policy {
+  padding: 22px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
 .password-field {
   margin-top: 22px;
   display: grid;
@@ -401,6 +409,11 @@ h2 {
   margin-top: 12px;
   color: #b42318;
   font-weight: 700;
+}
+
+.login-submit {
+  margin-top: 22px;
+  width: 100%;
 }
 
 .login-list {
