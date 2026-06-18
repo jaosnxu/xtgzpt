@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { randomUUID } from "node:crypto";
 import {
   canManageOrganizations,
   canManageRoles,
@@ -19,7 +20,7 @@ interface LoginBody {
 const sessionPrefix = "dev-session";
 
 function createSessionToken(user: UserAccount) {
-  return `${sessionPrefix}:${user.id}`;
+  return `${sessionPrefix}:${user.id}:${randomUUID()}`;
 }
 
 export function buildServer() {
@@ -34,7 +35,11 @@ export function buildServer() {
     }
 
     const normalizedToken = token.startsWith("Bearer ") ? token.slice(7) : token;
-    const userId = sessions.get(normalizedToken) ?? normalizedToken.replace(`${sessionPrefix}:`, "");
+    const userId = sessions.get(normalizedToken);
+
+    if (!userId) {
+      return undefined;
+    }
 
     return seedUsers.find((user) => user.id === userId && user.status === "active");
   }

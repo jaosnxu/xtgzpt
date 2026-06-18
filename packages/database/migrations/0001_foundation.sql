@@ -14,6 +14,8 @@ CREATE TABLE roles (
   name TEXT NOT NULL,
   data_scope TEXT NOT NULL,
   can_manage_settings BOOLEAN NOT NULL DEFAULT false,
+  can_manage_organizations BOOLEAN NOT NULL DEFAULT false,
+  can_manage_roles BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

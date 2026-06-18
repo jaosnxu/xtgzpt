@@ -13,18 +13,34 @@ import {
   ShieldCheck,
   Users
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   canManageOrganizations,
   canManageRoles,
-  getVisibleModules,
   roles,
   rolePolicies,
   seedOrganizations,
-  seedUsers,
-  visibleOrganizationsForUser,
-  type UserAccount
+  platformModules,
+  type ModuleKey,
+  type Organization,
+  type PublicUser
 } from "@xtgzpt/shared";
+
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api";
+
+interface SessionState {
+  token: string;
+  user: PublicUser;
+  visibleModules: ModuleKey[];
+  dataOrganizations: Organization[];
+}
+
+const loginAccounts = [
+  { username: "super", displayName: "超级管理员", role: "super_admin" },
+  { username: "admin", displayName: "系统管理员", role: "admin" },
+  { username: "owner", displayName: "项目负责人", role: "project_owner" },
+  { username: "member", displayName: "普通成员", role: "member" }
+] as const;
 
 const menuIcon = {
   dashboard: Home,
@@ -53,18 +69,34 @@ const auditEvents = [
 ];
 
 export function App() {
-  const [activeUserId, setActiveUserId] = useState<string | null>(null);
-  const activeUser = useMemo(
-    () => seedUsers.find((user) => user.id === activeUserId) ?? null,
-    [activeUserId]
-  );
+  const [session, setSession] = useState<SessionState | null>(null);
+  const activeUser = session?.user ?? null;
 
-  if (!activeUser) {
-    return <LoginScreen onLogin={setActiveUserId} />;
+  async function handleLogin(username: string, password: string) {
+    const response = await fetch(`${apiBaseUrl}/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        username,
+        password
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error("账号或密码错误");
+    }
+
+    setSession((await response.json()) as SessionState);
   }
 
-  const visibleModules = getVisibleModules(activeUser.role);
-  const dataOrganizations = visibleOrganizationsForUser(activeUser);
+  if (!session || !activeUser) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
+  const visibleModules = platformModules.filter((item) => session.visibleModules.includes(item.key));
+  const dataOrganizations = session.dataOrganizations;
   const canOpenSettings = canManageOrganizations(activeUser.role) || canManageRoles(activeUser.role);
 
   return (
@@ -106,6 +138,9 @@ export function App() {
               <Search size={17} />
               <input placeholder="搜索项目、任务、合同" />
             </label>
+            <button className="text-button" onClick={() => setSession(null)}>
+              退出
+            </button>
             <button className="icon-button" aria-label="通知">
               <Bell size={18} />
             </button>
@@ -160,7 +195,7 @@ export function App() {
             <ul className="guard-list">
               <li>审批必须人工完成</li>
               <li>配置入口仅管理员角色可见</li>
-              <li>业务数据按组织授权裁剪</li>
+              <li>业务数据按授权范围裁剪</li>
               <li>审计记录只追加不删除</li>
             </ul>
           </aside>
@@ -217,21 +252,39 @@ export function App() {
   );
 }
 
-function LoginScreen({ onLogin }: { onLogin: (userId: string) => void }) {
+function LoginScreen({ onLogin }: { onLogin: (username: string, password: string) => Promise<void> }) {
+  const [password, setPassword] = useState("113113");
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(username: string) {
+    setError(null);
+
+    try {
+      await onLogin(username, password);
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : "登录失败");
+    }
+  }
+
   return (
     <main className="login-page">
       <section className="login-shell">
         <div>
           <p className="eyebrow">协同工作平台</p>
           <h1>账号登录</h1>
-          <p className="login-copy">选择一个 DEV-002 账号进入系统。所有账号密码为 113113。</p>
+          <p className="login-copy">输入密码后选择账号进入系统。登录必须由 API 签发会话。</p>
+          <label className="password-field">
+            <span>密码</span>
+            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" />
+          </label>
+          {error ? <p className="login-error">{error}</p> : null}
         </div>
         <div className="login-list">
-          {seedUsers.map((user) => (
-            <button className="login-account" key={user.id} onClick={() => onLogin(user.id)}>
+          {loginAccounts.map((user) => (
+            <button className="login-account" key={user.username} onClick={() => void submit(user.username)}>
               <span>{user.displayName}</span>
               <strong>{roles[user.role]}</strong>
-              <small>{describeAccess(user)}</small>
+              <small>{describeAccess(user.role)}</small>
             </button>
           ))}
         </div>
@@ -259,8 +312,8 @@ function SettingsItem({ title, value, enabled }: { title: string; value: string;
   );
 }
 
-function describeAccess(user: UserAccount) {
-  const policy = rolePolicies[user.role];
+function describeAccess(role: keyof typeof roles) {
+  const policy = rolePolicies[role];
 
   if (policy.dataScope === "all_organizations") {
     return "可查看全部组织业务数据";
@@ -270,5 +323,9 @@ function describeAccess(user: UserAccount) {
     return "可配置系统，仅看授权组织业务数据";
   }
 
-  return `可见 ${user.organizationIds.length} 个授权组织`;
+  if (policy.dataScope === "own_records") {
+    return "仅看本人相关数据";
+  }
+
+  return "仅看授权组织业务数据";
 }

@@ -52,6 +52,8 @@ export interface UserAccount {
   status: "active" | "disabled";
 }
 
+export type PublicUser = Omit<UserAccount, "password">;
+
 export interface RolePolicy {
   role: RoleKey;
   name: string;
@@ -236,6 +238,10 @@ export function canViewOrganizationData(user: UserAccount, organizationId: strin
 
   if (scope === "all_organizations") {
     return true;
+  }
+
+  if (scope === "own_records") {
+    return false;
   }
 
   return user.organizationIds.includes(organizationId);

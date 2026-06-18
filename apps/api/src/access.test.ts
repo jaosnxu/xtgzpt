@@ -34,6 +34,20 @@ describe("access control", () => {
     expect(response.json()).toEqual({ error: "forbidden" });
   });
 
+  it("rejects forged session tokens", async () => {
+    const server = buildServer();
+    const response = await server.inject({
+      method: "GET",
+      url: "/settings/organizations",
+      headers: {
+        authorization: "Bearer dev-session:user-admin"
+      }
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({ error: "unauthorized" });
+  });
+
   it("lets system admins configure organizations and roles", async () => {
     const { server, token } = await login("admin");
 
@@ -74,5 +88,19 @@ describe("access control", () => {
         id: "org-group"
       })
     ]);
+  });
+
+  it("does not expand member own-record scope to organization business data", async () => {
+    const { server, token } = await login("member");
+    const response = await server.inject({
+      method: "GET",
+      url: "/business/organizations",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().organizations).toEqual([]);
   });
 });

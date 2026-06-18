@@ -167,6 +167,7 @@ h2 {
 }
 
 .icon-button,
+.text-button,
 .primary-button {
   height: 44px;
   border-radius: 8px;
@@ -181,6 +182,12 @@ h2 {
 
 .icon-button {
   width: 44px;
+}
+
+.text-button {
+  padding: 0 14px;
+  color: #344054;
+  font-weight: 700;
 }
 
 .primary-button {
@@ -368,6 +375,32 @@ h2 {
   max-width: 420px;
   color: #667085;
   line-height: 1.7;
+}
+
+.password-field {
+  margin-top: 22px;
+  display: grid;
+  gap: 8px;
+}
+
+.password-field span {
+  color: #344054;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.password-field input {
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  outline: 0;
+}
+
+.login-error {
+  margin-top: 12px;
+  color: #b42318;
+  font-weight: 700;
 }
 
 .login-list {

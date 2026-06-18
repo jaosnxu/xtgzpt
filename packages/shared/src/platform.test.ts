@@ -28,4 +28,13 @@ describe("platform boundary", () => {
     expect(canViewOrganizationData(admin!, "org-store-a")).toBe(false);
     expect(visibleOrganizationsForUser(admin!)).toHaveLength(1);
   });
+
+  it("does not treat own-record access as organization-wide data access", () => {
+    const member = seedUsers.find((user) => user.username === "member");
+
+    expect(member).toBeDefined();
+    expect(canAccessModule("member", "settings")).toBe(false);
+    expect(canViewOrganizationData(member!, "org-store-a")).toBe(false);
+    expect(visibleOrganizationsForUser(member!)).toEqual([]);
+  });
 });
