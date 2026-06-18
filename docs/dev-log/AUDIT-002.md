@@ -2,7 +2,7 @@
 
 ## 状态
 
-- 状态：修复复测中
+- 状态：阶段门通过，等待合并
 - Issue：`https://github.com/jaosnxu/xtgzpt/issues/8`
 - 基线：`main` after DEV-002
 - 目的：进入 DEV-003 前，对当前阶段做统一自检、审计、修复和复测
@@ -26,6 +26,7 @@
 | `npm audit --omit=dev` | 0 vulnerabilities |
 | `git diff --check HEAD` | 通过 |
 | Headless Chrome 页面自检 | 通过 |
+| 独立 reviewer gate | 无 P0/P1/P2，允许合并 |
 
 ## API 自检结果
 
@@ -149,3 +150,13 @@
 - API 权限矩阵复测通过
 - 浏览器页面状态复测通过
 - 独立 reviewer gate 通过
+
+## Reviewer Gate
+
+最终 reviewer 结论：
+
+- 无 P0/P1/P2
+- 首页不再展示假业务事实
+- 审批模块仍明确标注 `DEV-010 待开发`
+- 登录、菜单、组织范围和数据权限未发现明显回归
+- 允许合并
