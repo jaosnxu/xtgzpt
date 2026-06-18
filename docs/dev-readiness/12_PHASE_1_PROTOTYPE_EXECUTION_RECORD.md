@@ -147,6 +147,17 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - `Settings State / 成员绑定`
 - `Settings State / 审计编辑`
 
+### 09 Test Evidence
+
+用于保存 Phase 1 原型测试截图证据。
+
+主要内容：
+
+- `Loop Prototype Test Evidence`
+- 25 张测试 frame 截图缩略图
+- V2 主流程 32/32 链接 PASS 记录
+- 设置详情 16/16 链接 PASS 记录
+
 ## 4. 已覆盖验收点
 
 已覆盖：
@@ -189,6 +200,7 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - 设置详情状态 frame
 - V2 主流程 32/32 按钮有效连线
 - 设置详情 16/16 按钮有效连线
+- 截图证据已存入 `09 Test Evidence`
 - 原型冻结话术规则
 
 ## 5. 当前未完成项
@@ -210,8 +222,9 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - `06 QA Fixed Screens`：4 个主要 frame
 - `07 V2 Main Prototype`：13 个主要 frame
 - `08 Role And Settings Detail`：12 个主要 frame
+- `09 Test Evidence`：26 个主要 frame
 
-合计：71 个主要 frame。
+合计：97 个主要 frame。
 
 已添加第一批按钮连线：
 

@@ -108,6 +108,7 @@
 - `11_PHASE_1_PROTOTYPE_GOVERNANCE.md`：第一阶段原型治理与冻结规则
 - `12_PHASE_1_PROTOTYPE_EXECUTION_RECORD.md`：第一阶段原型执行记录
 - `13_PHASE_1_DESIGN_QA_AUDIT.md`：第一阶段设计 QA 审计
+- `14_PHASE_1_INTERACTION_TEST_REPORT.md`：第一阶段交互测试报告
 
 ## 7. 进入开发前的放行条件
 
