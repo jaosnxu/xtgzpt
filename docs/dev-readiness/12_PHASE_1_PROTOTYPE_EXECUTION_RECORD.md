@@ -97,6 +97,17 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - `AI 失败与权限阻断`
 - `无权限页面模板`
 
+### 06 QA Fixed Screens
+
+用于修复第一轮 Design QA 发现的 P1 结构问题。
+
+主要 frame：
+
+- `QA FIX / 首页正式列表`
+- `QA FIX / 审批正式列表`
+- `QA FIX / 管理员设置导航`
+- `QA FIX / Phase Scope checklist`
+
 ## 4. 已覆盖验收点
 
 已覆盖：
@@ -129,6 +140,7 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - AI permission_blocked / policy_blocked / network_error 状态
 - 无权限页面模板
 - 系统设置字段级配置
+- QA 修复页：真实表格列、宽角色 badge、管理员设置导航、Phase Scope checklist
 - 原型冻结话术规则
 
 ## 5. 当前未完成项
@@ -150,8 +162,9 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - `03 States And Acceptance`：6 个主要 frame
 - `04 Deep Flows`：6 个主要 frame
 - `05 Edge States`：8 个主要 frame
+- `06 QA Fixed Screens`：4 个主要 frame
 
-合计：42 个主要 frame。
+合计：46 个主要 frame。
 
 已添加第一批按钮连线：
 
@@ -169,4 +182,4 @@ Loop 已启动 Phase 1 原型执行。
 
 当前原型可用于第一轮方向审查和主流程测试，但还不能冻结。
 
-冻结前必须继续补齐未完成项，并由用户完成测试。
+冻结前必须用 `06 QA Fixed Screens` 的标准替换旧版伪表格页面，并由用户完成测试。

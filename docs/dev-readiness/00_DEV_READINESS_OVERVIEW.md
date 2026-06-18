@@ -107,6 +107,7 @@
 - `10_DEVELOPMENT_BACKLOG.md`：开发 backlog
 - `11_PHASE_1_PROTOTYPE_GOVERNANCE.md`：第一阶段原型治理与冻结规则
 - `12_PHASE_1_PROTOTYPE_EXECUTION_RECORD.md`：第一阶段原型执行记录
+- `13_PHASE_1_DESIGN_QA_AUDIT.md`：第一阶段设计 QA 审计
 
 ## 7. 进入开发前的放行条件
 
