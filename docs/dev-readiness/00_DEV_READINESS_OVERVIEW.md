@@ -105,11 +105,14 @@
 - `08_TEST_CASES_AND_ACCEPTANCE.md`：测试用例与验收
 - `09_P0_P1_RISK_AUDIT.md`：P0/P1 风险审计
 - `10_DEVELOPMENT_BACKLOG.md`：开发 backlog
+- `11_PHASE_1_PROTOTYPE_GOVERNANCE.md`：第一阶段原型治理与冻结规则
 
 ## 7. 进入开发前的放行条件
 
 只有同时满足以下条件，才允许进入代码开发：
 
+- 第一阶段原型已经验收通过
+- 用户明确确认原型冻结
 - 一级菜单没有越界
 - 权限矩阵完整
 - 合同流程完整
@@ -133,3 +136,5 @@
 - changelog 或 release note：阶段结果
 
 Loop 运行时必须先读取本目录，再决定下一步动作。
+
+第一阶段必须先读 `11_PHASE_1_PROTOTYPE_GOVERNANCE.md`，不得跳过原型冻结直接进入正式代码开发。
