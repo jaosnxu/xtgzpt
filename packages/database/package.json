@@ -7,4 +7,3 @@
     "build": "node -e \"console.log('database migrations are SQL assets')\""
   }
 }
-

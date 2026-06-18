@@ -57,4 +57,3 @@ export const ROLE_MENU: Record<RoleKey, ModuleKey[]> = {
 export function canAccessModule(role: RoleKey, module: ModuleKey) {
   return ROLE_MENU[role].includes(module);
 }
-

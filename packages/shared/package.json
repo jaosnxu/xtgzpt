@@ -12,6 +12,6 @@
     }
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -p tsconfig.build.json"
   }
 }

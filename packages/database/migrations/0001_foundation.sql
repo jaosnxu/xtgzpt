@@ -25,4 +25,3 @@ CREATE TABLE audit_events (
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-

@@ -2,8 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
+    "outDir": "dist-types",
+    "noEmit": false,
+    "declaration": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts"],
+  "references": [{ "path": "../../packages/shared" }]
 }
-

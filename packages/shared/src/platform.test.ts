@@ -12,4 +12,3 @@ describe("platform boundary", () => {
     expect(canAccessModule("admin", "settings")).toBe(true);
   });
 });
-

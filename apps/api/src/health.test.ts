@@ -8,9 +8,12 @@ describe("health endpoint", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
+      boundary: {
+        aiAuthority: "draft-suggest-remind-only",
+        approvalAuthority: "human-only"
+      },
       status: "ok",
       service: "xtgzpt-api"
     });
   });
 });
-
