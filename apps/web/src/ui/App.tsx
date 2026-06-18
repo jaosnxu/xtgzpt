@@ -13,9 +13,27 @@ import {
   ShieldCheck,
   Users
 } from "lucide-react";
-import { ROLE_MENU, type RoleKey, platformModules } from "@xtgzpt/shared";
+import { useState } from "react";
+import {
+  canManageOrganizations,
+  canManageRoles,
+  roles,
+  rolePolicies,
+  seedOrganizations,
+  platformModules,
+  type ModuleKey,
+  type Organization,
+  type PublicUser
+} from "@xtgzpt/shared";
 
-const activeRole: RoleKey = "admin";
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api";
+
+interface SessionState {
+  token: string;
+  user: PublicUser;
+  visibleModules: ModuleKey[];
+  dataOrganizations: Organization[];
+}
 
 const menuIcon = {
   dashboard: Home,
@@ -44,7 +62,35 @@ const auditEvents = [
 ];
 
 export function App() {
-  const visibleModules = platformModules.filter((item) => ROLE_MENU[activeRole].includes(item.key));
+  const [session, setSession] = useState<SessionState | null>(null);
+  const activeUser = session?.user ?? null;
+
+  async function handleLogin(username: string, password: string) {
+    const response = await fetch(`${apiBaseUrl}/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        username,
+        password
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error("账号或密码错误");
+    }
+
+    setSession((await response.json()) as SessionState);
+  }
+
+  if (!session || !activeUser) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
+  const visibleModules = platformModules.filter((item) => session.visibleModules.includes(item.key));
+  const dataOrganizations = session.dataOrganizations;
+  const canOpenSettings = canManageOrganizations(activeUser.role) || canManageRoles(activeUser.role);
 
   return (
     <div className="app-shell">
@@ -53,7 +99,7 @@ export function App() {
           <span className="brand-mark">XT</span>
           <div>
             <strong>协同工作平台</strong>
-            <span>Phase 1 Development</span>
+            <span>{roles[activeUser.role]}</span>
           </div>
         </div>
 
@@ -73,14 +119,21 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">已按冻结原型进入开发</p>
+            <p className="eyebrow">已进入 DEV-002：账号、角色、组织、权限</p>
             <h1>首页工作台</h1>
           </div>
           <div className="top-actions">
+            <div className="account-chip">
+              <span>{activeUser.displayName}</span>
+              <strong>{roles[activeUser.role]}</strong>
+            </div>
             <label className="search-box">
               <Search size={17} />
               <input placeholder="搜索项目、任务、合同" />
             </label>
+            <button className="text-button" onClick={() => setSession(null)}>
+              退出
+            </button>
             <button className="icon-button" aria-label="通知">
               <Bell size={18} />
             </button>
@@ -90,7 +143,7 @@ export function App() {
         <section className="metric-grid" aria-label="核心指标">
           <MetricCard title="我的待办" value="18" helper="审批、任务、合同确认" />
           <MetricCard title="进行中项目" value="12" helper="按成员权限裁剪" />
-          <MetricCard title="待审合同" value="5" helper="必须人工二次确认" />
+          <MetricCard title="可见组织" value={String(dataOrganizations.length)} helper={rolePolicies[activeUser.role].dataScope} />
           <MetricCard title="审计事件" value="246" helper="关键动作不可删除" />
         </section>
 
@@ -128,14 +181,14 @@ export function App() {
             <div className="panel-header compact">
               <div>
                 <h2>权限边界</h2>
-                <p>AI 只能建议，不能替人确认。</p>
+                <p>系统管理员可配置系统，但不默认拥有全部业务数据。</p>
               </div>
               <ShieldCheck size={22} />
             </div>
             <ul className="guard-list">
               <li>审批必须人工完成</li>
-              <li>系统设置仅管理员可见</li>
-              <li>合同详情按项目成员裁剪</li>
+              <li>配置入口仅管理员角色可见</li>
+              <li>业务数据按授权范围裁剪</li>
               <li>审计记录只追加不删除</li>
             </ul>
           </aside>
@@ -144,15 +197,14 @@ export function App() {
             <div className="panel-header compact">
               <div>
                 <h2>组织与角色</h2>
-                <p>DEV-002 将进入账号、角色、组织范围。</p>
+                <p>当前账号只能看到被授权的组织范围。</p>
               </div>
               <Users size={22} />
             </div>
             <div className="role-strip">
-              <span>超级管理员</span>
-              <span>系统管理员</span>
-              <span>项目负责人</span>
-              <span>普通成员</span>
+              {dataOrganizations.map((organization) => (
+                <span key={organization.id}>{organization.name}</span>
+              ))}
             </div>
           </div>
 
@@ -169,9 +221,87 @@ export function App() {
               ))}
             </ol>
           </div>
+
+          {canOpenSettings ? (
+            <div className="panel settings-panel">
+              <div className="panel-header compact">
+                <div>
+                  <h2>系统设置</h2>
+                  <p>组织、角色和菜单权限进入配置管理。</p>
+                </div>
+                <Settings size={22} />
+              </div>
+              <div className="settings-grid">
+                <SettingsItem title="组织管理" value={`${seedOrganizations.length} 个组织`} enabled={canManageOrganizations(activeUser.role)} />
+                <SettingsItem title="角色管理" value={`${Object.keys(rolePolicies).length} 个角色`} enabled={canManageRoles(activeUser.role)} />
+                <SettingsItem title="菜单权限" value={`${visibleModules.length} 个可见菜单`} enabled />
+                <SettingsItem title="数据范围" value={rolePolicies[activeUser.role].dataScope} enabled />
+              </div>
+            </div>
+          ) : null}
         </section>
       </main>
     </div>
+  );
+}
+
+function LoginScreen({ onLogin }: { onLogin: (username: string, password: string) => Promise<void> }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    setError(null);
+
+    try {
+      await onLogin(username, password);
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : "登录失败");
+    }
+  }
+
+  return (
+    <main className="login-page">
+      <section className="login-shell">
+        <form
+          className="login-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <p className="eyebrow">协同工作平台</p>
+          <h1>账号登录</h1>
+          <p className="login-copy">输入用户名和密码进入系统。登录必须由 API 签发会话。</p>
+          <label className="password-field">
+            <span>用户名</span>
+            <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
+          </label>
+          <label className="password-field">
+            <span>密码</span>
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              autoComplete="current-password"
+            />
+          </label>
+          {error ? <p className="login-error">{error}</p> : null}
+          <button className="primary-button login-submit" type="submit">
+            登录
+          </button>
+        </form>
+        <div className="login-policy">
+          <h2>访问边界</h2>
+          <ul className="guard-list">
+            <li>认证由 API 签发会话</li>
+            <li>菜单按角色裁剪</li>
+            <li>业务数据按授权范围裁剪</li>
+            <li>高权限账号不在登录页暴露</li>
+          </ul>
+        </div>
+      </section>
+    </main>
   );
 }
 
@@ -182,5 +312,14 @@ function MetricCard({ title, value, helper }: { title: string; value: string; he
       <strong>{value}</strong>
       <p>{helper}</p>
     </article>
+  );
+}
+
+function SettingsItem({ title, value, enabled }: { title: string; value: string; enabled: boolean }) {
+  return (
+    <div className={enabled ? "settings-item" : "settings-item disabled"}>
+      <span>{title}</span>
+      <strong>{value}</strong>
+    </div>
   );
 }
