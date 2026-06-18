@@ -277,3 +277,19 @@ V2 主流程复审结果：
 当前剩余：
 
 - 更多边缘状态点击连线
+
+## 11. 交互覆盖验证
+
+已补齐主测试页面的同页交互目标 frame。
+
+验证结果：
+
+- `07 V2 Main Prototype`：32 个按钮，32 个已连线，未连线 0
+- `08 Role And Settings Detail`：16 个按钮，16 个已连线，未连线 0
+
+说明：
+
+- Figma 的 `NAVIGATE` 动作要求目标是同一页面内不同顶层 frame。
+- 跨 Figma page 的按钮无法直接作为同一原型导航目标。
+- 因此主测试入口应使用 `07 V2 Main Prototype` 和 `08 Role And Settings Detail`。
+- 旧版页面保留为过程记录，不作为冻结验收入口。

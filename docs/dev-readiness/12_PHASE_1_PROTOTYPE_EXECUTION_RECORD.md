@@ -120,6 +120,13 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - `V2 / 合同闭环`
 - `V2 / 审批闭环`
 - `V2 / 管理员权限设置`
+- `V2 State / 项目详情打开`
+- `V2 State / 聊天AI整理完成`
+- `V2 State / 知识草稿审核`
+- `V2 State / 合同风险已确认`
+- `V2 State / 审批处理状态`
+- `V2 State / 权限保存状态`
+- `V2 State / 权限取消状态`
 
 ### 08 Role And Settings Detail
 
@@ -134,6 +141,11 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - `Settings Detail / 流程配置`
 - `Settings Detail / AI框架`
 - `Settings Detail / 审计配置`
+- `Settings State / 角色视图`
+- `Settings State / 组织已保存`
+- `Settings State / 角色已保存`
+- `Settings State / 成员绑定`
+- `Settings State / 审计编辑`
 
 ## 4. 已覆盖验收点
 
@@ -173,6 +185,10 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - V2 主流程点击连线
 - 角色切换演示
 - 设置详情：组织管理、角色管理、权限管理、流程配置、AI 框架、审计配置
+- V2 主流程状态 frame
+- 设置详情状态 frame
+- V2 主流程 32/32 按钮有效连线
+- 设置详情 16/16 按钮有效连线
 - 原型冻结话术规则
 
 ## 5. 当前未完成项
@@ -192,10 +208,10 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - `04 Deep Flows`：6 个主要 frame
 - `05 Edge States`：8 个主要 frame
 - `06 QA Fixed Screens`：4 个主要 frame
-- `07 V2 Main Prototype`：6 个主要 frame
-- `08 Role And Settings Detail`：7 个主要 frame
+- `07 V2 Main Prototype`：13 个主要 frame
+- `08 Role And Settings Detail`：12 个主要 frame
 
-合计：59 个主要 frame。
+合计：71 个主要 frame。
 
 已添加第一批按钮连线：
 
@@ -217,6 +233,11 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - 审批同意 -> 首页工作台
 - 审批驳回 -> 合同闭环
 - 审批退回修改 -> 合同闭环
+
+最终交互覆盖验证：
+
+- `07 V2 Main Prototype`：32 个按钮，32 个已连线，未连线 0
+- `08 Role And Settings Detail`：16 个按钮，16 个已连线，未连线 0
 
 ## 7. 当前结论
 
@@ -248,3 +269,5 @@ V2 主流程已通过结构化审计：
 当前原型可用于第一轮方向审查和主流程测试，但还不能冻结。
 
 冻结前必须补齐更多边缘状态点击连线，并由用户完成测试。
+
+主测页面交互已补齐；旧版页面仍作为历史过程页，不作为冻结测试入口。
