@@ -51,7 +51,7 @@ const menuIcon = {
 
 const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
   dashboard: {
-    stage: "DEV-003 进行中",
+    stage: "DEV-003 已完成",
     summary: "当前阶段验证菜单、数据、操作、文件和 AI 权限统一受控。"
   },
   workbench: {
@@ -83,7 +83,7 @@ const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
     summary: "审批发起、当前节点审批人、同意、驳回、退回、转交和加签尚未进入代码开发。"
   },
   settings: {
-    stage: "DEV-003 进行中",
+    stage: "DEV-003 已完成",
     summary: "当前阶段已接入权限策略摘要，后续配置写入仍待真实后台持久化。"
   }
 };
@@ -170,7 +170,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">已进入 DEV-003：统一权限中间层</p>
+            <p className="eyebrow">DEV-003 已完成：等待 AUDIT-003 收口</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
