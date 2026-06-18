@@ -1,0 +1,76 @@
+name: PRD / 开发任务审查
+description: 提交协同工作平台的完整开发内容，先由 Loop 审查再进入开发。
+title: "[PRD] "
+labels:
+  - prd-review
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: 软件目标
+      description: 这个软件解决什么问题，给谁用，最终达到什么结果。
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 第一版范围
+      description: 第一版必须做什么、不做什么、核心闭环是什么。
+    validations:
+      required: true
+  - type: textarea
+    id: roles
+    attributes:
+      label: 用户角色与权限
+      description: 谁登录，每个角色能看什么、做什么。
+    validations:
+      required: true
+  - type: textarea
+    id: workflows
+    attributes:
+      label: 核心流程
+      description: 从开始到结束怎么走，每一步谁处理，状态如何变化。
+    validations:
+      required: true
+  - type: textarea
+    id: modules
+    attributes:
+      label: 页面与模块
+      description: 需要哪些页面，每个页面主要做什么。
+    validations:
+      required: false
+  - type: textarea
+    id: data
+    attributes:
+      label: 数据对象与字段
+      description: 核心对象、关键字段、关系。
+    validations:
+      required: false
+  - type: textarea
+    id: rules
+    attributes:
+      label: 业务规则
+      description: 权限、状态、审批、通知、配置、数据规则。
+    validations:
+      required: false
+  - type: textarea
+    id: integrations
+    attributes:
+      label: 第三方系统 / 技术限制
+      description: 是否需要外部系统、指定技术栈、多语言、移动端等。
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 什么叫完成，必须真实跑通什么，哪些错误不能出现。
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考资料
+      description: 竞品、截图、链接、表格、旧文档、附件说明。
+    validations:
+      required: false
