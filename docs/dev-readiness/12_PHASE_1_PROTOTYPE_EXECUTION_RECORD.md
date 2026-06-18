@@ -108,6 +108,19 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - `QA FIX / 管理员设置导航`
 - `QA FIX / Phase Scope checklist`
 
+### 07 V2 Main Prototype
+
+用于把 QA Fixed 标准应用到主流程页面，替代旧版伪表格页面。
+
+主要 frame：
+
+- `V2 / 首页工作台`
+- `V2 / 项目与任务`
+- `V2 / 聊天知识`
+- `V2 / 合同闭环`
+- `V2 / 审批闭环`
+- `V2 / 管理员权限设置`
+
 ## 4. 已覆盖验收点
 
 已覆盖：
@@ -141,16 +154,18 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - 无权限页面模板
 - 系统设置字段级配置
 - QA 修复页：真实表格列、宽角色 badge、管理员设置导航、Phase Scope checklist
+- V2 主流程：按 QA 标准重做首页、项目任务、聊天知识、合同、审批、管理员权限
+- V2 文件权限弹窗
+- V2 主流程点击连线
 - 原型冻结话术规则
 
 ## 5. 当前未完成项
 
 仍需继续补齐：
 
-- 系统设置每个子模块的完整表单字段
 - 角色切换演示
-- 文件权限独立弹窗
-- 更多 Figma 原型点击连线
+- 系统设置每个子模块的完整表单字段
+- 更多边缘状态点击连线
 
 ## 6. 验证记录
 
@@ -163,8 +178,9 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - `04 Deep Flows`：6 个主要 frame
 - `05 Edge States`：8 个主要 frame
 - `06 QA Fixed Screens`：4 个主要 frame
+- `07 V2 Main Prototype`：6 个主要 frame
 
-合计：46 个主要 frame。
+合计：52 个主要 frame。
 
 已添加第一批按钮连线：
 
@@ -176,10 +192,28 @@ https://www.figma.com/design/hN1gaidnnmvWUO3IgUwKYt
 - 合同执行确认完成回到 1280 首页
 - 审批退回修改回到合同上传/粘贴入口
 
+已添加 V2 主流程连线：
+
+- 首页处理合同风险 -> 合同闭环
+- 首页查看审批 -> 审批闭环
+- 首页确认 AI 草稿 -> 聊天知识
+- 聊天任务草稿 -> 项目与任务
+- 合同进入二次审查 -> 审批闭环
+- 审批同意 -> 首页工作台
+- 审批驳回 -> 合同闭环
+- 审批退回修改 -> 合同闭环
+
 ## 7. 当前结论
 
 Loop 已启动 Phase 1 原型执行。
 
+V2 主流程已通过结构化审计：
+
+- P1：0
+- P2：0
+- fake table spacing：0
+- text width risk：0
+
 当前原型可用于第一轮方向审查和主流程测试，但还不能冻结。
 
-冻结前必须用 `06 QA Fixed Screens` 的标准替换旧版伪表格页面，并由用户完成测试。
+冻结前必须完成角色切换演示，并由用户完成测试。
