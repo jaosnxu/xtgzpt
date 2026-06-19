@@ -21,7 +21,17 @@
 
 `INTENT-001` 已关闭。
 
+## Merge Queue Check
+
+- Queue: `#28 → #29 → #31`
+- `#28`: checks 全绿，`mergeable=true`
+- Blocker: `mergeable_state=blocked`
+- Branch protection: `main` requires 1 approving review
+- Current reviews: only `COMMENTED`, no `APPROVED`
+- Decision: do not self-approve or bypass reviewer gate
+
 ## Remaining Platform Debt
 
 - `INTENT-002`: 本机未安装 / 未认证 `gh` CLI，当前继续使用 GitHub connector 与 local git。
 - `INTENT-003`: 真实生产 secrets 与上线 smoke test 等生产目标明确后再开启。
+- `INTENT-004`: PR 队列合并需要非作者 / 外部 reviewer approving review。

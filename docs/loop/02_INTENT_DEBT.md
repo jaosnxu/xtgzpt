@@ -9,6 +9,7 @@
 | INTENT-001 | 2026-06-19 | external_switch | GitHub required checks 强制分支保护 | closed | 2026-06-19 已确认仓库为 public，`main` 已 protected，required checks 包含 `lint`、`typecheck`、`test`、`build-smoke`、`audit` |
 | INTENT-002 | 2026-06-19 | tool_failure | 使用 `gh` CLI 创建 / 检查 PR | open | 本机安装并认证 `gh`，或继续使用 GitHub connector |
 | INTENT-003 | 2026-06-19 | external_switch | 真实生产 secrets 与上线 smoke test | open | 生产环境、secrets、部署目标明确后配置 |
+| INTENT-004 | 2026-06-19 | external_review_gate | 合并 PR 队列 `#28 → #29 → #31` | open | `main` 分支保护要求 1 个 approving review；由非 PR 作者 / 外部 reviewer 审批 #28 后恢复合并队列 |
 
 ## 记录模板
 
