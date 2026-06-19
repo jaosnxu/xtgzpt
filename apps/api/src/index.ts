@@ -4,6 +4,12 @@ import { randomUUID } from "node:crypto";
 import { AiProviderError, fallbackAiFrameworkVersion, generateAiDraftContent } from "./ai-provider";
 import { loadLocalEnv } from "./env";
 import {
+  createRuntimeStore,
+  resolveRuntimeStoreOptions,
+  type DeniedAccessEvent,
+  type RuntimeStoreOptions
+} from "./runtime-store";
+import {
   canAccessFileAction,
   canAccessModule,
   canAccessResourceData,
@@ -33,7 +39,6 @@ import {
   type KnowledgeSearchResult,
   type ModuleKey,
   type OperationPermission,
-  type PermissionDimension,
   type ProjectMemoryRecord,
   type ProjectRecord,
   type ProjectStatus,
@@ -140,17 +145,6 @@ function textOrDefault(value: string | undefined, fallback: string) {
   return normalized && normalized.length > 0 ? normalized : fallback;
 }
 
-interface DeniedAccessEvent {
-  id: string;
-  actorUserId: string | null;
-  dimension: PermissionDimension | "auth";
-  action: string;
-  resourceType: string;
-  reason: "unauthenticated" | "forbidden";
-  requestId: string;
-  createdAt: string;
-}
-
 interface AuditRecordInput {
   request: FastifyRequest;
   user?: UserAccount;
@@ -170,17 +164,20 @@ function createSessionToken(user: UserAccount) {
   return `${sessionPrefix}:${user.id}:${randomUUID()}`;
 }
 
-export function buildServer() {
+export function buildServer(options: RuntimeStoreOptions = {}) {
   const sessions = new Map<string, string>();
-  const deniedAccessEvents: DeniedAccessEvent[] = [];
-  const auditLogs: AuditLogEntry[] = [];
-  const projects: ProjectRecord[] = [];
-  const tasks: TaskRecord[] = [];
-  const chatThreads: ChatThreadRecord[] = [];
-  const chatMessages: ChatMessageRecord[] = [];
-  const aiDrafts: AiDraftRecord[] = [];
-  const knowledgeItems: KnowledgeItemRecord[] = [];
-  const projectMemories: ProjectMemoryRecord[] = [];
+  const store = createRuntimeStore(resolveRuntimeStoreOptions(options));
+  const {
+    deniedAccessEvents,
+    auditLogs,
+    projects,
+    tasks,
+    chatThreads,
+    chatMessages,
+    aiDrafts,
+    knowledgeItems,
+    projectMemories
+  } = store.state;
   const server = Fastify({
     logger: true
   });
@@ -227,6 +224,7 @@ export function buildServer() {
     };
 
     auditLogs.push(entry);
+    store.save();
     return entry;
   }
 
@@ -263,6 +261,7 @@ export function buildServer() {
       requestId: requestId(request),
       createdAt: new Date().toISOString()
     });
+    store.save();
   }
 
   function canReadAuditEntry(user: UserAccount, entry: AuditLogEntry) {
@@ -1055,6 +1054,7 @@ export function buildServer() {
     };
 
     projects.push(project);
+    store.save();
     recordAudit({
       request,
       user,
@@ -1128,6 +1128,7 @@ export function buildServer() {
     if (!project.memberUserIds.includes(member.id)) {
       project.memberUserIds.push(member.id);
       project.updatedAt = nowIso();
+      store.save();
     }
 
     recordAudit({
@@ -1175,6 +1176,7 @@ export function buildServer() {
 
     project.status = nextStatus;
     project.updatedAt = nowIso();
+    store.save();
     recordAudit({
       request,
       user,
@@ -1265,6 +1267,7 @@ export function buildServer() {
     };
 
     tasks.push(task);
+    store.save();
     recordAudit({
       request,
       user,
@@ -1347,6 +1350,7 @@ export function buildServer() {
     task.status = nextStatus;
     task.cancelReason = nextStatus === "cancelled" ? request.body.reason?.trim() ?? null : task.cancelReason;
     task.updatedAt = nowIso();
+    store.save();
     recordAudit({
       request,
       user,
@@ -1437,6 +1441,7 @@ export function buildServer() {
     };
 
     chatThreads.push(thread);
+    store.save();
     recordAudit({
       request,
       user,
@@ -1545,6 +1550,7 @@ export function buildServer() {
 
     chatMessages.push(message);
     thread.updatedAt = timestamp;
+    store.save();
     recordAudit({
       request,
       user,
@@ -1690,6 +1696,7 @@ export function buildServer() {
     };
 
     aiDrafts.push(draft);
+    store.save();
     recordAudit({
       request,
       user,
@@ -1836,6 +1843,7 @@ export function buildServer() {
       draft.confirmedAt = timestamp;
       draft.promotedObjectType = "task";
       draft.promotedObjectId = task.id;
+      store.save();
       recordAudit({
         request,
         user,
@@ -1892,6 +1900,7 @@ export function buildServer() {
       draft.confirmedAt = timestamp;
       draft.promotedObjectType = "knowledge_item";
       draft.promotedObjectId = item.id;
+      store.save();
       recordAudit({
         request,
         user,
@@ -1939,6 +1948,7 @@ export function buildServer() {
     draft.confirmedAt = timestamp;
     draft.promotedObjectType = "project_memory";
     draft.promotedObjectId = memory.id;
+    store.save();
     recordAudit({
       request,
       user,

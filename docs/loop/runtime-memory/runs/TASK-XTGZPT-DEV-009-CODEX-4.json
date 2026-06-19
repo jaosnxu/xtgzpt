@@ -1,0 +1,61 @@
+{
+  "schema_version": "loop.run_summary.v1",
+  "task_id": "TASK-XTGZPT-DEV-009-CODEX-4",
+  "goal": "Complete DEV-009 production persistence foundation in the current xtgzpt working tree.",
+  "status": "verified_with_environment_exceptions",
+  "current_stage": "verification",
+  "created_at": "2026-06-19T17:30:00+00:00",
+  "updated_at": "2026-06-19T17:30:00+00:00",
+  "scope": {
+    "include": [
+      "API runtime persistence boundary",
+      "restart persistence tests",
+      "database migration assets",
+      "DEV-009 and AUDIT-009 logs",
+      "backlog alignment"
+    ],
+    "exclude": [
+      "Loop platform repository",
+      "secrets",
+      "deployment",
+      "production data",
+      "finance modules",
+      "unrelated features"
+    ]
+  },
+  "implementation": {
+    "accepted_existing_dev009_work": true,
+    "changes": [
+      "Expanded runtime restart tests to cover chat threads, chat messages, AI drafts, knowledge items, project memory and post-restart knowledge search.",
+      "Corrected DEV-009 PostgreSQL migration asset user and organization foreign key types to match existing UUID foundation tables.",
+      "Added migration assets for project status history, task status history and denied access events.",
+      "Changed smoke:api to use node --import tsx so the managed sandbox does not hit the tsx CLI IPC pipe restriction.",
+      "Updated DEV-009, AUDIT-009 and development backlog records."
+    ]
+  },
+  "verification": {
+    "passed": [
+      "npm run lint",
+      "npm run typecheck",
+      "npm run test: 8 files / 34 tests",
+      "npm run build",
+      "npm run smoke:api",
+      "npm run ci",
+      "npm audit --audit-level=low --offline: 0 vulnerabilities",
+      "Touched-file whitespace and conflict-marker scan"
+    ],
+    "blocked_by_environment": [
+      {
+        "command": "npm audit --audit-level=low",
+        "failure_type": "network",
+        "reason": "Restricted environment cannot resolve registry.npmjs.org."
+      },
+      {
+        "command": "git diff --check",
+        "failure_type": "configuration",
+        "reason": "Current managed worktree has no .git metadata."
+      }
+    ]
+  },
+  "next_action": "Run online npm audit and git diff --check in the real Git worktree / PR environment, then run GitHub required checks."
+}
