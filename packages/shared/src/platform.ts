@@ -62,6 +62,33 @@ export type PermissionDimension = "menu" | "data" | "operation" | "file" | "ai";
 
 export const permissionPolicyVersion = "seed-dev-003";
 
+export type AuditResult = "success" | "failure" | "denied";
+
+export interface AuditLogEntry {
+  id: string;
+  occurredAt: string;
+  actorUserId: string | null;
+  actorRoleIds: RoleKey[];
+  action: string;
+  objectType: string;
+  objectId: string | null;
+  organizationId: string | null;
+  sourceIp: string;
+  requestId: string;
+  beforeSnapshotRef: string | null;
+  afterSnapshotRef: string | null;
+  reason: string;
+  result: AuditResult;
+  aiInvolved: boolean;
+  aiFrameworkVersion: string | null;
+}
+
+export interface AuditLogFilter {
+  actorUserId?: string;
+  objectType?: string;
+  objectId?: string;
+}
+
 export interface Organization {
   id: string;
   name: string;
@@ -318,6 +345,10 @@ export function canManageRoles(role: RoleKey) {
 
 export function canManageSettings(role: RoleKey) {
   return rolePolicies[role].canManageSettings;
+}
+
+export function canQueryAuditLogs(role: RoleKey) {
+  return role === "super_admin" || rolePolicies[role].operations.includes("manage_permissions");
 }
 
 export function canViewOrganizationData(user: UserAccount, organizationId: string | undefined) {
