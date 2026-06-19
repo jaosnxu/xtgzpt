@@ -426,6 +426,30 @@ h2 {
   font-weight: 800;
 }
 
+.scope-note {
+  min-height: 38px;
+  margin: -4px 0 14px;
+  padding: 8px 10px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scope-note span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.scope-note strong {
+  color: #175b66;
+  font-size: 13px;
+  text-align: right;
+}
+
 .record-list {
   display: grid;
   gap: 10px;

@@ -446,6 +446,70 @@ describe("chat and AI draft loop", () => {
         authorization: `Bearer ${superToken}`
       }
     });
+
+    expect(tasks.json().tasks).toEqual(expect.arrayContaining([expect.objectContaining({ projectId })]));
+    expect(knowledgeItems.json().items).toHaveLength(1);
+    expect(memories.json().items).toHaveLength(1);
+
+    const knowledgeQuery = await server.inject({
+      method: "POST",
+      url: "/knowledge/query",
+      headers: {
+        authorization: `Bearer ${superToken}`
+      },
+      payload: {
+        query: "DEV-007",
+        projectId
+      }
+    });
+    expect(knowledgeQuery.statusCode).toBe(200);
+    expect(knowledgeQuery.json().results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "project_memory",
+          relevanceScore: expect.any(Number)
+        }),
+        expect.objectContaining({
+          type: "knowledge_item",
+          relevanceScore: expect.any(Number)
+        })
+      ])
+    );
+
+    const reuseThread = await server.inject({
+      method: "POST",
+      url: "/chat/threads",
+      headers: {
+        authorization: `Bearer ${superToken}`
+      },
+      payload: {
+        title: "DEV-007 回用会话",
+        organizationId: "org-product",
+        relatedObjectType: "project",
+        relatedObjectId: projectId
+      }
+    });
+    const reuseThreadId = reuseThread.json().thread.id as string;
+    await server.inject({
+      method: "POST",
+      url: `/chat/threads/${reuseThreadId}/messages`,
+      headers: {
+        authorization: `Bearer ${superToken}`
+      },
+      payload: {
+        content: "继续处理 DEV-007 项目记忆。"
+      }
+    });
+    const reuseDraft = await server.inject({
+      method: "POST",
+      url: `/chat/threads/${reuseThreadId}/ai/summarize`,
+      headers: {
+        authorization: `Bearer ${superToken}`
+      }
+    });
+    expect(reuseDraft.statusCode).toBe(200);
+    expect(reuseDraft.json().draft.contextSourceIds.length).toBeGreaterThan(0);
+
     const audit = await server.inject({
       method: "GET",
       url: "/audit-logs",
@@ -454,14 +518,15 @@ describe("chat and AI draft loop", () => {
       }
     });
 
-    expect(tasks.json().tasks).toEqual(expect.arrayContaining([expect.objectContaining({ projectId })]));
-    expect(knowledgeItems.json().items).toHaveLength(1);
-    expect(memories.json().items).toHaveLength(1);
     expect(audit.json().auditLogs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ action: "task.created_from_ai_draft" }),
         expect.objectContaining({ action: "knowledge.published_from_ai_draft" }),
-        expect.objectContaining({ action: "memory.created_from_ai_summary" })
+        expect.objectContaining({ action: "memory.created_from_ai_summary" }),
+        expect.objectContaining({
+          action: "ai.knowledge_query_requested",
+          result: "success"
+        })
       ])
     );
   });

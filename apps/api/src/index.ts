@@ -30,6 +30,7 @@ import {
   type ChatThreadRecord,
   type FilePermission,
   type KnowledgeItemRecord,
+  type KnowledgeSearchResult,
   type ModuleKey,
   type OperationPermission,
   type PermissionDimension,
@@ -94,6 +95,13 @@ interface ConfirmAiDraftBody {
   projectId?: string;
   assigneeUserId?: string;
   confirmerUserId?: string;
+}
+
+interface KnowledgeQueryBody {
+  query?: string;
+  organizationId?: string;
+  projectId?: string;
+  limit?: number;
 }
 
 const sessionPrefix = "dev-session";
@@ -375,14 +383,16 @@ export function buildServer() {
   function canReadKnowledgeItem(user: UserAccount, item: KnowledgeItemRecord) {
     return canAccessResourceData(user, {
       organizationId: item.organizationId,
-      ownerUserId: item.creatorUserId
+      ownerUserId: item.creatorUserId,
+      participantUserIds: item.sourceParticipantUserIds
     });
   }
 
   function canReadProjectMemory(user: UserAccount, item: ProjectMemoryRecord) {
     return canAccessResourceData(user, {
       organizationId: item.organizationId,
-      ownerUserId: item.creatorUserId
+      ownerUserId: item.creatorUserId,
+      participantUserIds: item.sourceParticipantUserIds
     });
   }
 
@@ -392,6 +402,112 @@ export function buildServer() {
 
   function visibleProjectMemoriesForUser(user: UserAccount) {
     return projectMemories.filter((item) => canReadProjectMemory(user, item));
+  }
+
+  function normalizeSearchText(value: string) {
+    return value.trim().toLocaleLowerCase();
+  }
+
+  function scoreSearchCandidate(queryTerms: string[], title: string, content: string) {
+    const normalizedTitle = normalizeSearchText(title);
+    const normalizedContent = normalizeSearchText(content);
+    const matchedFields = new Set<string>();
+    let relevanceScore = 0;
+
+    for (const term of queryTerms) {
+      if (normalizedTitle.includes(term)) {
+        relevanceScore += 3;
+        matchedFields.add("title");
+      }
+
+      if (normalizedContent.includes(term)) {
+        relevanceScore += 1;
+        matchedFields.add("content");
+      }
+    }
+
+    return {
+      relevanceScore,
+      matchedFields: Array.from(matchedFields)
+    };
+  }
+
+  function splitQueryTerms(query: string) {
+    return normalizeSearchText(query)
+      .split(/\s+/)
+      .map((term) => term.trim())
+      .filter(Boolean);
+  }
+
+  function searchKnowledgeAndMemory({
+    user,
+    query,
+    organizationId,
+    projectId,
+    limit = 8
+  }: {
+    user: UserAccount;
+    query: string;
+    organizationId?: string;
+    projectId?: string | null;
+    limit?: number;
+  }) {
+    const queryTerms = splitQueryTerms(query);
+
+    if (queryTerms.length === 0) {
+      return [];
+    }
+
+    const knowledgeResults: KnowledgeSearchResult[] = visibleKnowledgeItemsForUser(user)
+      .filter((item) => !organizationId || item.organizationId === organizationId)
+      .map((item) => {
+        const score = scoreSearchCandidate(queryTerms, item.title, item.content);
+
+        return {
+          id: item.id,
+          type: "knowledge_item",
+          title: item.title,
+          content: item.content,
+          organizationId: item.organizationId,
+          projectId: null,
+          sourceId: item.sourceDraftId,
+          sourceMessageIds: item.sourceMessageIds,
+          relevanceScore: score.relevanceScore,
+          matchedFields: score.matchedFields,
+          createdAt: item.createdAt
+        };
+      });
+    const memoryResults: KnowledgeSearchResult[] = visibleProjectMemoriesForUser(user)
+      .filter((item) => !organizationId || item.organizationId === organizationId)
+      .filter((item) => !projectId || item.projectId === projectId)
+      .map((item) => {
+        const score = scoreSearchCandidate(queryTerms, item.title, item.content);
+
+        return {
+          id: item.id,
+          type: "project_memory",
+          title: item.title,
+          content: item.content,
+          organizationId: item.organizationId,
+          projectId: item.projectId,
+          sourceId: item.sourceDraftId,
+          sourceMessageIds: item.sourceMessageIds,
+          relevanceScore: score.relevanceScore,
+          matchedFields: score.matchedFields,
+          createdAt: item.createdAt
+        };
+      });
+
+    return [...knowledgeResults, ...memoryResults]
+      .filter((item) => item.relevanceScore > 0)
+      .sort((left, right) => {
+        if (right.relevanceScore !== left.relevanceScore) {
+          return right.relevanceScore - left.relevanceScore;
+        }
+
+        return right.createdAt.localeCompare(left.createdAt);
+      })
+      .slice(0, Math.max(1, Math.min(limit, 20)));
   }
 
   function findVisibleChatThread(user: UserAccount, threadId: string) {
@@ -591,34 +707,6 @@ export function buildServer() {
         dimension: "file",
         action,
         resourceType: "file",
-        reason: "forbidden"
-      });
-      reply.code(403).send({ error: "forbidden" });
-      return undefined;
-    }
-
-    return user;
-  }
-
-  async function requireAiAccess(
-    request: FastifyRequest,
-    reply: FastifyReply,
-    capability: AiCapability,
-    resource?: ResourceAccessContext
-  ) {
-    const user = await requireUser(request, reply);
-
-    if (!user) {
-      return undefined;
-    }
-
-    if (!canUseAiCapability(user, capability, resource)) {
-      recordDeniedAccess({
-        request,
-        user,
-        dimension: "ai",
-        action: capability,
-        resourceType: "ai",
         reason: "forbidden"
       });
       reply.code(403).send({ error: "forbidden" });
@@ -1525,6 +1613,13 @@ export function buildServer() {
         senderName: seedUsers.find((candidate) => candidate.id === message.senderUserId)?.displayName ?? message.senderUserId,
         content: message.content
       }));
+    const contextResults = searchKnowledgeAndMemory({
+      user,
+      query: [thread.title, ...sourceMessages.map((message) => message.content)].join(" "),
+      organizationId: thread.organizationId,
+      projectId: thread.relatedObjectType === "project" ? thread.relatedObjectId : null,
+      limit: 5
+    });
 
     if (sourceMessageIds.length === 0) {
       reply.code(400).send({ error: "source_messages_required" });
@@ -1534,7 +1629,12 @@ export function buildServer() {
     const aiResult = await generateAiDraftContent({
       kind,
       threadTitle: thread.title,
-      messages: sourceMessages
+      messages: sourceMessages,
+      memoryContexts: contextResults.map((item) => ({
+        type: item.type,
+        title: item.title,
+        content: item.content
+      }))
     }).catch((error: unknown) => {
       if (error instanceof AiProviderError) {
         return error;
@@ -1578,6 +1678,7 @@ export function buildServer() {
             : `${thread.title} 知识草稿`,
       content: aiResult.content,
       sourceMessageIds,
+      contextSourceIds: contextResults.map((item) => item.id),
       frameworkVersion: aiResult.frameworkVersion,
       isDraft: true,
       status: "draft",
@@ -1601,7 +1702,7 @@ export function buildServer() {
       objectType: "ai_run",
       objectId: draft.id,
       organizationId: thread.organizationId,
-      reason: `ai_draft:${kind}`,
+      reason: `ai_draft:${kind}:memory_context:${contextResults.length}`,
       result: "success",
       aiInvolved: true,
       aiFrameworkVersion: draft.frameworkVersion
@@ -1779,6 +1880,7 @@ export function buildServer() {
         creatorUserId: user.id,
         sourceDraftId: draft.id,
         sourceMessageIds: draft.sourceMessageIds,
+        sourceParticipantUserIds: thread.memberUserIds,
         status: "published",
         createdAt: timestamp,
         updatedAt: timestamp
@@ -1827,6 +1929,7 @@ export function buildServer() {
       creatorUserId: user.id,
       sourceDraftId: draft.id,
       sourceMessageIds: draft.sourceMessageIds,
+      sourceParticipantUserIds: thread.memberUserIds,
       createdAt: timestamp
     };
 
@@ -1921,28 +2024,75 @@ export function buildServer() {
     return reply.code(501).send({ error: "not_implemented", stage: "DEV-005" });
   });
 
-  server.post("/knowledge/query", async (request, reply) => {
-    const user = await requireAiAccess(request, reply, "knowledge_query", {
-      participantUserIds: []
-    });
+  server.post<{ Body: KnowledgeQueryBody }>("/knowledge/query", async (request, reply) => {
+    const user = await requireUser(request, reply);
 
     if (!user) {
       return;
     }
+
+    if (!canUseAiCapability(user, "knowledge_query", { participantUserIds: [user.id] })) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "ai",
+        action: "knowledge_query",
+        resourceType: "knowledge",
+        reason: "forbidden"
+      });
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    const query = request.body?.query?.trim();
+
+    if (!query) {
+      return reply.code(400).send({ error: "query_required" });
+    }
+
+    const project = request.body?.projectId ? findVisibleProject(user, request.body.projectId) : undefined;
+
+    if (request.body?.projectId && !project) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "project",
+        reason: "knowledge_query:project_scope",
+        result: "denied",
+        aiInvolved: true,
+        aiFrameworkVersion: fallbackAiFrameworkVersion
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    if (request.body?.organizationId && project && project.organizationId !== request.body.organizationId) {
+      return reply.code(400).send({ error: "invalid_query_scope" });
+    }
+
+    const results = searchKnowledgeAndMemory({
+      user,
+      query,
+      organizationId: request.body?.organizationId ?? project?.organizationId,
+      projectId: project?.id ?? null,
+      limit: request.body?.limit
+    });
 
     recordAudit({
       request,
       user,
       action: "ai.knowledge_query_requested",
       objectType: "ai_run",
-      objectId: "dev008-not-implemented",
-      organizationId: user.defaultOrganizationId,
-      reason: "permission_passed_but_dev008_not_implemented",
-      result: "failure",
+      objectId: `knowledge-query-${requestId(request)}`,
+      organizationId: request.body?.organizationId ?? project?.organizationId ?? user.defaultOrganizationId,
+      reason: `knowledge_query:results:${results.length}`,
+      result: "success",
       aiInvolved: true,
-      aiFrameworkVersion: "not_started"
+      aiFrameworkVersion: fallbackAiFrameworkVersion
     });
-    return reply.code(501).send({ error: "not_implemented", stage: "DEV-008" });
+    return {
+      query,
+      results
+    };
   });
 
   server.get<{ Params: { module: string } }>("/modules/:module", async (request, reply) => {

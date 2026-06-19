@@ -10,10 +10,17 @@ interface AiProviderMessage {
   content: string;
 }
 
+export interface AiProviderMemoryContext {
+  type: "knowledge_item" | "project_memory";
+  title: string;
+  content: string;
+}
+
 interface GenerateAiDraftInput {
   kind: AiDraftRecord["kind"];
   threadTitle: string;
   messages: AiProviderMessage[];
+  memoryContexts?: AiProviderMemoryContext[];
 }
 
 interface GenerateAiDraftOptions {
@@ -65,6 +72,16 @@ function buildConversationText(messages: AiProviderMessage[]) {
   return messages.map((message, index) => `${index + 1}. ${message.senderName}: ${message.content}`).join("\n");
 }
 
+function buildMemoryContextText(memoryContexts: AiProviderMemoryContext[] = []) {
+  if (memoryContexts.length === 0) {
+    return "无";
+  }
+
+  return memoryContexts
+    .map((context, index) => `${index + 1}. [${context.type}] ${context.title}: ${context.content}`)
+    .join("\n");
+}
+
 export function buildArkChatPayload(input: GenerateAiDraftInput, model = defaultArkModel) {
   return {
     model,
@@ -79,6 +96,8 @@ export function buildArkChatPayload(input: GenerateAiDraftInput, model = default
         content: [
           `会话标题：${input.threadTitle}`,
           `目标：${promptForKind(input.kind)}`,
+          "可用项目记忆和知识：",
+          buildMemoryContextText(input.memoryContexts),
           "原始消息：",
           buildConversationText(input.messages)
         ].join("\n")
