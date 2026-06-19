@@ -26,5 +26,12 @@
 ## 当前状态
 
 - 代码层已补 `.github/workflows/ci.yml`
-- 平台层 required checks 需要仓库管理员确认
-- 未配置前，Loop 必须在本地运行同等 gate 并记录结果
+- 仓库可见性已配置为 `public`
+- `main` 分支已启用 branch protection
+- Required checks 已启用：
+  - `lint`
+  - `typecheck`
+  - `test`
+  - `build-smoke`
+  - `audit`
+- 验证来源：2026-06-19 GitHub repository metadata 与 public branch API

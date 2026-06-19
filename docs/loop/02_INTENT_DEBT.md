@@ -6,7 +6,7 @@
 
 | ID | 日期 | 分类 | 原始意图 | 当前状态 | 恢复条件 |
 | --- | --- | --- | --- | --- | --- |
-| INTENT-001 | 2026-06-19 | external_switch | GitHub required checks 强制分支保护 | open | 需要仓库管理员在 GitHub Branch protection rules 中启用 required checks |
+| INTENT-001 | 2026-06-19 | external_switch | GitHub required checks 强制分支保护 | closed | 2026-06-19 已确认仓库为 public，`main` 已 protected，required checks 包含 `lint`、`typecheck`、`test`、`build-smoke`、`audit` |
 | INTENT-002 | 2026-06-19 | tool_failure | 使用 `gh` CLI 创建 / 检查 PR | open | 本机安装并认证 `gh`，或继续使用 GitHub connector |
 | INTENT-003 | 2026-06-19 | external_switch | 真实生产 secrets 与上线 smoke test | open | 生产环境、secrets、部署目标明确后配置 |
 
