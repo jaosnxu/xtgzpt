@@ -1,0 +1,52 @@
+name: Loop BUG / 修复任务
+description: 记录缺陷、回归或生产风险，必须分类和复测。
+title: "[BUG] "
+labels:
+  - bug
+  - loop
+body:
+  - type: dropdown
+    id: failure_type
+    attributes:
+      label: 失败分类
+      options:
+        - code_error
+        - permission
+        - state_machine
+        - data_leak
+        - test_gap
+        - network
+        - configuration
+        - requirement_unclear
+        - production_risk
+        - tool_failure
+    validations:
+      required: true
+  - type: textarea
+    id: symptom
+    attributes:
+      label: 现象
+      description: 看到什么错误，在哪个页面、接口、命令或流程。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 正确行为
+      description: 应该发生什么。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤
+      description: 命令、账号、URL、输入数据、截图。
+    validations:
+      required: true
+  - type: textarea
+    id: regression
+    attributes:
+      label: 回归测试
+      description: 修复后必须增加或运行什么测试，避免同类问题重复。
+    validations:
+      required: true
