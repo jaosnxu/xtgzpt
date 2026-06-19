@@ -4,6 +4,7 @@ import {
   canAccessFileAction,
   canPerformOperation,
   canUseAiCapability,
+  canQueryAuditLogs,
   getPermissionSummary,
   canManageOrganizations,
   permissionPolicyVersion,
@@ -77,5 +78,12 @@ describe("platform boundary", () => {
     expect(canUseAiCapability(member!, "contract_review", { participantUserIds: [member!.id] })).toBe(false);
     expect(canUseAiCapability(admin!, "configure_ai_frameworks")).toBe(true);
     expect(canUseAiCapability(member!, "configure_ai_frameworks")).toBe(false);
+  });
+
+  it("restricts audit log queries to permission managers", () => {
+    expect(canQueryAuditLogs("super_admin")).toBe(true);
+    expect(canQueryAuditLogs("admin")).toBe(true);
+    expect(canQueryAuditLogs("project_owner")).toBe(false);
+    expect(canQueryAuditLogs("member")).toBe(false);
   });
 });

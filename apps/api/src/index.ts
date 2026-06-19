@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import {
   canAccessFileAction,
   canAccessModule,
+  canQueryAuditLogs,
   canManageSettings,
   canManageOrganizations,
   canManageRoles,
@@ -17,6 +18,9 @@ import {
   seedOrganizations,
   seedUsers,
   visibleOrganizationsForUser,
+  type AuditLogEntry,
+  type AuditLogFilter,
+  type AuditResult,
   type AiCapability,
   type FilePermission,
   type ModuleKey,
@@ -50,6 +54,21 @@ interface DeniedAccessEvent {
   createdAt: string;
 }
 
+interface AuditRecordInput {
+  request: FastifyRequest;
+  user?: UserAccount;
+  action: string;
+  objectType: string;
+  objectId?: string | null;
+  organizationId?: string | null;
+  beforeSnapshotRef?: string | null;
+  afterSnapshotRef?: string | null;
+  reason: string;
+  result: AuditResult;
+  aiInvolved?: boolean;
+  aiFrameworkVersion?: string | null;
+}
+
 function createSessionToken(user: UserAccount) {
   return `${sessionPrefix}:${user.id}:${randomUUID()}`;
 }
@@ -57,12 +76,54 @@ function createSessionToken(user: UserAccount) {
 export function buildServer() {
   const sessions = new Map<string, string>();
   const deniedAccessEvents: DeniedAccessEvent[] = [];
+  const auditLogs: AuditLogEntry[] = [];
   const server = Fastify({
     logger: true
   });
 
   function requestId(request: FastifyRequest) {
     return request.id;
+  }
+
+  function sourceIp(request: FastifyRequest) {
+    return request.ip || "unknown";
+  }
+
+  function recordAudit({
+    request,
+    user,
+    action,
+    objectType,
+    objectId = null,
+    organizationId = null,
+    beforeSnapshotRef = null,
+    afterSnapshotRef = null,
+    reason,
+    result,
+    aiInvolved = false,
+    aiFrameworkVersion = null
+  }: AuditRecordInput) {
+    const entry: AuditLogEntry = {
+      id: randomUUID(),
+      occurredAt: new Date().toISOString(),
+      actorUserId: user?.id ?? null,
+      actorRoleIds: user ? [user.role] : [],
+      action,
+      objectType,
+      objectId,
+      organizationId,
+      sourceIp: sourceIp(request),
+      requestId: requestId(request),
+      beforeSnapshotRef,
+      afterSnapshotRef,
+      reason,
+      result,
+      aiInvolved,
+      aiFrameworkVersion
+    };
+
+    auditLogs.push(entry);
+    return entry;
   }
 
   function recordDeniedAccess({
@@ -80,6 +141,14 @@ export function buildServer() {
     resourceType: string;
     reason: DeniedAccessEvent["reason"];
   }) {
+    recordAudit({
+      request,
+      user,
+      action: `access.${reason}`,
+      objectType: resourceType,
+      reason: `${dimension}:${action}`,
+      result: "denied"
+    });
     deniedAccessEvents.push({
       id: randomUUID(),
       actorUserId: user?.id ?? null,
@@ -89,6 +158,44 @@ export function buildServer() {
       reason,
       requestId: requestId(request),
       createdAt: new Date().toISOString()
+    });
+  }
+
+  function canReadAuditEntry(user: UserAccount, entry: AuditLogEntry) {
+    if (!canQueryAuditLogs(user.role)) {
+      return false;
+    }
+
+    if (rolePolicies[user.role].dataScope === "all_organizations") {
+      return true;
+    }
+
+    if (!entry.organizationId) {
+      return true;
+    }
+
+    return visibleOrganizationsForUser(user).some((organization) => organization.id === entry.organizationId);
+  }
+
+  function auditResultFor(user: UserAccount, filter: AuditLogFilter = {}) {
+    return auditLogs.filter((entry) => {
+      if (!canReadAuditEntry(user, entry)) {
+        return false;
+      }
+
+      if (filter.actorUserId && entry.actorUserId !== filter.actorUserId) {
+        return false;
+      }
+
+      if (filter.objectType && entry.objectType !== filter.objectType) {
+        return false;
+      }
+
+      if (filter.objectId && entry.objectId !== filter.objectId) {
+        return false;
+      }
+
+      return true;
     });
   }
 
@@ -272,11 +379,28 @@ export function buildServer() {
     );
 
     if (!user) {
+      recordAudit({
+        request,
+        action: "auth.login_failed",
+        objectType: "session",
+        reason: "invalid_credentials",
+        result: "failure"
+      });
       return reply.code(401).send({ error: "invalid_credentials" });
     }
 
     const token = createSessionToken(user);
     sessions.set(token, user.id);
+    recordAudit({
+      request,
+      user,
+      action: "auth.login_success",
+      objectType: "session",
+      objectId: user.id,
+      organizationId: user.defaultOrganizationId,
+      reason: "user_login",
+      result: "success"
+    });
 
     return {
       token,
@@ -284,6 +408,37 @@ export function buildServer() {
       visibleModules: rolePolicies[user.role].menu,
       dataOrganizations: visibleOrganizationsForUser(user),
       permissions: getPermissionSummary(user)
+    };
+  });
+
+  server.post("/auth/logout", async (request, reply) => {
+    const user = await requireUser(request, reply);
+
+    if (!user) {
+      return;
+    }
+
+    const headerToken = request.headers.authorization ?? request.headers["x-session-token"];
+    const token = Array.isArray(headerToken) ? headerToken[0] : headerToken;
+    const normalizedToken = token?.startsWith("Bearer ") ? token.slice(7) : token;
+
+    if (normalizedToken) {
+      sessions.delete(normalizedToken);
+    }
+
+    recordAudit({
+      request,
+      user,
+      action: "auth.logout",
+      objectType: "session",
+      objectId: user.id,
+      organizationId: user.defaultOrganizationId,
+      reason: "user_logout",
+      result: "success"
+    });
+
+    return {
+      status: "ok"
     };
   });
 
@@ -409,6 +564,74 @@ export function buildServer() {
     };
   });
 
+  server.get("/audit-logs", async (request, reply) => {
+    const user = await requireOperationAccess(request, reply, "manage_permissions");
+
+    if (!user) {
+      return;
+    }
+
+    recordAudit({
+      request,
+      user,
+      action: "audit.query",
+      objectType: "audit_log",
+      reason: "query_audit_logs",
+      result: "success"
+    });
+
+    return {
+      auditLogs: auditResultFor(user)
+    };
+  });
+
+  server.get<{ Params: { type: string; id: string } }>("/objects/:type/:id/audit-logs", async (request, reply) => {
+    const user = await requireOperationAccess(request, reply, "manage_permissions");
+
+    if (!user) {
+      return;
+    }
+
+    recordAudit({
+      request,
+      user,
+      action: "audit.object_query",
+      objectType: "audit_log",
+      reason: "query_object_audit_logs",
+      result: "success"
+    });
+
+    return {
+      auditLogs: auditResultFor(user, {
+        objectType: request.params.type,
+        objectId: request.params.id
+      })
+    };
+  });
+
+  server.get<{ Params: { id: string } }>("/users/:id/audit-logs", async (request, reply) => {
+    const user = await requireOperationAccess(request, reply, "manage_permissions");
+
+    if (!user) {
+      return;
+    }
+
+    recordAudit({
+      request,
+      user,
+      action: "audit.user_query",
+      objectType: "audit_log",
+      reason: "query_user_audit_logs",
+      result: "success"
+    });
+
+    return {
+      auditLogs: auditResultFor(user, {
+        actorUserId: request.params.id
+      })
+    };
+  });
+
   server.get("/business/organizations", async (request, reply) => {
     const user = await requireUser(request, reply);
 
@@ -428,6 +651,16 @@ export function buildServer() {
       return;
     }
 
+    recordAudit({
+      request,
+      user,
+      action: "project.create_requested",
+      objectType: "project",
+      objectId: "dev005-not-implemented",
+      organizationId: user.defaultOrganizationId,
+      reason: "permission_passed_but_dev005_not_implemented",
+      result: "failure"
+    });
     return reply.code(501).send({ error: "not_implemented", stage: "DEV-005" });
   });
 
@@ -438,6 +671,16 @@ export function buildServer() {
       return;
     }
 
+    recordAudit({
+      request,
+      user,
+      action: "file.upload_requested",
+      objectType: "file",
+      objectId: "dev005-not-implemented",
+      organizationId: user.defaultOrganizationId,
+      reason: "permission_passed_but_dev005_not_implemented",
+      result: "failure"
+    });
     return reply.code(501).send({ error: "not_implemented", stage: "DEV-005" });
   });
 
@@ -450,6 +693,15 @@ export function buildServer() {
       return;
     }
 
+    recordAudit({
+      request,
+      user,
+      action: "file.download_requested",
+      objectType: "file",
+      objectId: "dev005-not-implemented",
+      reason: "permission_passed_but_dev005_not_implemented",
+      result: "failure"
+    });
     return reply.code(501).send({ error: "not_implemented", stage: "DEV-005" });
   });
 
@@ -462,6 +714,18 @@ export function buildServer() {
       return;
     }
 
+    recordAudit({
+      request,
+      user,
+      action: "ai.knowledge_query_requested",
+      objectType: "ai_run",
+      objectId: "dev008-not-implemented",
+      organizationId: user.defaultOrganizationId,
+      reason: "permission_passed_but_dev008_not_implemented",
+      result: "failure",
+      aiInvolved: true,
+      aiFrameworkVersion: "not_started"
+    });
     return reply.code(501).send({ error: "not_implemented", stage: "DEV-008" });
   });
 

@@ -51,8 +51,8 @@ const menuIcon = {
 
 const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
   dashboard: {
-    stage: "DEV-003 已完成",
-    summary: "当前阶段验证菜单、数据、操作、文件和 AI 权限统一受控。"
+    stage: "DEV-004 进行中",
+    summary: "当前阶段接入审计日志基础设施、对象审计查询和用户审计查询。"
   },
   workbench: {
     stage: "DEV-005 待开发",
@@ -83,8 +83,8 @@ const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
     summary: "审批发起、当前节点审批人、同意、驳回、退回、转交和加签尚未进入代码开发。"
   },
   settings: {
-    stage: "DEV-003 已完成",
-    summary: "当前阶段已接入权限策略摘要，后续配置写入仍待真实后台持久化。"
+    stage: "DEV-004 进行中",
+    summary: "当前阶段已接入权限策略摘要和审计查询入口，配置写入仍待真实后台持久化。"
   }
 };
 
@@ -94,14 +94,15 @@ const stageGateItems = [
   { scope: "组织数据范围", owner: "API", status: "已验证", stage: "DEV-002" },
   { scope: "统一权限中间层", owner: "API / Web", status: "已验证", stage: "DEV-003" },
   { scope: "文件与 AI 权限", owner: "API", status: "已验证", stage: "DEV-003" },
+  { scope: "审计日志基础设施", owner: "API", status: "已验证", stage: "DEV-004" },
   { scope: "审批真实流程", owner: "未开发", status: "待开发", stage: "DEV-010" }
 ];
 
 const auditReadinessItems = [
-  "当前阶段记录无权限访问拒绝，不展示业务审计事实",
-  "真实审计写入基础设施待 DEV-004 接入",
+  "登录成功/失败、无权限访问和关键未实现动作已写 AuditLog",
+  "对象审计和用户审计查询已接入权限控制",
   "项目、合同、任务、审批事件未开发前不能出现在最近审计",
-  "后续所有失败与修复必须继续写入 dev-log 和 Issue"
+  "审计记录不提供物理删除入口"
 ];
 
 export function App() {
@@ -170,7 +171,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">DEV-003 已完成：等待 AUDIT-003 收口</p>
+            <p className="eyebrow">已进入 DEV-004：审计日志基础设施</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
@@ -228,10 +229,10 @@ function DashboardView({
   return (
     <>
       <section className="metric-grid" aria-label="核心指标">
-        <MetricCard title="当前阶段" value="DEV-003" helper="统一权限中间层" />
+        <MetricCard title="当前阶段" value="DEV-004" helper="审计日志基础设施" />
         <MetricCard title="可见菜单" value={String(visibleModuleCount)} helper="按角色裁剪" />
         <MetricCard title="可见组织" value={String(dataOrganizations.length)} helper={rolePolicies[activeUser.role].dataScope} />
-        <MetricCard title="策略版本" value={permissions.policyVersion} helper="后端返回权限摘要" />
+        <MetricCard title="审计查询" value="已接入" helper="对象 / 用户 / 全局审计" />
       </section>
 
       <section className="content-grid">
@@ -343,7 +344,7 @@ function AuditPreviewPanel() {
       <div className="panel-header compact">
         <div>
           <h2>审计边界</h2>
-          <p>真实业务审计尚未接入，当前仅展示阶段约束。</p>
+          <p>这里只展示审计能力边界，不展示模拟业务审计事实。</p>
         </div>
       </div>
       <ol className="audit-list">
