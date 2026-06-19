@@ -27,7 +27,6 @@
     "test": "npm run build -w @xtgzpt/shared && vitest run",
     "smoke:api": "tsx scripts/smoke.mjs",
     "live:ark": "tsx scripts/live-ark-check.mjs",
-    "loop:merge-queue": "node scripts/loop-merge-queue.mjs",
     "smoke": "npm run build && npm run smoke:api",
     "ci": "npm run lint && npm run typecheck && npm run test && npm run build && npm run smoke:api"
   },

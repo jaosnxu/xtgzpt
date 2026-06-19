@@ -16,9 +16,10 @@
 10. `docs/dev-readiness/10_DEVELOPMENT_BACKLOG.md`
 11. `docs/loop/01_OPERATING_RULES.md`
 12. `docs/loop/02_INTENT_DEBT.md`
-13. `docs/loop/04_MERGE_QUEUE_RUNNER.md`
-14. 最近 3 个 `docs/dev-log/DEV-*.md`
-15. 最近 3 个 `docs/dev-log/AUDIT-*.md`
+13. `docs/loop/04_GITHUB_BRANCH_PROTECTION.md`
+14. `docs/loop/05_EXTERNAL_LOOP_SYSTEM.md`
+15. 最近 3 个 `docs/dev-log/DEV-*.md`
+16. 最近 3 个 `docs/dev-log/AUDIT-*.md`
 
 ## 阶段启动必须确认
 
