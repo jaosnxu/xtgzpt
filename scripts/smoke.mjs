@@ -1,5 +1,3 @@
-/* global console, process */
-
 process.env.NODE_ENV = "test";
 
 const { buildServer } = await import("../apps/api/src/index.ts");

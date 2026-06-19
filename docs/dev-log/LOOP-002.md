@@ -29,6 +29,9 @@
 - Branch protection: `main` requires 1 approving review
 - Current reviews: only `COMMENTED`, no `APPROVED`
 - Decision: do not self-approve or bypass reviewer gate
+- Runner: `npm run loop:merge-queue -- --queue 28,29,31 --apply`
+- Runner result: stopped at `#28` with GitHub `405`
+- GitHub message: `At least 1 approving review is required by reviewers with write access.`
 
 ## Remaining Platform Debt
 
