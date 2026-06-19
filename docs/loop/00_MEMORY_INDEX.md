@@ -6,20 +6,24 @@
 
 1. `README.md`
 2. `PROJECT_INTAKE.md`
-3. `docs/dev-readiness/00_DEV_READINESS_OVERVIEW.md`
-4. `docs/dev-readiness/01_DEVELOPMENT_PRD.md`
-5. `docs/dev-readiness/02_PERMISSION_MATRIX.md`
-6. `docs/dev-readiness/03_OBJECTS_AND_STATE_MACHINES.md`
-7. `docs/dev-readiness/04_API_DRAFT.md`
-8. `docs/dev-readiness/06_AUDIT_LOG_MATRIX.md`
-9. `docs/dev-readiness/08_TEST_CASES_AND_ACCEPTANCE.md`
-10. `docs/dev-readiness/10_DEVELOPMENT_BACKLOG.md`
-11. `docs/loop/01_OPERATING_RULES.md`
-12. `docs/loop/02_INTENT_DEBT.md`
-13. `docs/loop/04_GITHUB_BRANCH_PROTECTION.md`
-14. `docs/loop/05_EXTERNAL_LOOP_SYSTEM.md`
-15. 最近 3 个 `docs/dev-log/DEV-*.md`
-16. 最近 3 个 `docs/dev-log/AUDIT-*.md`
+3. `docs/PROJECT_CONSTITUTION.md`
+4. `docs/TECHNICAL_STANDARD.md`
+5. `docs/BUSINESS_IMPLEMENTATION_PLAN.md`
+6. `docs/TEST_ACCEPTANCE_STANDARD.md`
+7. `docs/dev-readiness/00_DEV_READINESS_OVERVIEW.md`
+8. `docs/dev-readiness/01_DEVELOPMENT_PRD.md`
+9. `docs/dev-readiness/02_PERMISSION_MATRIX.md`
+10. `docs/dev-readiness/03_OBJECTS_AND_STATE_MACHINES.md`
+11. `docs/dev-readiness/04_API_DRAFT.md`
+12. `docs/dev-readiness/06_AUDIT_LOG_MATRIX.md`
+13. `docs/dev-readiness/08_TEST_CASES_AND_ACCEPTANCE.md`
+14. `docs/dev-readiness/10_DEVELOPMENT_BACKLOG.md`
+15. `docs/loop/01_OPERATING_RULES.md`
+16. `docs/loop/02_INTENT_DEBT.md`
+17. `docs/loop/04_GITHUB_BRANCH_PROTECTION.md`
+18. `docs/loop/05_EXTERNAL_LOOP_SYSTEM.md`
+19. 最近 3 个 `docs/dev-log/DEV-*.md`
+20. 最近 3 个 `docs/dev-log/AUDIT-*.md`
 
 ## 阶段启动必须确认
 

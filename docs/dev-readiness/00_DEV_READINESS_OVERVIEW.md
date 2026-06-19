@@ -1,6 +1,6 @@
 # DEV READINESS OVERVIEW
 
-更新时间：2026-06-18
+更新时间：2026-06-19
 
 ## 1. 本包目的
 
@@ -14,6 +14,10 @@
 
 - `README.md`
 - `PROJECT_INTAKE.md`
+- `docs/PROJECT_CONSTITUTION.md`
+- `docs/TECHNICAL_STANDARD.md`
+- `docs/BUSINESS_IMPLEMENTATION_PLAN.md`
+- `docs/TEST_ACCEPTANCE_STANDARD.md`
 - `docs/00_PROJECT_MASTER_PACKAGE.md`
 - `docs/01_GOVERNANCE_FREEZE_G000_G019.md`
 - `docs/02_WIREFRAME_WF0_P001_P009.md`
@@ -23,9 +27,10 @@
 
 冲突处理顺序：
 
-1. G000-G019 冻结规则优先
-2. WF-0 / P001-P009 页面范围优先
-3. 本目录用于落地补全，不得推翻冻结边界
+1. `docs/PROJECT_CONSTITUTION.md` 当前阶段、边界和禁止项优先
+2. G000-G019 冻结规则优先
+3. WF-0 / P001-P009 页面范围优先
+4. 本目录用于落地补全，不得推翻冻结边界
 
 ## 3. 开发总目标
 
@@ -95,6 +100,10 @@
 
 ## 6. DEV READINESS 文件索引
 
+- `../PROJECT_CONSTITUTION.md`：项目宪法
+- `../TECHNICAL_STANDARD.md`：技术标准
+- `../BUSINESS_IMPLEMENTATION_PLAN.md`：业务实现阶段计划
+- `../TEST_ACCEPTANCE_STANDARD.md`：测试验收标准
 - `01_DEVELOPMENT_PRD.md`：开发版 PRD
 - `02_PERMISSION_MATRIX.md`：权限矩阵
 - `03_OBJECTS_AND_STATE_MACHINES.md`：业务对象与状态机
@@ -127,6 +136,13 @@
 - 页面状态完整
 - 响应式范围明确
 - P0 风险已消除或有阻断标记
+
+当前状态：
+
+- Phase 1 原型已冻结。
+- 用户已明确回复 `按这个原型进入开发`。
+- 当前已进入代码开发，已完成 `DEV-001` 到 `DEV-008`。
+- 当前仍禁止生产上线，直到生产上线验收门槛全部通过。
 
 ## 8. Loop 记录规则
 
