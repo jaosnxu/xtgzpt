@@ -239,4 +239,52 @@ describe("chat and AI draft loop", () => {
     expect(summary.statusCode).toBe(400);
     expect(summary.json()).toEqual({ error: "source_messages_required" });
   });
+
+  it("rejects chat thread creation outside the creator organization scope", async () => {
+    const server = buildServer();
+    const memberToken = await loginOnServer(server, "member");
+    const superToken = await loginOnServer(server, "super");
+
+    const deniedThread = await server.inject({
+      method: "POST",
+      url: "/chat/threads",
+      headers: {
+        authorization: `Bearer ${memberToken}`
+      },
+      payload: {
+        title: "越权组织会话",
+        organizationId: "org-product"
+      }
+    });
+    const memberThreads = await server.inject({
+      method: "GET",
+      url: "/chat/threads",
+      headers: {
+        authorization: `Bearer ${memberToken}`
+      }
+    });
+    const audit = await server.inject({
+      method: "GET",
+      url: "/audit-logs",
+      headers: {
+        authorization: `Bearer ${superToken}`
+      }
+    });
+
+    expect(deniedThread.statusCode).toBe(403);
+    expect(deniedThread.json()).toEqual({ error: "forbidden" });
+    expect(memberThreads.statusCode).toBe(200);
+    expect(memberThreads.json().threads).toHaveLength(0);
+    expect(audit.statusCode).toBe(200);
+    expect(audit.json().auditLogs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "access.forbidden",
+          objectType: "chat_thread",
+          reason: "data:create_chat_thread",
+          result: "denied"
+        })
+      ])
+    );
+  });
 });

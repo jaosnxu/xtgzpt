@@ -356,6 +356,10 @@ export function buildServer() {
     return chatThreads.filter((thread) => thread.status !== "archived" && canReadChatThread(user, thread));
   }
 
+  function canUseOrganizationScope(user: UserAccount, organizationId: string) {
+    return visibleOrganizationsForUser(user).some((organization) => organization.id === organizationId);
+  }
+
   function findVisibleChatThread(user: UserAccount, threadId: string) {
     const thread = chatThreads.find((item) => item.id === threadId);
 
@@ -1238,6 +1242,19 @@ export function buildServer() {
     }
 
     const organizationId = request.body?.organizationId ?? user.defaultOrganizationId;
+
+    if (!canUseOrganizationScope(user, organizationId)) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "data",
+        action: "create_chat_thread",
+        resourceType: "chat_thread",
+        reason: "forbidden"
+      });
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
     const requestedMembers = request.body?.memberUserIds ?? [];
     const memberUserIds = Array.from(new Set([user.id, ...requestedMembers]));
     const validMembers = memberUserIds
