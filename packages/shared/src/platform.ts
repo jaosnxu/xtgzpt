@@ -68,6 +68,12 @@ export type ProjectStatus = "draft" | "active" | "paused" | "completed" | "archi
 
 export type TaskStatus = "draft" | "todo" | "in_progress" | "submitted" | "completed" | "blocked" | "cancelled" | "archived";
 
+export type ChatThreadStatus = "active" | "archived";
+
+export type ChatMessageStatus = "sent" | "edited" | "withdrawn";
+
+export type AiDraftKind = "chat_summary" | "task_draft" | "knowledge_draft";
+
 export interface ProjectRecord {
   id: string;
   title: string;
@@ -92,6 +98,42 @@ export interface TaskRecord {
   cancelReason: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ChatThreadRecord {
+  id: string;
+  title: string;
+  organizationId: string;
+  creatorUserId: string;
+  memberUserIds: string[];
+  relatedObjectType: "project" | "task" | "contract" | null;
+  relatedObjectId: string | null;
+  status: ChatThreadStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatMessageRecord {
+  id: string;
+  threadId: string;
+  senderUserId: string;
+  content: string;
+  status: ChatMessageStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiDraftRecord {
+  id: string;
+  kind: AiDraftKind;
+  threadId: string;
+  creatorUserId: string;
+  title: string;
+  content: string;
+  sourceMessageIds: string[];
+  frameworkVersion: string;
+  isDraft: true;
+  createdAt: string;
 }
 
 export interface AuditLogEntry {

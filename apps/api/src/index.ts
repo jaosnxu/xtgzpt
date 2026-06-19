@@ -19,10 +19,13 @@ import {
   seedOrganizations,
   seedUsers,
   visibleOrganizationsForUser,
+  type AiDraftRecord,
   type AuditLogEntry,
   type AuditLogFilter,
   type AuditResult,
   type AiCapability,
+  type ChatMessageRecord,
+  type ChatThreadRecord,
   type FilePermission,
   type ModuleKey,
   type OperationPermission,
@@ -65,6 +68,18 @@ interface CreateTaskBody {
 interface TaskStatusBody {
   status?: TaskStatus;
   reason?: string;
+}
+
+interface CreateChatThreadBody {
+  title?: string;
+  organizationId?: string;
+  memberUserIds?: string[];
+  relatedObjectType?: ChatThreadRecord["relatedObjectType"];
+  relatedObjectId?: string;
+}
+
+interface SendChatMessageBody {
+  content?: string;
 }
 
 const sessionPrefix = "dev-session";
@@ -139,6 +154,9 @@ export function buildServer() {
   const auditLogs: AuditLogEntry[] = [];
   const projects: ProjectRecord[] = [];
   const tasks: TaskRecord[] = [];
+  const chatThreads: ChatThreadRecord[] = [];
+  const chatMessages: ChatMessageRecord[] = [];
+  const aiDrafts: AiDraftRecord[] = [];
   const server = Fastify({
     logger: true
   });
@@ -323,6 +341,37 @@ export function buildServer() {
     return {
       task,
       project
+    };
+  }
+
+  function canReadChatThread(user: UserAccount, thread: ChatThreadRecord) {
+    return thread.memberUserIds.includes(user.id);
+  }
+
+  function visibleChatThreadsForUser(user: UserAccount) {
+    return chatThreads.filter((thread) => thread.status !== "archived" && canReadChatThread(user, thread));
+  }
+
+  function findVisibleChatThread(user: UserAccount, threadId: string) {
+    const thread = chatThreads.find((item) => item.id === threadId);
+
+    if (!thread || !canReadChatThread(user, thread)) {
+      return undefined;
+    }
+
+    return thread;
+  }
+
+  function latestThreadMessageIds(threadId: string) {
+    return chatMessages
+      .filter((message) => message.threadId === threadId && message.status !== "withdrawn")
+      .map((message) => message.id);
+  }
+
+  function threadWithMessageCount(thread: ChatThreadRecord) {
+    return {
+      ...thread,
+      messageCount: chatMessages.filter((message) => message.threadId === thread.id && message.status !== "withdrawn").length
     };
   }
 
@@ -1165,6 +1214,303 @@ export function buildServer() {
     };
   });
 
+  server.get("/chat/threads", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "chat");
+
+    if (!user) {
+      return;
+    }
+
+    return {
+      threads: visibleChatThreadsForUser(user).map(threadWithMessageCount)
+    };
+  });
+
+  server.post<{ Body: CreateChatThreadBody }>("/chat/threads", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "chat");
+
+    if (!user) {
+      return;
+    }
+
+    const organizationId = request.body?.organizationId ?? user.defaultOrganizationId;
+    const requestedMembers = request.body?.memberUserIds ?? [];
+    const memberUserIds = Array.from(new Set([user.id, ...requestedMembers]));
+    const validMembers = memberUserIds
+      .map((userId) => seedUsers.find((candidate) => candidate.id === userId && candidate.status === "active"))
+      .filter((candidate): candidate is UserAccount => Boolean(candidate));
+
+    if (validMembers.length !== memberUserIds.length) {
+      return reply.code(400).send({ error: "invalid_chat_member" });
+    }
+
+    if (request.body?.relatedObjectType === "project" && request.body.relatedObjectId) {
+      const relatedProject = findVisibleProject(user, request.body.relatedObjectId);
+
+      if (!relatedProject) {
+        recordAudit({
+          request,
+          user,
+          action: "access.forbidden",
+          objectType: "chat_thread",
+          reason: "chat:create_related_project",
+          result: "denied"
+        });
+        return reply.code(404).send({ error: "not_found" });
+      }
+    }
+
+    const timestamp = nowIso();
+    const thread: ChatThreadRecord = {
+      id: `chat-${randomUUID()}`,
+      title: textOrDefault(request.body?.title, "新的工作会话"),
+      organizationId,
+      creatorUserId: user.id,
+      memberUserIds,
+      relatedObjectType: request.body?.relatedObjectType ?? null,
+      relatedObjectId: request.body?.relatedObjectId ?? null,
+      status: "active",
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    chatThreads.push(thread);
+    recordAudit({
+      request,
+      user,
+      action: "chat.thread_created",
+      objectType: "chat_thread",
+      objectId: thread.id,
+      organizationId,
+      reason: "user_created_chat_thread",
+      result: "success"
+    });
+
+    return reply.code(201).send({
+      thread: threadWithMessageCount(thread)
+    });
+  });
+
+  server.get<{ Params: { id: string } }>("/chat/threads/:id", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "chat");
+
+    if (!user) {
+      return;
+    }
+
+    const thread = findVisibleChatThread(user, request.params.id);
+
+    if (!thread) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "chat_thread",
+        reason: "chat:read",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    return {
+      thread: threadWithMessageCount(thread)
+    };
+  });
+
+  server.get<{ Params: { id: string } }>("/chat/threads/:id/messages", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "chat");
+
+    if (!user) {
+      return;
+    }
+
+    const thread = findVisibleChatThread(user, request.params.id);
+
+    if (!thread) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "chat_thread",
+        reason: "chat:messages",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    return {
+      messages: chatMessages.filter((message) => message.threadId === thread.id && message.status !== "withdrawn")
+    };
+  });
+
+  server.post<{ Body: SendChatMessageBody; Params: { id: string } }>("/chat/threads/:id/messages", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "chat");
+
+    if (!user) {
+      return;
+    }
+
+    const thread = findVisibleChatThread(user, request.params.id);
+
+    if (!thread) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "chat_thread",
+        reason: "chat:send_message",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    const content = request.body?.content?.trim();
+
+    if (!content) {
+      return reply.code(400).send({ error: "message_content_required" });
+    }
+
+    const timestamp = nowIso();
+    const message: ChatMessageRecord = {
+      id: `message-${randomUUID()}`,
+      threadId: thread.id,
+      senderUserId: user.id,
+      content,
+      status: "sent",
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    chatMessages.push(message);
+    thread.updatedAt = timestamp;
+    recordAudit({
+      request,
+      user,
+      action: "chat.message_sent",
+      objectType: "chat_message",
+      objectId: message.id,
+      organizationId: thread.organizationId,
+      reason: "user_sent_chat_message",
+      result: "success"
+    });
+
+    return reply.code(201).send({
+      message
+    });
+  });
+
+  async function createChatAiDraft(
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+    capability: AiCapability,
+    kind: AiDraftRecord["kind"]
+  ) {
+    const user = await requireUser(request, reply);
+
+    if (!user) {
+      return undefined;
+    }
+
+    const thread = findVisibleChatThread(user, request.params.id);
+
+    if (!thread) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "chat_thread",
+        reason: `chat:${kind}`,
+        result: "denied",
+        aiInvolved: true,
+        aiFrameworkVersion: "chat-ai-framework-v1"
+      });
+      reply.code(404).send({ error: "not_found" });
+      return undefined;
+    }
+
+    if (!canUseAiCapability(user, capability, {
+      organizationId: thread.organizationId,
+      participantUserIds: thread.memberUserIds
+    })) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "ai",
+        action: capability,
+        resourceType: "chat_thread",
+        reason: "forbidden"
+      });
+      reply.code(403).send({ error: "forbidden" });
+      return undefined;
+    }
+
+    const sourceMessageIds = latestThreadMessageIds(thread.id);
+
+    if (sourceMessageIds.length === 0) {
+      reply.code(400).send({ error: "source_messages_required" });
+      return undefined;
+    }
+
+    const timestamp = nowIso();
+    const draft: AiDraftRecord = {
+      id: `ai-draft-${randomUUID()}`,
+      kind,
+      threadId: thread.id,
+      creatorUserId: user.id,
+      title:
+        kind === "chat_summary"
+          ? `${thread.title} 整理摘要`
+          : kind === "task_draft"
+            ? `${thread.title} 任务草稿`
+            : `${thread.title} 知识草稿`,
+      content:
+        kind === "chat_summary"
+          ? "AI 建议：已根据当前会话消息整理重点、风险和后续动作。"
+          : kind === "task_draft"
+            ? "AI 草稿：建议创建一条待人工确认的任务，不能自动进入正式任务列表。"
+            : "AI 草稿：建议沉淀为知识条目，必须由知识管理员审核发布。",
+      sourceMessageIds,
+      frameworkVersion: "chat-ai-framework-v1",
+      isDraft: true,
+      createdAt: timestamp
+    };
+
+    aiDrafts.push(draft);
+    recordAudit({
+      request,
+      user,
+      action:
+        kind === "chat_summary"
+          ? "ai.chat_summarized"
+          : kind === "task_draft"
+            ? "ai.task_draft_created"
+            : "ai.knowledge_draft_created",
+      objectType: "ai_run",
+      objectId: draft.id,
+      organizationId: thread.organizationId,
+      reason: `ai_draft:${kind}`,
+      result: "success",
+      aiInvolved: true,
+      aiFrameworkVersion: draft.frameworkVersion
+    });
+
+    return {
+      draft
+    };
+  }
+
+  server.post<{ Params: { id: string } }>("/chat/threads/:id/ai/summarize", async (request, reply) =>
+    createChatAiDraft(request, reply, "chat_summarize", "chat_summary")
+  );
+
+  server.post<{ Params: { id: string } }>("/chat/threads/:id/ai/task-draft", async (request, reply) =>
+    createChatAiDraft(request, reply, "task_draft", "task_draft")
+  );
+
+  server.post<{ Params: { id: string } }>("/chat/threads/:id/ai/knowledge-draft", async (request, reply) =>
+    createChatAiDraft(request, reply, "knowledge_query", "knowledge_draft")
+  );
+
   server.post("/files", async (request, reply) => {
     const user = await requireOperationAccess(request, reply, "upload_file");
 
@@ -1232,7 +1578,7 @@ export function buildServer() {
 
   server.get<{ Params: { module: string } }>("/modules/:module", async (request, reply) => {
     const moduleKey = request.params.module;
-    const availableModules: ModuleKey[] = ["dashboard", "settings", "projects", "tasks"];
+    const availableModules: ModuleKey[] = ["dashboard", "settings", "projects", "tasks", "chat"];
 
     if (!platformModules.some((module) => module.key === moduleKey)) {
       return reply.code(404).send({ error: "not_found" });

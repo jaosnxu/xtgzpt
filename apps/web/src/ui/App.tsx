@@ -22,6 +22,9 @@ import {
   seedOrganizations,
   seedUsers,
   platformModules,
+  type AiDraftRecord,
+  type ChatMessageRecord,
+  type ChatThreadRecord,
   type ModuleKey,
   type Organization,
   type PermissionSummary,
@@ -44,6 +47,10 @@ interface ProjectSummary extends ProjectRecord {
   taskCount: number;
 }
 
+interface ChatThreadSummary extends ChatThreadRecord {
+  messageCount: number;
+}
+
 const menuIcon = {
   dashboard: Home,
   workbench: LayoutDashboard,
@@ -58,8 +65,8 @@ const menuIcon = {
 
 const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
   dashboard: {
-    stage: "DEV-005 进行中",
-    summary: "项目与任务闭环正在接入真实 API，审计基础设施继续作为底座。"
+    stage: "DEV-006 进行中",
+    summary: "聊天与 AI 草稿正在接入真实 API，项目任务闭环继续作为底座。"
   },
   workbench: {
     stage: "DEV-005 待开发",
@@ -74,8 +81,8 @@ const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
     summary: "任务列表、创建、负责人提交和人工确认已进入真实接口。"
   },
   chat: {
-    stage: "DEV-006 待开发",
-    summary: "聊天、AI 整理草稿和群组可见性尚未进入代码开发。"
+    stage: "DEV-006 进行中",
+    summary: "聊天会话、消息、AI 整理、任务草稿和知识草稿已进入真实接口。"
   },
   knowledge: {
     stage: "DEV-008 待开发",
@@ -102,7 +109,8 @@ const stageGateItems = [
   { scope: "统一权限中间层", owner: "API / Web", status: "已验证", stage: "DEV-003" },
   { scope: "文件与 AI 权限", owner: "API", status: "已验证", stage: "DEV-003" },
   { scope: "审计日志基础设施", owner: "API", status: "已验证", stage: "DEV-004" },
-  { scope: "项目与任务闭环", owner: "API / Web", status: "开发中", stage: "DEV-005" },
+  { scope: "项目与任务闭环", owner: "API / Web", status: "已验证", stage: "DEV-005" },
+  { scope: "聊天与 AI 草稿", owner: "API / Web", status: "开发中", stage: "DEV-006" },
   { scope: "审批真实流程", owner: "未开发", status: "待开发", stage: "DEV-010" }
 ];
 
@@ -118,10 +126,17 @@ export function App() {
   const [activeModule, setActiveModule] = useState<ModuleKey>("dashboard");
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
+  const [chatThreads, setChatThreads] = useState<ChatThreadSummary[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessageRecord[]>([]);
+  const [aiDrafts, setAiDrafts] = useState<AiDraftRecord[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [projectTitle, setProjectTitle] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
+  const [chatTitle, setChatTitle] = useState("");
+  const [chatMessage, setChatMessage] = useState("");
   const [workError, setWorkError] = useState<string | null>(null);
+  const [chatError, setChatError] = useState<string | null>(null);
   const activeUser = session?.user ?? null;
 
   async function authorizedRequest<T>(path: string, init: RequestInit = {}) {
@@ -160,16 +175,41 @@ export function App() {
     setSelectedProjectId((current) => current ?? projectResult.projects[0]?.id ?? null);
   }
 
+  async function refreshChatData(threadId = selectedThreadId) {
+    if (!session) {
+      return;
+    }
+
+    const threadResult = await authorizedRequest<{ threads: ChatThreadSummary[] }>("/chat/threads");
+    const nextThreadId = threadId ?? threadResult.threads[0]?.id ?? null;
+    setChatThreads(threadResult.threads);
+    setSelectedThreadId(nextThreadId);
+
+    if (!nextThreadId) {
+      setChatMessages([]);
+      return;
+    }
+
+    const messageResult = await authorizedRequest<{ messages: ChatMessageRecord[] }>(`/chat/threads/${nextThreadId}/messages`);
+    setChatMessages(messageResult.messages);
+  }
+
   useEffect(() => {
     if (!session) {
       setProjects([]);
       setTasks([]);
+      setChatThreads([]);
+      setChatMessages([]);
+      setAiDrafts([]);
       setSelectedProjectId(null);
+      setSelectedThreadId(null);
       return;
     }
 
-    void refreshWorkData().catch((error) => {
-      setWorkError(error instanceof Error ? error.message : "项目任务数据加载失败");
+    void Promise.all([refreshWorkData(), refreshChatData()]).catch((error) => {
+      const message = error instanceof Error ? error.message : "数据加载失败";
+      setWorkError(message);
+      setChatError(message);
     });
   }, [session?.token]);
 
@@ -268,6 +308,55 @@ export function App() {
     await refreshWorkData();
   }
 
+  async function createChatThread() {
+    setChatError(null);
+    const result = await authorizedRequest<{ thread: ChatThreadSummary }>("/chat/threads", {
+      method: "POST",
+      body: JSON.stringify({
+        title: chatTitle.trim() || "新的工作会话",
+        organizationId: session?.dataOrganizations[0]?.id ?? activeUser?.defaultOrganizationId,
+        memberUserIds: activeUser?.id === "user-member" ? ["user-owner"] : ["user-member"]
+      })
+    });
+    setChatTitle("");
+    await refreshChatData(result.thread.id);
+  }
+
+  async function sendChatMessage() {
+    if (!selectedThreadId) {
+      return;
+    }
+
+    setChatError(null);
+    await authorizedRequest<{ message: ChatMessageRecord }>(`/chat/threads/${selectedThreadId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({
+        content: chatMessage.trim() || "需要 AI 整理的工作沟通。"
+      })
+    });
+    setChatMessage("");
+    await refreshChatData(selectedThreadId);
+  }
+
+  async function createAiDraft(kind: AiDraftRecord["kind"]) {
+    if (!selectedThreadId) {
+      return;
+    }
+
+    setChatError(null);
+    const path =
+      kind === "chat_summary"
+        ? "summarize"
+        : kind === "task_draft"
+          ? "task-draft"
+          : "knowledge-draft";
+    const result = await authorizedRequest<{ draft: AiDraftRecord }>(`/chat/threads/${selectedThreadId}/ai/${path}`, {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+    setAiDrafts((current) => [result.draft, ...current]);
+  }
+
   if (!session || !activeUser) {
     return <LoginScreen onLogin={handleLogin} />;
   }
@@ -310,7 +399,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">已进入 DEV-005：项目与任务闭环</p>
+            <p className="eyebrow">已进入 DEV-006：聊天与 AI 草稿</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
@@ -380,6 +469,40 @@ export function App() {
             taskTitle={taskTitle}
             tasks={tasks}
           />
+        ) : currentModule === "chat" ? (
+          <ChatView
+            activeUser={activeUser}
+            aiDrafts={aiDrafts}
+            chatMessage={chatMessage}
+            chatTitle={chatTitle}
+            error={chatError}
+            messages={chatMessages}
+            onCreateDraft={(kind) => {
+              void createAiDraft(kind).catch((error) => {
+                setChatError(error instanceof Error ? error.message : "AI 草稿生成失败");
+              });
+            }}
+            onCreateThread={() => {
+              void createChatThread().catch((error) => {
+                setChatError(error instanceof Error ? error.message : "创建会话失败");
+              });
+            }}
+            onSelectThread={(threadId) => {
+              setSelectedThreadId(threadId);
+              void refreshChatData(threadId).catch((error) => {
+                setChatError(error instanceof Error ? error.message : "会话加载失败");
+              });
+            }}
+            onSendMessage={() => {
+              void sendChatMessage().catch((error) => {
+                setChatError(error instanceof Error ? error.message : "发送消息失败");
+              });
+            }}
+            selectedThreadId={selectedThreadId}
+            setChatMessage={setChatMessage}
+            setChatTitle={setChatTitle}
+            threads={chatThreads}
+          />
         ) : currentModule === "settings" && canOpenSettings ? (
           <SettingsView activeUser={activeUser} permissions={session.permissions} visibleModuleCount={visibleModules.length} />
         ) : (
@@ -408,7 +531,7 @@ function DashboardView({
   return (
     <>
       <section className="metric-grid" aria-label="核心指标">
-        <MetricCard title="当前阶段" value="DEV-005" helper="项目与任务闭环" />
+        <MetricCard title="当前阶段" value="DEV-006" helper="聊天与 AI 草稿" />
         <MetricCard title="可见菜单" value={String(visibleModuleCount)} helper="按角色裁剪" />
         <MetricCard title="可见组织" value={String(dataOrganizations.length)} helper={rolePolicies[activeUser.role].dataScope} />
         <MetricCard title="审计查询" value="已接入" helper="对象 / 用户 / 全局审计" />
@@ -772,6 +895,163 @@ function taskActionButtons(task: TaskRecord, onTaskStatusChange: (task: TaskReco
   }
 
   return <span className="muted-text">无</span>;
+}
+
+function ChatView({
+  activeUser,
+  aiDrafts,
+  chatMessage,
+  chatTitle,
+  error,
+  messages,
+  onCreateDraft,
+  onCreateThread,
+  onSelectThread,
+  onSendMessage,
+  selectedThreadId,
+  setChatMessage,
+  setChatTitle,
+  threads
+}: {
+  activeUser: PublicUser;
+  aiDrafts: AiDraftRecord[];
+  chatMessage: string;
+  chatTitle: string;
+  error: string | null;
+  messages: ChatMessageRecord[];
+  onCreateDraft: (kind: AiDraftRecord["kind"]) => void;
+  onCreateThread: () => void;
+  onSelectThread: (threadId: string) => void;
+  onSendMessage: () => void;
+  selectedThreadId: string | null;
+  setChatMessage: (value: string) => void;
+  setChatTitle: (value: string) => void;
+  threads: ChatThreadSummary[];
+}) {
+  const selectedThread = threads.find((thread) => thread.id === selectedThreadId) ?? threads[0] ?? null;
+  const selectedDrafts = selectedThread ? aiDrafts.filter((draft) => draft.threadId === selectedThread.id) : [];
+
+  return (
+    <section className="project-workspace">
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">DEV-006 真实数据</p>
+            <h2>聊天会话</h2>
+            <p>会话只对成员可见，AI 只能整理和生成草稿。</p>
+          </div>
+        </div>
+        {error ? <p className="inline-error">{error}</p> : null}
+        <div className="inline-form">
+          <input value={chatTitle} onChange={(event) => setChatTitle(event.target.value)} placeholder="会话名称" />
+          <button className="primary-button" onClick={onCreateThread}>
+            创建会话
+          </button>
+        </div>
+        <div className="record-list">
+          {threads.length > 0 ? (
+            threads.map((thread) => (
+              <button
+                className={selectedThread?.id === thread.id ? "record-row active" : "record-row"}
+                key={thread.id}
+                onClick={() => onSelectThread(thread.id)}
+              >
+                <span>
+                  <strong>{thread.title}</strong>
+                  <small>{organizationName(thread.organizationId)} · {thread.memberUserIds.length} 成员</small>
+                </span>
+                <span className="status-pill">{thread.status}</span>
+                <span className="count-pill">{thread.messageCount} 消息</span>
+              </button>
+            ))
+          ) : (
+            <div className="empty-state">当前没有可见会话。</div>
+          )}
+        </div>
+      </div>
+
+      <div className="panel project-task-panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">会话消息</p>
+            <h2>{selectedThread?.title ?? "未选择会话"}</h2>
+            <p>AI 整理必须引用消息来源，不能删除原始消息。</p>
+          </div>
+        </div>
+        {selectedThread ? (
+          <>
+            <div className="inline-form">
+              <input value={chatMessage} onChange={(event) => setChatMessage(event.target.value)} placeholder="输入工作消息" />
+              <button className="primary-button" onClick={onSendMessage}>
+                发送
+              </button>
+            </div>
+            <div className="task-table">
+              <div className="task-row task-head">
+                <span>发送人</span>
+                <span>内容</span>
+                <span>状态</span>
+                <span>时间</span>
+                <span>来源</span>
+              </div>
+              {messages.length > 0 ? (
+                messages.map((message) => (
+                  <div className="task-row" key={message.id}>
+                    <span>{userName(message.senderUserId)}</span>
+                    <span>
+                      <strong>{message.content}</strong>
+                    </span>
+                    <span className="status-pill">{message.status}</span>
+                    <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
+                    <span className="muted-text">原始消息</span>
+                  </div>
+                ))
+              ) : (
+                <div className="empty-state">当前会话没有消息。</div>
+              )}
+            </div>
+          </>
+        ) : null}
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">AI 边界</p>
+            <h2>整理与草稿</h2>
+            <p>当前用户：{activeUser.displayName}。AI 输出必须人工确认后才能进入正式对象。</p>
+          </div>
+        </div>
+        <div className="action-row">
+          <button className="secondary-button" disabled={!selectedThread || messages.length === 0} onClick={() => onCreateDraft("chat_summary")}>
+            整理摘要
+          </button>
+          <button className="secondary-button" disabled={!selectedThread || messages.length === 0} onClick={() => onCreateDraft("task_draft")}>
+            任务草稿
+          </button>
+          <button className="secondary-button" disabled={!selectedThread || messages.length === 0} onClick={() => onCreateDraft("knowledge_draft")}>
+            知识草稿
+          </button>
+        </div>
+        <div className="record-list">
+          {selectedDrafts.length > 0 ? (
+            selectedDrafts.map((draft) => (
+              <div className="record-row" key={draft.id}>
+                <span>
+                  <strong>{draft.title}</strong>
+                  <small>{draft.content}</small>
+                </span>
+                <span className="status-pill">{draft.kind}</span>
+                <span className="count-pill">{draft.sourceMessageIds.length} 来源</span>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state">还没有 AI 草稿。先发送消息，再生成草稿。</div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function ModuleStatusView({ moduleKey, moduleName }: { moduleKey: ModuleKey; moduleName: string }) {
