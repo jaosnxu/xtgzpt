@@ -1,6 +1,8 @@
 import Fastify from "fastify";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
+import { AiProviderError, fallbackAiFrameworkVersion, generateAiDraftContent } from "./ai-provider";
+import { loadLocalEnv } from "./env";
 import {
   canAccessFileAction,
   canAccessModule,
@@ -37,6 +39,8 @@ import {
   type TaskStatus,
   type UserAccount
 } from "@xtgzpt/shared";
+
+loadLocalEnv();
 
 interface LoginBody {
   username?: string;
@@ -1422,7 +1426,7 @@ export function buildServer() {
         reason: `chat:${kind}`,
         result: "denied",
         aiInvolved: true,
-        aiFrameworkVersion: "chat-ai-framework-v1"
+        aiFrameworkVersion: fallbackAiFrameworkVersion
       });
       reply.code(404).send({ error: "not_found" });
       return undefined;
@@ -1445,9 +1449,48 @@ export function buildServer() {
     }
 
     const sourceMessageIds = latestThreadMessageIds(thread.id);
+    const sourceMessages = chatMessages
+      .filter((message) => sourceMessageIds.includes(message.id))
+      .map((message) => ({
+        senderName: seedUsers.find((candidate) => candidate.id === message.senderUserId)?.displayName ?? message.senderUserId,
+        content: message.content
+      }));
 
     if (sourceMessageIds.length === 0) {
       reply.code(400).send({ error: "source_messages_required" });
+      return undefined;
+    }
+
+    const aiResult = await generateAiDraftContent({
+      kind,
+      threadTitle: thread.title,
+      messages: sourceMessages
+    }).catch((error: unknown) => {
+      if (error instanceof AiProviderError) {
+        return error;
+      }
+
+      return new AiProviderError("ai_provider_unexpected_error");
+    });
+
+    if (aiResult instanceof AiProviderError) {
+      recordAudit({
+        request,
+        user,
+        action:
+          kind === "chat_summary"
+            ? "ai.chat_summarized"
+            : kind === "task_draft"
+              ? "ai.task_draft_created"
+              : "ai.knowledge_draft_created",
+        objectType: "ai_run",
+        organizationId: thread.organizationId,
+        reason: aiResult.message,
+        result: "failure",
+        aiInvolved: true,
+        aiFrameworkVersion: fallbackAiFrameworkVersion
+      });
+      reply.code(502).send({ error: "ai_provider_failed" });
       return undefined;
     }
 
@@ -1463,14 +1506,9 @@ export function buildServer() {
           : kind === "task_draft"
             ? `${thread.title} 任务草稿`
             : `${thread.title} 知识草稿`,
-      content:
-        kind === "chat_summary"
-          ? "AI 建议：已根据当前会话消息整理重点、风险和后续动作。"
-          : kind === "task_draft"
-            ? "AI 草稿：建议创建一条待人工确认的任务，不能自动进入正式任务列表。"
-            : "AI 草稿：建议沉淀为知识条目，必须由知识管理员审核发布。",
+      content: aiResult.content,
       sourceMessageIds,
-      frameworkVersion: "chat-ai-framework-v1",
+      frameworkVersion: aiResult.frameworkVersion,
       isDraft: true,
       createdAt: timestamp
     };

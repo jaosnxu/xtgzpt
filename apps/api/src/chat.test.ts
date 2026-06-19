@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { fallbackAiFrameworkVersion } from "./ai-provider";
 import { buildServer } from "./index";
 
 type TestServer = ReturnType<typeof buildServer>;
@@ -131,7 +132,7 @@ describe("chat and AI draft loop", () => {
       expect.objectContaining({
         kind: "chat_summary",
         isDraft: true,
-        frameworkVersion: "chat-ai-framework-v1",
+        frameworkVersion: fallbackAiFrameworkVersion,
         sourceMessageIds: [messageId]
       })
     );
@@ -191,7 +192,7 @@ describe("chat and AI draft loop", () => {
         expect.objectContaining({
           action: "ai.chat_summarized",
           aiInvolved: true,
-          aiFrameworkVersion: "chat-ai-framework-v1"
+          aiFrameworkVersion: fallbackAiFrameworkVersion
         }),
         expect.objectContaining({
           action: "ai.task_draft_created",
