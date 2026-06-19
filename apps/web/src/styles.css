@@ -205,6 +205,13 @@ h2 {
   background: #eef6f6;
 }
 
+.secondary-button:disabled {
+  cursor: not-allowed;
+  color: #98a2b3;
+  border-color: #d8dee8;
+  background: #f8fafc;
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -444,6 +451,10 @@ h2 {
 .record-row:hover {
   border-color: #1f7a8c;
   background: #f3fbfb;
+}
+
+div.record-row {
+  cursor: default;
 }
 
 .record-row strong,

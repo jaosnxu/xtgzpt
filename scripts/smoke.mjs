@@ -116,6 +116,32 @@ try {
     "task completed audit entry missing"
   );
 
+  const createThread = await inject("POST", "/chat/threads", ownerToken, {
+    title: "Smoke 会话",
+    organizationId: "org-product",
+    memberUserIds: ["user-member"]
+  });
+  assert(createThread.statusCode === 201, `create chat thread failed with ${createThread.statusCode}`);
+  const threadId = createThread.body.thread.id;
+
+  const sendMessage = await inject("POST", `/chat/threads/${threadId}/messages`, memberToken, {
+    content: "Smoke 聊天消息，需要 AI 整理和草稿。"
+  });
+  assert(sendMessage.statusCode === 201, `send chat message failed with ${sendMessage.statusCode}`);
+
+  const summaryDraft = await inject("POST", `/chat/threads/${threadId}/ai/summarize`, memberToken);
+  const taskDraft = await inject("POST", `/chat/threads/${threadId}/ai/task-draft`, memberToken);
+  const knowledgeDraft = await inject("POST", `/chat/threads/${threadId}/ai/knowledge-draft`, memberToken);
+  assert(summaryDraft.statusCode === 200, `summary draft failed with ${summaryDraft.statusCode}`);
+  assert(taskDraft.statusCode === 200, `task draft failed with ${taskDraft.statusCode}`);
+  assert(knowledgeDraft.statusCode === 200, `knowledge draft failed with ${knowledgeDraft.statusCode}`);
+  assert(summaryDraft.body.draft.isDraft === true, "summary is not marked as draft");
+  assert(taskDraft.body.draft.kind === "task_draft", "task draft returned wrong kind");
+  assert(knowledgeDraft.body.draft.kind === "knowledge_draft", "knowledge draft returned wrong kind");
+
+  const chatModule = await inject("GET", "/modules/chat", memberToken);
+  assert(chatModule.body.status === "available", "chat module is not available");
+
   console.log(
     JSON.stringify(
       {
@@ -128,7 +154,9 @@ try {
           "task_status_loop",
           "confirmation_gate",
           "module_status",
-          "task_audit"
+          "task_audit",
+          "chat_thread",
+          "chat_ai_drafts"
         ]
       },
       null,

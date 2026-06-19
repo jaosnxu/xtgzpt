@@ -104,3 +104,32 @@ jobs:
 
       - name: Dependency audit
         run: npm audit --audit-level=low
+
+  ark-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ARK_API_KEY: ${{ secrets.ARK_API_KEY }}
+      ARK_BASE_URL: ${{ vars.ARK_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3' }}
+      ARK_MODEL: ${{ vars.ARK_MODEL || 'doubao-seed-2-0-pro-260215' }}
+      ARK_AI_MAX_TOKENS: ${{ vars.ARK_AI_MAX_TOKENS || '1200' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Skip when Ark secret is missing
+        if: ${{ env.ARK_API_KEY == '' }}
+        run: echo "ARK_API_KEY secret is not configured. Live Ark test skipped."
+
+      - name: Ark live test
+        if: ${{ env.ARK_API_KEY != '' }}
+        run: npm run live:ark
