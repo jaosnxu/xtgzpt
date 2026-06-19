@@ -3,7 +3,12 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
 import { AiProviderError, fallbackAiFrameworkVersion, generateAiDraftContent } from "./ai-provider";
 import { loadLocalEnv } from "./env";
-import { createRuntimeStore, type DeniedAccessEvent, type RuntimeStoreOptions } from "./runtime-store";
+import {
+  createRuntimeStore,
+  resolveRuntimeStoreOptions,
+  type DeniedAccessEvent,
+  type RuntimeStoreOptions
+} from "./runtime-store";
 import {
   canAccessFileAction,
   canAccessModule,
@@ -161,7 +166,7 @@ function createSessionToken(user: UserAccount) {
 
 export function buildServer(options: RuntimeStoreOptions = {}) {
   const sessions = new Map<string, string>();
-  const store = createRuntimeStore(options);
+  const store = createRuntimeStore(resolveRuntimeStoreOptions(options));
   const {
     deniedAccessEvents,
     auditLogs,

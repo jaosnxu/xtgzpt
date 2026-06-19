@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildServer } from "./index";
+import { resolveRuntimeStoreOptions } from "./runtime-store";
 
 type TestServer = ReturnType<typeof buildServer>;
 
@@ -35,6 +36,81 @@ afterEach(() => {
 });
 
 describe("runtime persistence store", () => {
+  it("resolves a stable runtime data path for non-test startup and stays inert in tests", () => {
+    expect(
+      resolveRuntimeStoreOptions({}, { NODE_ENV: "development" }, "/tmp/xtgzpt/apps/api/dist")
+    ).toEqual({
+      dataFilePath: "/tmp/xtgzpt/apps/api/data/runtime-data.json"
+    });
+    expect(
+      resolveRuntimeStoreOptions({}, { NODE_ENV: "development", XTGZPT_RUNTIME_DATA_FILE: "/tmp/custom.json" }, "/tmp/xtgzpt/apps/api/dist")
+    ).toEqual({
+      dataFilePath: "/tmp/custom.json"
+    });
+    expect(resolveRuntimeStoreOptions({}, { NODE_ENV: "test" }, "/tmp/xtgzpt/apps/api/dist")).toEqual({});
+  });
+
+  it("keeps runtime data after restart through the default server startup path", async () => {
+    const dataFilePath = createDataFilePath();
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousRuntimeDataFile = process.env.XTGZPT_RUNTIME_DATA_FILE;
+    process.env.NODE_ENV = "development";
+    process.env.XTGZPT_RUNTIME_DATA_FILE = dataFilePath;
+
+    let secondServer: TestServer | null = null;
+
+    try {
+      const firstServer = buildServer();
+      const ownerToken = await loginOnServer(firstServer, "owner");
+      const createProject = await firstServer.inject({
+        method: "POST",
+        url: "/projects",
+        headers: {
+          authorization: `Bearer ${ownerToken}`
+        },
+        payload: {
+          title: "DEV-009 默认启动持久化",
+          summary: "验证正常启动路径不再丢失 runtime 数据。",
+          organizationId: "org-product"
+        }
+      });
+
+      expect(createProject.statusCode).toBe(201);
+      const projectId = createProject.json().project.id as string;
+      await firstServer.close();
+
+      secondServer = buildServer();
+      const secondOwnerToken = await loginOnServer(secondServer, "owner");
+      const projects = await secondServer.inject({
+        method: "GET",
+        url: "/projects",
+        headers: {
+          authorization: `Bearer ${secondOwnerToken}`
+        }
+      });
+
+      expect(projects.statusCode).toBe(200);
+      expect(projects.json().projects).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: projectId,
+            title: "DEV-009 默认启动持久化"
+          })
+        ])
+      );
+    } finally {
+      if (secondServer) {
+        await secondServer.close();
+      }
+      process.env.NODE_ENV = previousNodeEnv;
+      if (previousRuntimeDataFile === undefined) {
+        delete process.env.XTGZPT_RUNTIME_DATA_FILE;
+      } else {
+        process.env.XTGZPT_RUNTIME_DATA_FILE = previousRuntimeDataFile;
+      }
+    }
+  });
+
   it("keeps projects, tasks and audit logs after the API runtime restarts", async () => {
     const dataFilePath = createDataFilePath();
     const firstServer = buildServer({ dataFilePath });

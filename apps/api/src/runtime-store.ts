@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type {
   AiDraftRecord,
   AuditLogEntry,
@@ -43,6 +44,8 @@ export interface RuntimeStoreOptions {
   dataFilePath?: string;
 }
 
+const defaultRuntimeDataFileName = "runtime-data.json";
+
 function emptyRuntimeData(): RuntimeData {
   return {
     deniedAccessEvents: [],
@@ -84,6 +87,23 @@ function loadRuntimeData(dataFilePath?: string) {
 
   const raw = readFileSync(dataFilePath, "utf8");
   return normalizeRuntimeData(JSON.parse(raw));
+}
+
+export function resolveRuntimeStoreOptions(
+  options: RuntimeStoreOptions = {},
+  env: Record<string, string | undefined> = process.env,
+  moduleDir = dirname(fileURLToPath(import.meta.url))
+): RuntimeStoreOptions {
+  if (options.dataFilePath || env.NODE_ENV === "test") {
+    return options;
+  }
+
+  return {
+    ...options,
+    dataFilePath:
+      env.XTGZPT_RUNTIME_DATA_FILE ??
+      resolve(moduleDir, "..", "data", defaultRuntimeDataFileName)
+  };
 }
 
 export function createRuntimeStore(options: RuntimeStoreOptions = {}): RuntimeStore {
