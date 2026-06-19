@@ -51,8 +51,8 @@ const menuIcon = {
 
 const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
   dashboard: {
-    stage: "DEV-004 进行中",
-    summary: "当前阶段接入审计日志基础设施、对象审计查询和用户审计查询。"
+    stage: "DEV-004 已完成",
+    summary: "审计日志基础设施、对象审计查询和用户审计查询已合并，等待 AUDIT-004 收口。"
   },
   workbench: {
     stage: "DEV-005 待开发",
@@ -83,8 +83,8 @@ const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
     summary: "审批发起、当前节点审批人、同意、驳回、退回、转交和加签尚未进入代码开发。"
   },
   settings: {
-    stage: "DEV-004 进行中",
-    summary: "当前阶段已接入权限策略摘要和审计查询入口，配置写入仍待真实后台持久化。"
+    stage: "DEV-004 已完成",
+    summary: "审计查询权限边界已接入，配置写入仍待真实后台持久化。"
   }
 };
 
@@ -171,7 +171,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">已进入 DEV-004：审计日志基础设施</p>
+            <p className="eyebrow">DEV-004 已完成：等待 AUDIT-004 收口</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
