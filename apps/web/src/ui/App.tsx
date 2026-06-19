@@ -25,9 +25,11 @@ import {
   type AiDraftRecord,
   type ChatMessageRecord,
   type ChatThreadRecord,
+  type KnowledgeItemRecord,
   type ModuleKey,
   type Organization,
   type PermissionSummary,
+  type ProjectMemoryRecord,
   type ProjectRecord,
   type PublicUser,
   type TaskRecord
@@ -65,8 +67,8 @@ const menuIcon = {
 
 const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
   dashboard: {
-    stage: "DEV-006 进行中",
-    summary: "聊天与 AI 草稿正在接入真实 API，项目任务闭环继续作为底座。"
+    stage: "DEV-007 进行中",
+    summary: "AI 草稿确认入库正在接入，聊天和项目任务闭环继续作为底座。"
   },
   workbench: {
     stage: "DEV-005 待开发",
@@ -81,12 +83,12 @@ const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
     summary: "任务列表、创建、负责人提交和人工确认已进入真实接口。"
   },
   chat: {
-    stage: "DEV-006 进行中",
-    summary: "聊天会话、消息、AI 整理、任务草稿和知识草稿已进入真实接口。"
+    stage: "DEV-007 进行中",
+    summary: "聊天会话、消息、AI 草稿和人工确认入库已进入真实接口。"
   },
   knowledge: {
-    stage: "DEV-008 待开发",
-    summary: "知识库问答、发布审核和权限过滤尚未进入代码开发。"
+    stage: "DEV-007 进行中",
+    summary: "AI 知识草稿经人工确认后发布为知识条目，摘要可沉淀为项目记忆。"
   },
   contracts: {
     stage: "DEV-009 待开发",
@@ -110,7 +112,8 @@ const stageGateItems = [
   { scope: "文件与 AI 权限", owner: "API", status: "已验证", stage: "DEV-003" },
   { scope: "审计日志基础设施", owner: "API", status: "已验证", stage: "DEV-004" },
   { scope: "项目与任务闭环", owner: "API / Web", status: "已验证", stage: "DEV-005" },
-  { scope: "聊天与 AI 草稿", owner: "API / Web", status: "开发中", stage: "DEV-006" },
+  { scope: "聊天与 AI 草稿", owner: "API / Web", status: "已验证", stage: "DEV-006" },
+  { scope: "AI 草稿确认入库", owner: "API / Web", status: "开发中", stage: "DEV-007" },
   { scope: "审批真实流程", owner: "未开发", status: "待开发", stage: "DEV-010" }
 ];
 
@@ -129,6 +132,8 @@ export function App() {
   const [chatThreads, setChatThreads] = useState<ChatThreadSummary[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessageRecord[]>([]);
   const [aiDrafts, setAiDrafts] = useState<AiDraftRecord[]>([]);
+  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItemRecord[]>([]);
+  const [projectMemories, setProjectMemories] = useState<ProjectMemoryRecord[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [projectTitle, setProjectTitle] = useState("");
@@ -187,11 +192,29 @@ export function App() {
 
     if (!nextThreadId) {
       setChatMessages([]);
+      setAiDrafts([]);
       return;
     }
 
-    const messageResult = await authorizedRequest<{ messages: ChatMessageRecord[] }>(`/chat/threads/${nextThreadId}/messages`);
+    const [messageResult, draftResult] = await Promise.all([
+      authorizedRequest<{ messages: ChatMessageRecord[] }>(`/chat/threads/${nextThreadId}/messages`),
+      authorizedRequest<{ drafts: AiDraftRecord[] }>(`/chat/threads/${nextThreadId}/ai/drafts`)
+    ]);
     setChatMessages(messageResult.messages);
+    setAiDrafts(draftResult.drafts);
+  }
+
+  async function refreshKnowledgeData() {
+    if (!session) {
+      return;
+    }
+
+    const [knowledgeResult, memoryResult] = await Promise.all([
+      authorizedRequest<{ items: KnowledgeItemRecord[] }>("/knowledge/items"),
+      authorizedRequest<{ items: ProjectMemoryRecord[] }>("/memory/items")
+    ]);
+    setKnowledgeItems(knowledgeResult.items);
+    setProjectMemories(memoryResult.items);
   }
 
   useEffect(() => {
@@ -201,12 +224,14 @@ export function App() {
       setChatThreads([]);
       setChatMessages([]);
       setAiDrafts([]);
+      setKnowledgeItems([]);
+      setProjectMemories([]);
       setSelectedProjectId(null);
       setSelectedThreadId(null);
       return;
     }
 
-    void Promise.all([refreshWorkData(), refreshChatData()]).catch((error) => {
+    void Promise.all([refreshWorkData(), refreshChatData(), refreshKnowledgeData()]).catch((error) => {
       const message = error instanceof Error ? error.message : "数据加载失败";
       setWorkError(message);
       setChatError(message);
@@ -350,11 +375,24 @@ export function App() {
         : kind === "task_draft"
           ? "task-draft"
           : "knowledge-draft";
-    const result = await authorizedRequest<{ draft: AiDraftRecord }>(`/chat/threads/${selectedThreadId}/ai/${path}`, {
+    await authorizedRequest<{ draft: AiDraftRecord }>(`/chat/threads/${selectedThreadId}/ai/${path}`, {
       method: "POST",
       body: JSON.stringify({})
     });
-    setAiDrafts((current) => [result.draft, ...current]);
+    await refreshChatData(selectedThreadId);
+  }
+
+  async function confirmAiDraft(draft: AiDraftRecord) {
+    setChatError(null);
+    await authorizedRequest(`/ai/drafts/${draft.id}/confirm`, {
+      method: "POST",
+      body: JSON.stringify({
+        projectId: draft.kind === "task_draft" ? selectedProjectId ?? projects[0]?.id : undefined,
+        assigneeUserId: activeUser?.id,
+        confirmerUserId: projects.find((project) => project.id === (selectedProjectId ?? projects[0]?.id))?.ownerUserId ?? activeUser?.id
+      })
+    });
+    await Promise.all([refreshWorkData(), refreshChatData(selectedThreadId), refreshKnowledgeData()]);
   }
 
   if (!session || !activeUser) {
@@ -399,7 +437,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">已进入 DEV-006：聊天与 AI 草稿</p>
+            <p className="eyebrow">已进入 DEV-007：AI 草稿确认入库</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
@@ -473,6 +511,8 @@ export function App() {
           <ChatView
             activeUser={activeUser}
             aiDrafts={aiDrafts}
+            canConfirmKnowledge={session.permissions.operations.includes("publish_knowledge")}
+            canConfirmTask={session.permissions.operations.includes("create_task") && projects.length > 0}
             chatMessage={chatMessage}
             chatTitle={chatTitle}
             error={chatError}
@@ -480,6 +520,11 @@ export function App() {
             onCreateDraft={(kind) => {
               void createAiDraft(kind).catch((error) => {
                 setChatError(error instanceof Error ? error.message : "AI 草稿生成失败");
+              });
+            }}
+            onConfirmDraft={(draft) => {
+              void confirmAiDraft(draft).catch((error) => {
+                setChatError(error instanceof Error ? error.message : "AI 草稿确认失败");
               });
             }}
             onCreateThread={() => {
@@ -503,6 +548,8 @@ export function App() {
             setChatTitle={setChatTitle}
             threads={chatThreads}
           />
+        ) : currentModule === "knowledge" ? (
+          <KnowledgeView knowledgeItems={knowledgeItems} projectMemories={projectMemories} />
         ) : currentModule === "settings" && canOpenSettings ? (
           <SettingsView activeUser={activeUser} permissions={session.permissions} visibleModuleCount={visibleModules.length} />
         ) : (
@@ -531,7 +578,7 @@ function DashboardView({
   return (
     <>
       <section className="metric-grid" aria-label="核心指标">
-        <MetricCard title="当前阶段" value="DEV-006" helper="聊天与 AI 草稿" />
+        <MetricCard title="当前阶段" value="DEV-007" helper="AI 草稿确认入库" />
         <MetricCard title="可见菜单" value={String(visibleModuleCount)} helper="按角色裁剪" />
         <MetricCard title="可见组织" value={String(dataOrganizations.length)} helper={rolePolicies[activeUser.role].dataScope} />
         <MetricCard title="审计查询" value="已接入" helper="对象 / 用户 / 全局审计" />
@@ -900,11 +947,14 @@ function taskActionButtons(task: TaskRecord, onTaskStatusChange: (task: TaskReco
 function ChatView({
   activeUser,
   aiDrafts,
+  canConfirmKnowledge,
+  canConfirmTask,
   chatMessage,
   chatTitle,
   error,
   messages,
   onCreateDraft,
+  onConfirmDraft,
   onCreateThread,
   onSelectThread,
   onSendMessage,
@@ -915,11 +965,14 @@ function ChatView({
 }: {
   activeUser: PublicUser;
   aiDrafts: AiDraftRecord[];
+  canConfirmKnowledge: boolean;
+  canConfirmTask: boolean;
   chatMessage: string;
   chatTitle: string;
   error: string | null;
   messages: ChatMessageRecord[];
   onCreateDraft: (kind: AiDraftRecord["kind"]) => void;
+  onConfirmDraft: (draft: AiDraftRecord) => void;
   onCreateThread: () => void;
   onSelectThread: (threadId: string) => void;
   onSendMessage: () => void;
@@ -930,13 +983,16 @@ function ChatView({
 }) {
   const selectedThread = threads.find((thread) => thread.id === selectedThreadId) ?? threads[0] ?? null;
   const selectedDrafts = selectedThread ? aiDrafts.filter((draft) => draft.threadId === selectedThread.id) : [];
+  const canConfirmDraft = (draft: AiDraftRecord) =>
+    draft.status === "draft" &&
+    (draft.kind === "chat_summary" || (draft.kind === "task_draft" && canConfirmTask) || (draft.kind === "knowledge_draft" && canConfirmKnowledge));
 
   return (
     <section className="project-workspace">
       <div className="panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">DEV-006 真实数据</p>
+            <p className="eyebrow">DEV-007 真实数据</p>
             <h2>聊天会话</h2>
             <p>会话只对成员可见，AI 只能整理和生成草稿。</p>
           </div>
@@ -1042,11 +1098,79 @@ function ChatView({
                   <small>{draft.content}</small>
                 </span>
                 <span className="status-pill">{draft.kind}</span>
+                <span className="status-pill">{draft.status}</span>
                 <span className="count-pill">{draft.sourceMessageIds.length} 来源</span>
+                <button className="secondary-button compact-button" disabled={!canConfirmDraft(draft)} onClick={() => onConfirmDraft(draft)}>
+                  确认入库
+                </button>
               </div>
             ))
           ) : (
             <div className="empty-state">还没有 AI 草稿。先发送消息，再生成草稿。</div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function KnowledgeView({
+  knowledgeItems,
+  projectMemories
+}: {
+  knowledgeItems: KnowledgeItemRecord[];
+  projectMemories: ProjectMemoryRecord[];
+}) {
+  return (
+    <section className="content-grid">
+      <div className="panel work-panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">DEV-007 正式入库</p>
+            <h2>知识条目</h2>
+            <p>这里只展示人工确认后的正式知识，AI 草稿不会直接出现在这里。</p>
+          </div>
+        </div>
+        <div className="record-list">
+          {knowledgeItems.length > 0 ? (
+            knowledgeItems.map((item) => (
+              <div className="record-row" key={item.id}>
+                <span>
+                  <strong>{item.title}</strong>
+                  <small>{item.content}</small>
+                </span>
+                <span className="status-pill">{item.status}</span>
+                <span className="count-pill">{item.sourceMessageIds.length} 来源</span>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state">还没有正式知识。请先在聊天中生成知识草稿并确认入库。</div>
+          )}
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Memory Spine</p>
+            <h2>项目记忆</h2>
+            <p>摘要草稿确认后进入项目记忆，用于后续开发前回读上下文。</p>
+          </div>
+        </div>
+        <div className="record-list">
+          {projectMemories.length > 0 ? (
+            projectMemories.map((item) => (
+              <div className="record-row" key={item.id}>
+                <span>
+                  <strong>{item.title}</strong>
+                  <small>{item.content}</small>
+                </span>
+                <span className="status-pill">{item.projectId ?? "无项目"}</span>
+                <span className="count-pill">{item.sourceMessageIds.length} 来源</span>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state">还没有项目记忆。请先在聊天中生成摘要并确认入库。</div>
           )}
         </div>
       </div>

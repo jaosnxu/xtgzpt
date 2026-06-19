@@ -29,9 +29,11 @@ import {
   type ChatMessageRecord,
   type ChatThreadRecord,
   type FilePermission,
+  type KnowledgeItemRecord,
   type ModuleKey,
   type OperationPermission,
   type PermissionDimension,
+  type ProjectMemoryRecord,
   type ProjectRecord,
   type ProjectStatus,
   type ResourceAccessContext,
@@ -84,6 +86,14 @@ interface CreateChatThreadBody {
 
 interface SendChatMessageBody {
   content?: string;
+}
+
+interface ConfirmAiDraftBody {
+  title?: string;
+  content?: string;
+  projectId?: string;
+  assigneeUserId?: string;
+  confirmerUserId?: string;
 }
 
 const sessionPrefix = "dev-session";
@@ -161,6 +171,8 @@ export function buildServer() {
   const chatThreads: ChatThreadRecord[] = [];
   const chatMessages: ChatMessageRecord[] = [];
   const aiDrafts: AiDraftRecord[] = [];
+  const knowledgeItems: KnowledgeItemRecord[] = [];
+  const projectMemories: ProjectMemoryRecord[] = [];
   const server = Fastify({
     logger: true
   });
@@ -360,6 +372,28 @@ export function buildServer() {
     return visibleOrganizationsForUser(user).some((organization) => organization.id === organizationId);
   }
 
+  function canReadKnowledgeItem(user: UserAccount, item: KnowledgeItemRecord) {
+    return canAccessResourceData(user, {
+      organizationId: item.organizationId,
+      ownerUserId: item.creatorUserId
+    });
+  }
+
+  function canReadProjectMemory(user: UserAccount, item: ProjectMemoryRecord) {
+    return canAccessResourceData(user, {
+      organizationId: item.organizationId,
+      ownerUserId: item.creatorUserId
+    });
+  }
+
+  function visibleKnowledgeItemsForUser(user: UserAccount) {
+    return knowledgeItems.filter((item) => item.status !== "archived" && canReadKnowledgeItem(user, item));
+  }
+
+  function visibleProjectMemoriesForUser(user: UserAccount) {
+    return projectMemories.filter((item) => canReadProjectMemory(user, item));
+  }
+
   function findVisibleChatThread(user: UserAccount, threadId: string) {
     const thread = chatThreads.find((item) => item.id === threadId);
 
@@ -368,6 +402,25 @@ export function buildServer() {
     }
 
     return thread;
+  }
+
+  function findVisibleAiDraft(user: UserAccount, draftId: string) {
+    const draft = aiDrafts.find((item) => item.id === draftId);
+
+    if (!draft) {
+      return undefined;
+    }
+
+    const thread = findVisibleChatThread(user, draft.threadId);
+
+    if (!thread) {
+      return undefined;
+    }
+
+    return {
+      draft,
+      thread
+    };
   }
 
   function latestThreadMessageIds(threadId: string) {
@@ -1527,6 +1580,11 @@ export function buildServer() {
       sourceMessageIds,
       frameworkVersion: aiResult.frameworkVersion,
       isDraft: true,
+      status: "draft",
+      confirmedByUserId: null,
+      confirmedAt: null,
+      promotedObjectType: null,
+      promotedObjectId: null,
       createdAt: timestamp
     };
 
@@ -1565,6 +1623,262 @@ export function buildServer() {
   server.post<{ Params: { id: string } }>("/chat/threads/:id/ai/knowledge-draft", async (request, reply) =>
     createChatAiDraft(request, reply, "knowledge_query", "knowledge_draft")
   );
+
+  server.get<{ Params: { id: string } }>("/chat/threads/:id/ai/drafts", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "chat");
+
+    if (!user) {
+      return;
+    }
+
+    const thread = findVisibleChatThread(user, request.params.id);
+
+    if (!thread) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "chat_thread",
+        reason: "chat:ai_drafts",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    return {
+      drafts: aiDrafts.filter((draft) => draft.threadId === thread.id)
+    };
+  });
+
+  server.post<{ Body: ConfirmAiDraftBody; Params: { id: string } }>("/ai/drafts/:id/confirm", async (request, reply) => {
+    const user = await requireUser(request, reply);
+
+    if (!user) {
+      return;
+    }
+
+    const visibleDraft = findVisibleAiDraft(user, request.params.id);
+
+    if (!visibleDraft) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "ai_draft",
+        reason: "ai_draft:confirm",
+        result: "denied",
+        aiInvolved: true,
+        aiFrameworkVersion: fallbackAiFrameworkVersion
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    const { draft, thread } = visibleDraft;
+
+    if (draft.status !== "draft") {
+      return reply.code(409).send({ error: "draft_already_confirmed" });
+    }
+
+    const timestamp = nowIso();
+    const title = textOrDefault(request.body?.title, draft.title);
+    const content = textOrDefault(request.body?.content, draft.content);
+
+    if (draft.kind === "task_draft") {
+      const projectId = request.body?.projectId ?? (thread.relatedObjectType === "project" ? thread.relatedObjectId ?? undefined : undefined);
+      const project = projectId ? findVisibleProject(user, projectId) : undefined;
+
+      if (!project) {
+        return reply.code(400).send({ error: "project_required_for_task_draft" });
+      }
+
+      if (!canPerformOperation(user, "create_task", {
+        organizationId: project.organizationId,
+        ownerUserId: user.id,
+        participantUserIds: project.memberUserIds
+      })) {
+        recordDeniedAccess({
+          request,
+          user,
+          dimension: "operation",
+          action: "create_task",
+          resourceType: "ai_draft",
+          reason: "forbidden"
+        });
+        return reply.code(403).send({ error: "forbidden" });
+      }
+
+      const assigneeUserId = request.body?.assigneeUserId ?? user.id;
+      const confirmerUserId = request.body?.confirmerUserId ?? project.ownerUserId;
+      const participants = new Set([project.ownerUserId, ...project.memberUserIds]);
+
+      if (!participants.has(assigneeUserId) || !participants.has(confirmerUserId)) {
+        return reply.code(400).send({ error: "invalid_task_participant" });
+      }
+
+      const task: TaskRecord = {
+        id: `task-${randomUUID()}`,
+        projectId: project.id,
+        title,
+        description: content,
+        creatorUserId: user.id,
+        assigneeUserId,
+        confirmerUserId,
+        status: "todo",
+        cancelReason: null,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      };
+
+      tasks.push(task);
+      draft.status = "confirmed";
+      draft.confirmedByUserId = user.id;
+      draft.confirmedAt = timestamp;
+      draft.promotedObjectType = "task";
+      draft.promotedObjectId = task.id;
+      recordAudit({
+        request,
+        user,
+        action: "task.created_from_ai_draft",
+        objectType: "task",
+        objectId: task.id,
+        organizationId: project.organizationId,
+        beforeSnapshotRef: draft.id,
+        reason: "ai_draft_confirmed:task",
+        result: "success",
+        aiInvolved: true,
+        aiFrameworkVersion: draft.frameworkVersion
+      });
+
+      return reply.code(201).send({
+        draft,
+        task
+      });
+    }
+
+    if (draft.kind === "knowledge_draft") {
+      if (!canPerformOperation(user, "publish_knowledge", {
+        organizationId: thread.organizationId,
+        participantUserIds: thread.memberUserIds
+      })) {
+        recordDeniedAccess({
+          request,
+          user,
+          dimension: "operation",
+          action: "publish_knowledge",
+          resourceType: "ai_draft",
+          reason: "forbidden"
+        });
+        return reply.code(403).send({ error: "forbidden" });
+      }
+
+      const item: KnowledgeItemRecord = {
+        id: `knowledge-${randomUUID()}`,
+        title,
+        content,
+        organizationId: thread.organizationId,
+        creatorUserId: user.id,
+        sourceDraftId: draft.id,
+        sourceMessageIds: draft.sourceMessageIds,
+        status: "published",
+        createdAt: timestamp,
+        updatedAt: timestamp
+      };
+
+      knowledgeItems.push(item);
+      draft.status = "confirmed";
+      draft.confirmedByUserId = user.id;
+      draft.confirmedAt = timestamp;
+      draft.promotedObjectType = "knowledge_item";
+      draft.promotedObjectId = item.id;
+      recordAudit({
+        request,
+        user,
+        action: "knowledge.published_from_ai_draft",
+        objectType: "knowledge_item",
+        objectId: item.id,
+        organizationId: item.organizationId,
+        beforeSnapshotRef: draft.id,
+        reason: "ai_draft_confirmed:knowledge",
+        result: "success",
+        aiInvolved: true,
+        aiFrameworkVersion: draft.frameworkVersion
+      });
+
+      return reply.code(201).send({
+        draft,
+        knowledgeItem: item
+      });
+    }
+
+    const projectId = request.body?.projectId ?? (thread.relatedObjectType === "project" ? thread.relatedObjectId : null);
+    const project = projectId ? findVisibleProject(user, projectId) : undefined;
+
+    if (projectId && (!project || project.organizationId !== thread.organizationId)) {
+      return reply.code(400).send({ error: "invalid_memory_project_scope" });
+    }
+
+    const memory: ProjectMemoryRecord = {
+      id: `memory-${randomUUID()}`,
+      title,
+      content,
+      organizationId: thread.organizationId,
+      projectId: project?.id ?? null,
+      threadId: thread.id,
+      creatorUserId: user.id,
+      sourceDraftId: draft.id,
+      sourceMessageIds: draft.sourceMessageIds,
+      createdAt: timestamp
+    };
+
+    projectMemories.push(memory);
+    draft.status = "confirmed";
+    draft.confirmedByUserId = user.id;
+    draft.confirmedAt = timestamp;
+    draft.promotedObjectType = "project_memory";
+    draft.promotedObjectId = memory.id;
+    recordAudit({
+      request,
+      user,
+      action: "memory.created_from_ai_summary",
+      objectType: "project_memory",
+      objectId: memory.id,
+      organizationId: memory.organizationId,
+      beforeSnapshotRef: draft.id,
+      reason: "ai_draft_confirmed:memory",
+      result: "success",
+      aiInvolved: true,
+      aiFrameworkVersion: draft.frameworkVersion
+    });
+
+    return reply.code(201).send({
+      draft,
+      memory
+    });
+  });
+
+  server.get("/knowledge/items", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "knowledge");
+
+    if (!user) {
+      return;
+    }
+
+    return {
+      items: visibleKnowledgeItemsForUser(user)
+    };
+  });
+
+  server.get("/memory/items", async (request, reply) => {
+    const user = await requireUser(request, reply);
+
+    if (!user) {
+      return;
+    }
+
+    return {
+      items: visibleProjectMemoriesForUser(user)
+    };
+  });
 
   server.post("/files", async (request, reply) => {
     const user = await requireOperationAccess(request, reply, "upload_file");
@@ -1633,7 +1947,7 @@ export function buildServer() {
 
   server.get<{ Params: { module: string } }>("/modules/:module", async (request, reply) => {
     const moduleKey = request.params.module;
-    const availableModules: ModuleKey[] = ["dashboard", "settings", "projects", "tasks", "chat"];
+    const availableModules: ModuleKey[] = ["dashboard", "settings", "projects", "tasks", "chat", "knowledge"];
 
     if (!platformModules.some((module) => module.key === moduleKey)) {
       return reply.code(404).send({ error: "not_found" });
