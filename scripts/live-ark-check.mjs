@@ -1,4 +1,5 @@
 import { arkAiFrameworkVersion, generateAiDraftContent } from "../apps/api/src/ai-provider.ts";
+import { stdout } from "node:process";
 
 const result = await generateAiDraftContent(
   {
@@ -20,11 +21,11 @@ if (result.frameworkVersion !== arkAiFrameworkVersion) {
   throw new Error("Ark provider was not used. Check ARK_API_KEY secret.");
 }
 
-console.log(
+stdout.write(
   JSON.stringify({
     ok: true,
     provider: result.frameworkVersion,
     model: result.model,
     contentLength: result.content.length
-  })
+  }) + "\n"
 );
