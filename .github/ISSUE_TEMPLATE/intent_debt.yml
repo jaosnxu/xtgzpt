@@ -1,0 +1,43 @@
+name: Loop 意图债
+description: 记录未完成、失败三次、外部阻塞或平台缺口，后续必须回收。
+title: "[INTENT-DEBT] "
+labels:
+  - intent-debt
+  - loop
+body:
+  - type: textarea
+    id: intent
+    attributes:
+      label: 原始意图
+      description: 当时要完成什么。
+    validations:
+      required: true
+  - type: dropdown
+    id: reason
+    attributes:
+      label: 归档原因
+      options:
+        - retry_limit_reached
+        - missing_permission
+        - missing_secret
+        - missing_external_switch
+        - requirement_unclear
+        - production_risk
+        - tool_unavailable
+        - out_of_scope
+    validations:
+      required: true
+  - type: textarea
+    id: attempts
+    attributes:
+      label: 已尝试动作
+      description: 至少记录时间、命令、结果、失败原因。
+    validations:
+      required: true
+  - type: textarea
+    id: next
+    attributes:
+      label: 下一步修复条件
+      description: 需要什么输入、权限、配置、代码或外部动作才能继续。
+    validations:
+      required: true

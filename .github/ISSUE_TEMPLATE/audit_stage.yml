@@ -1,0 +1,35 @@
+name: Loop AUDIT 阶段
+description: 对刚完成的 DEV 阶段做独立审计，不开发新功能。
+title: "[AUDIT-000] "
+labels:
+  - audit
+  - loop
+body:
+  - type: textarea
+    id: target
+    attributes:
+      label: 审计对象
+      description: DEV issue、PR、merge commit、相关日志。
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: 审计检查项
+      description: 权限、状态机、审计、页面、数据、未完成边界、回归风险。
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: 验证方式
+      description: 自动测试、smoke、浏览器验证、API 矩阵、人工 reviewer checklist。
+    validations:
+      required: true
+  - type: textarea
+    id: blockers
+    attributes:
+      label: 阻塞条件
+      description: 哪些问题必须修完才能进入下一阶段。
+    validations:
+      required: true
