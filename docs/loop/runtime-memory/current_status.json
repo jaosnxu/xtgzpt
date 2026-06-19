@@ -1,0 +1,43 @@
+{
+  "updated_at": "2026-06-19T17:30:00+00:00",
+  "active_task_id": "TASK-XTGZPT-DEV-009-CODEX-4",
+  "active_goal": "Complete DEV-009 production persistence foundation in the current xtgzpt working tree.",
+  "status": "verified_with_environment_exceptions",
+  "current_stage": "verification",
+  "last_summary": "Runtime persistence foundation implemented and npm code gates pass; online npm audit and git diff gate require network and Git metadata not present in this managed worktree.",
+  "gate_status": {
+    "npm_ci": {
+      "status": "passed",
+      "command": "PATH=/private/tmp/xtgzpt-tools/node-v24.17.0-darwin-arm64/bin:$PATH npm run ci",
+      "summary": "lint, typecheck, test, build and smoke:api passed; Vitest reported 8 files / 34 tests."
+    },
+    "npm_audit_offline": {
+      "status": "passed",
+      "command": "PATH=/private/tmp/xtgzpt-tools/node-v24.17.0-darwin-arm64/bin:$PATH npm audit --audit-level=low --offline",
+      "summary": "0 vulnerabilities"
+    },
+    "npm_audit_online": {
+      "status": "blocked",
+      "failure_type": "network",
+      "summary": "Restricted environment cannot resolve registry.npmjs.org."
+    },
+    "git_diff_check": {
+      "status": "blocked",
+      "failure_type": "configuration",
+      "summary": "Current managed worktree has no .git metadata."
+    },
+    "touched_file_whitespace_scan": {
+      "status": "passed",
+      "summary": "No trailing whitespace or conflict markers found in touched files."
+    }
+  },
+  "issue_count": 0,
+  "failure_count": 2,
+  "intent_debt": {
+    "goal": "Complete DEV-009 production persistence foundation.",
+    "failure_type": "external_environment",
+    "reason": "Online npm audit requires network access and git diff check requires .git metadata.",
+    "next_step": "Run online npm audit and git diff --check in the real Git worktree / PR environment.",
+    "created_at": "2026-06-19T17:30:00+00:00"
+  }
+}

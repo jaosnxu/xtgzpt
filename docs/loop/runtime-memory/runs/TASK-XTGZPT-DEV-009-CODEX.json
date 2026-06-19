@@ -1,0 +1,727 @@
+{
+  "schema_version": "loop.run_summary.v1",
+  "task_id": "TASK-XTGZPT-DEV-009-CODEX",
+  "goal": "Use Loop to execute DEV-009 for xtgzpt: production persistence foundation. Loop must delegate implementation to the Codex writer executor, then inspect git state, run gates, review, verify, and record project memory.",
+  "scope": {
+    "include": [
+      "/tmp/xtgzpt-bootstrap/xtgzpt"
+    ],
+    "exclude": [
+      "Loop platform source changes",
+      "production writes",
+      "deployment",
+      "secrets",
+      "finance-specific assumptions",
+      "manual project edits outside Loop"
+    ]
+  },
+  "acceptance": [
+    "Implementation is executed through the codex_executor connector, not by manual chat edits.",
+    "Loop loads xtgzpt docs/loop/00_MEMORY_INDEX.md and records loaded project memory files.",
+    "Loop writes project-level action history to xtgzpt docs/loop/runtime-memory.",
+    "DEV-009 records are written to docs/dev-log.",
+    "Runtime business data has a persistence boundary for projects, tasks, chat, AI drafts, knowledge, project memory, audit logs, and access denials.",
+    "A restart persistence test proves project, task, and audit data survive API runtime restart.",
+    "Database migration assets cover the current collaboration runtime objects.",
+    "Loop runs xtgzpt npm gates: lint, typecheck, test, build, smoke:api.",
+    "Any failure is classified, retried or repaired according to Loop policy, and written to intent debt or repair queue if not resolved."
+  ],
+  "status": "blocked",
+  "current_stage": "blocked",
+  "created_at": "2026-06-19T17:09:19.972888+00:00",
+  "updated_at": "2026-06-19T17:10:15.986866+00:00",
+  "heartbeat_at": "2026-06-19T17:10:15.986866+00:00",
+  "attempt_count": 22,
+  "retry_count": 0,
+  "repair_count": 3,
+  "workflow": {
+    "architecture": "graph_runtime",
+    "type": "durable_workflow",
+    "writer": "writer",
+    "reviewer": "reviewer",
+    "verifier": "verifier"
+  },
+  "project_memory_index": {
+    "root": "/private/tmp/xtgzpt-bootstrap/xtgzpt",
+    "index_path": "/private/tmp/xtgzpt-bootstrap/xtgzpt/docs/loop/00_MEMORY_INDEX.md",
+    "status": "available",
+    "loaded_files": [
+      "PROJECT_INTAKE.md",
+      "README.md",
+      "docs/BUSINESS_IMPLEMENTATION_PLAN.md",
+      "docs/PROJECT_CONSTITUTION.md",
+      "docs/TECHNICAL_STANDARD.md",
+      "docs/TEST_ACCEPTANCE_STANDARD.md",
+      "docs/dev-log/AUDIT-008.md",
+      "docs/dev-log/AUDIT-009.md",
+      "docs/dev-log/AUDIT-LOOP-001.md",
+      "docs/dev-log/DEV-007.md",
+      "docs/dev-log/DEV-008.md",
+      "docs/dev-log/DEV-009.md",
+      "docs/dev-readiness/00_DEV_READINESS_OVERVIEW.md",
+      "docs/dev-readiness/01_DEVELOPMENT_PRD.md",
+      "docs/dev-readiness/02_PERMISSION_MATRIX.md",
+      "docs/dev-readiness/03_OBJECTS_AND_STATE_MACHINES.md",
+      "docs/dev-readiness/04_API_DRAFT.md",
+      "docs/dev-readiness/06_AUDIT_LOG_MATRIX.md",
+      "docs/dev-readiness/08_TEST_CASES_AND_ACCEPTANCE.md",
+      "docs/dev-readiness/10_DEVELOPMENT_BACKLOG.md",
+      "docs/loop/00_MEMORY_INDEX.md",
+      "docs/loop/01_OPERATING_RULES.md",
+      "docs/loop/02_INTENT_DEBT.md",
+      "docs/loop/04_GITHUB_BRANCH_PROTECTION.md",
+      "docs/loop/05_EXTERNAL_LOOP_SYSTEM.md"
+    ],
+    "missing_files": [],
+    "rejected_files": []
+  },
+  "stages": [
+    {
+      "stage": "intake",
+      "status": "done",
+      "summary": "Accepted goal and initialized task context.",
+      "failure_type": null,
+      "next_state": "understanding",
+      "timestamp": "2026-06-19T17:09:19.975893+00:00"
+    },
+    {
+      "stage": "understanding",
+      "status": "done",
+      "summary": "Parsed task scope, acceptance, available resources, and repository memory.",
+      "failure_type": null,
+      "next_state": "planning",
+      "timestamp": "2026-06-19T17:09:19.977563+00:00"
+    },
+    {
+      "stage": "planning",
+      "status": "done",
+      "summary": "Built minimal execution plan from current goal.",
+      "failure_type": null,
+      "next_state": "routing",
+      "timestamp": "2026-06-19T17:09:19.979562+00:00"
+    },
+    {
+      "stage": "routing",
+      "status": "done",
+      "summary": "Selected candidate skills and connectors for the task.",
+      "failure_type": null,
+      "next_state": "preflight",
+      "timestamp": "2026-06-19T17:09:19.981894+00:00"
+    },
+    {
+      "stage": "preflight",
+      "status": "done",
+      "summary": "Preflight gate passed.",
+      "failure_type": null,
+      "next_state": "executing",
+      "timestamp": "2026-06-19T17:09:19.983912+00:00"
+    },
+    {
+      "stage": "executing",
+      "status": "failed",
+      "summary": "Connector codex_executor failed with exit code 2.",
+      "failure_type": "code_error",
+      "next_state": "repairing",
+      "timestamp": "2026-06-19T17:09:35.385378+00:00"
+    },
+    {
+      "stage": "repairing",
+      "status": "repairing",
+      "summary": "Starting self-repair cycle after code_error; cycle 1 of 3.",
+      "failure_type": "code_error",
+      "next_state": "planning",
+      "timestamp": "2026-06-19T17:09:35.388984+00:00"
+    },
+    {
+      "stage": "planning",
+      "status": "done",
+      "summary": "Built minimal execution plan from current goal.",
+      "failure_type": null,
+      "next_state": "routing",
+      "timestamp": "2026-06-19T17:09:35.391830+00:00"
+    },
+    {
+      "stage": "routing",
+      "status": "done",
+      "summary": "Selected candidate skills and connectors for the task.",
+      "failure_type": null,
+      "next_state": "preflight",
+      "timestamp": "2026-06-19T17:09:35.394506+00:00"
+    },
+    {
+      "stage": "preflight",
+      "status": "done",
+      "summary": "Preflight gate passed.",
+      "failure_type": null,
+      "next_state": "executing",
+      "timestamp": "2026-06-19T17:09:35.396885+00:00"
+    },
+    {
+      "stage": "executing",
+      "status": "failed",
+      "summary": "Connector codex_executor failed with exit code 2.",
+      "failure_type": "code_error",
+      "next_state": "repairing",
+      "timestamp": "2026-06-19T17:09:48.895454+00:00"
+    },
+    {
+      "stage": "repairing",
+      "status": "repairing",
+      "summary": "Starting self-repair cycle after code_error; cycle 2 of 3.",
+      "failure_type": "code_error",
+      "next_state": "planning",
+      "timestamp": "2026-06-19T17:09:48.899141+00:00"
+    },
+    {
+      "stage": "planning",
+      "status": "done",
+      "summary": "Built minimal execution plan from current goal.",
+      "failure_type": null,
+      "next_state": "routing",
+      "timestamp": "2026-06-19T17:09:48.902074+00:00"
+    },
+    {
+      "stage": "routing",
+      "status": "done",
+      "summary": "Selected candidate skills and connectors for the task.",
+      "failure_type": null,
+      "next_state": "preflight",
+      "timestamp": "2026-06-19T17:09:48.904897+00:00"
+    },
+    {
+      "stage": "preflight",
+      "status": "done",
+      "summary": "Preflight gate passed.",
+      "failure_type": null,
+      "next_state": "executing",
+      "timestamp": "2026-06-19T17:09:48.907473+00:00"
+    },
+    {
+      "stage": "executing",
+      "status": "failed",
+      "summary": "Connector codex_executor failed with exit code 2.",
+      "failure_type": "code_error",
+      "next_state": "repairing",
+      "timestamp": "2026-06-19T17:10:02.418839+00:00"
+    },
+    {
+      "stage": "repairing",
+      "status": "repairing",
+      "summary": "Starting self-repair cycle after code_error; cycle 3 of 3.",
+      "failure_type": "code_error",
+      "next_state": "planning",
+      "timestamp": "2026-06-19T17:10:02.422750+00:00"
+    },
+    {
+      "stage": "planning",
+      "status": "done",
+      "summary": "Built minimal execution plan from current goal.",
+      "failure_type": null,
+      "next_state": "routing",
+      "timestamp": "2026-06-19T17:10:02.426069+00:00"
+    },
+    {
+      "stage": "routing",
+      "status": "done",
+      "summary": "Selected candidate skills and connectors for the task.",
+      "failure_type": null,
+      "next_state": "preflight",
+      "timestamp": "2026-06-19T17:10:02.429123+00:00"
+    },
+    {
+      "stage": "preflight",
+      "status": "done",
+      "summary": "Preflight gate passed.",
+      "failure_type": null,
+      "next_state": "executing",
+      "timestamp": "2026-06-19T17:10:02.431789+00:00"
+    },
+    {
+      "stage": "executing",
+      "status": "failed",
+      "summary": "Connector codex_executor failed with exit code 2.",
+      "failure_type": "code_error",
+      "next_state": "repairing",
+      "timestamp": "2026-06-19T17:10:15.982826+00:00"
+    },
+    {
+      "stage": "repairing",
+      "status": "blocked",
+      "summary": "Repair moved to intent debt after code_error.",
+      "failure_type": "code_error",
+      "next_state": "blocked",
+      "timestamp": "2026-06-19T17:10:15.986866+00:00"
+    }
+  ],
+  "gates": {
+    "preflight_gate": {
+      "status": "passed",
+      "reason": "preflight checks passed",
+      "contracts": [
+        {
+          "name": "git",
+          "standard_name": "vcs_adapter",
+          "target": "git",
+          "mode": "read_write",
+          "risk_level": "medium",
+          "auth_requirements": [],
+          "capabilities": [
+            "status",
+            "diff",
+            "branch",
+            "commit_context"
+          ]
+        },
+        {
+          "name": "test",
+          "standard_name": "ci_test_runner",
+          "target": "test",
+          "mode": "read_only",
+          "risk_level": "low",
+          "auth_requirements": [],
+          "capabilities": [
+            "unit",
+            "integration",
+            "verification"
+          ]
+        },
+        {
+          "name": "codex_executor",
+          "standard_name": "codex_writer_executor",
+          "target": "codex",
+          "mode": "read_write",
+          "risk_level": "high",
+          "auth_requirements": [
+            "codex_login"
+          ],
+          "capabilities": [
+            "non_interactive_code_writer",
+            "local_diff_generation",
+            "self_contained_task_execution"
+          ]
+        }
+      ],
+      "auth_resolution": {
+        "git": [],
+        "test": [],
+        "codex_executor": [
+          {
+            "requirement": "codex_login",
+            "source": "missing",
+            "env": null,
+            "available": false
+          }
+        ]
+      },
+      "missing_auth": [
+        {
+          "connector": "codex_executor",
+          "requirement": "codex_login",
+          "source": "missing",
+          "env": null,
+          "available": false
+        }
+      ],
+      "tool_policy": {
+        "status": "passed",
+        "reason": "tool policy passed",
+        "decisions": [
+          {
+            "connector": "git",
+            "target": "git",
+            "mode": "read_write",
+            "risk_level": "medium",
+            "decision": "allowed",
+            "reason": "connector is allowed by policy",
+            "failure_type": null
+          },
+          {
+            "connector": "test",
+            "target": "test",
+            "mode": "read_only",
+            "risk_level": "low",
+            "decision": "allowed",
+            "reason": "connector is allowed by policy",
+            "failure_type": null
+          },
+          {
+            "connector": "codex_executor",
+            "target": "codex",
+            "mode": "read_write",
+            "risk_level": "high",
+            "decision": "allowed",
+            "reason": "connector is explicitly approved",
+            "failure_type": null
+          }
+        ],
+        "failure_type": null
+      },
+      "failure_type": null
+    }
+  },
+  "issues": {
+    "count": 9,
+    "items": [
+      {
+        "id": "ISSUE-001",
+        "title": "Implementation is executed through the codex_executor connector, not by manu...",
+        "status": "ready",
+        "priority": 1,
+        "goal": "Use Loop to execute DEV-009 for xtgzpt: production persistence foundation. Loop must delegate implementation to the Codex writer executor, then inspect git state, run gates, review, verify, and record project memory.",
+        "acceptance": [
+          "Implementation is executed through the codex_executor connector, not by manual chat edits."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "finance-specific assumptions",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-002",
+        "title": "Loop loads xtgzpt docs/loop/00_MEMORY_INDEX.md and records loaded project me...",
+        "status": "ready",
+        "priority": 2,
+        "goal": "Use Loop to execute DEV-009 for xtgzpt: production persistence foundation. Loop must delegate implementation to the Codex writer executor, then inspect git state, run gates, review, verify, and record project memory.",
+        "acceptance": [
+          "Loop loads xtgzpt docs/loop/00_MEMORY_INDEX.md and records loaded project memory files."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "finance-specific assumptions",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-003",
+        "title": "Loop writes project-level action history to xtgzpt docs/loop/runtime-memory.",
+        "status": "ready",
+        "priority": 3,
+        "goal": "Use Loop to execute DEV-009 for xtgzpt: production persistence foundation. Loop must delegate implementation to the Codex writer executor, then inspect git state, run gates, review, verify, and record project memory.",
+        "acceptance": [
+          "Loop writes project-level action history to xtgzpt docs/loop/runtime-memory."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "finance-specific assumptions",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-004",
+        "title": "DEV-009 records are written to docs/dev-log.",
+        "status": "ready",
+        "priority": 4,
+        "goal": "Use Loop to execute DEV-009 for xtgzpt: production persistence foundation. Loop must delegate implementation to the Codex writer executor, then inspect git state, run gates, review, verify, and record project memory.",
+        "acceptance": [
+          "DEV-009 records are written to docs/dev-log."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "finance-specific assumptions",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-005",
+        "title": "Runtime business data has a persistence boundary for projects, tasks, chat, ...",
+        "status": "ready",
+        "priority": 5,
+        "goal": "Use Loop to execute DEV-009 for xtgzpt: production persistence foundation. Loop must delegate implementation to the Codex writer executor, then inspect git state, run gates, review, verify, and record project memory.",
+        "acceptance": [
+          "Runtime business data has a persistence boundary for projects, tasks, chat, AI drafts, knowledge, project memory, audit logs, and access denials."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "finance-specific assumptions",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-006",
+        "title": "A restart persistence test proves project, task, and audit data survive API ...",
+        "status": "ready",
+        "priority": 6,
+        "goal": "Use Loop to execute DEV-009 for xtgzpt: production persistence foundation. Loop must delegate implementation to the Codex writer executor, then inspect git state, run gates, review, verify, and record project memory.",
+        "acceptance": [
+          "A restart persistence test proves project, task, and audit data survive API runtime restart."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "finance-specific assumptions",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-007",
+        "title": "Database migration assets cover the current collaboration runtime objects.",
+        "status": "ready",
+        "priority": 7,
+        "goal": "Use Loop to execute DEV-009 for xtgzpt: production persistence foundation. Loop must delegate implementation to the Codex writer executor, then inspect git state, run gates, review, verify, and record project memory.",
+        "acceptance": [
+          "Database migration assets cover the current collaboration runtime objects."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "finance-specific assumptions",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-008",
+        "title": "Loop runs xtgzpt npm gates: lint, typecheck, test, build, smoke:api.",
+        "status": "ready",
+        "priority": 8,
+        "goal": "Use Loop to execute DEV-009 for xtgzpt: production persistence foundation. Loop must delegate implementation to the Codex writer executor, then inspect git state, run gates, review, verify, and record project memory.",
+        "acceptance": [
+          "Loop runs xtgzpt npm gates: lint, typecheck, test, build, smoke:api."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "finance-specific assumptions",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-009",
+        "title": "Any failure is classified, retried or repaired according to Loop policy, and...",
+        "status": "ready",
+        "priority": 9,
+        "goal": "Use Loop to execute DEV-009 for xtgzpt: production persistence foundation. Loop must delegate implementation to the Codex writer executor, then inspect git state, run gates, review, verify, and record project memory.",
+        "acceptance": [
+          "Any failure is classified, retried or repaired according to Loop policy, and written to intent debt or repair queue if not resolved."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "finance-specific assumptions",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      }
+    ]
+  },
+  "failures": [
+    {
+      "stage": "executing",
+      "failure_type": "code_error",
+      "summary": "Connector codex_executor failed with exit code 2.",
+      "at": "2026-06-19T17:09:35.385378+00:00"
+    },
+    {
+      "stage": "repairing",
+      "failure_type": "code_error",
+      "summary": "Starting self-repair cycle after code_error; cycle 1 of 3.",
+      "at": "2026-06-19T17:09:35.388984+00:00"
+    },
+    {
+      "stage": "executing",
+      "failure_type": "code_error",
+      "summary": "Connector codex_executor failed with exit code 2.",
+      "at": "2026-06-19T17:09:48.895454+00:00"
+    },
+    {
+      "stage": "repairing",
+      "failure_type": "code_error",
+      "summary": "Starting self-repair cycle after code_error; cycle 2 of 3.",
+      "at": "2026-06-19T17:09:48.899141+00:00"
+    },
+    {
+      "stage": "executing",
+      "failure_type": "code_error",
+      "summary": "Connector codex_executor failed with exit code 2.",
+      "at": "2026-06-19T17:10:02.418839+00:00"
+    },
+    {
+      "stage": "repairing",
+      "failure_type": "code_error",
+      "summary": "Starting self-repair cycle after code_error; cycle 3 of 3.",
+      "at": "2026-06-19T17:10:02.422750+00:00"
+    },
+    {
+      "stage": "executing",
+      "failure_type": "code_error",
+      "summary": "Connector codex_executor failed with exit code 2.",
+      "at": "2026-06-19T17:10:15.982826+00:00"
+    },
+    {
+      "stage": "repairing",
+      "failure_type": "code_error",
+      "summary": "Repair moved to intent debt after code_error.",
+      "at": "2026-06-19T17:10:15.986866+00:00"
+    }
+  ],
+  "intent_debt": {
+    "goal": "Use Loop to execute DEV-009 for xtgzpt: production persistence foundation. Loop must delegate implementation to the Codex writer executor, then inspect git state, run gates, review, verify, and record project memory.",
+    "failure_type": "code_error",
+    "reason": "self-repair limit exhausted",
+    "next_step": "enqueue automated repair: split scope, reroute tools, and restart from planning",
+    "created_at": "2026-06-19T17:10:15.986862+00:00"
+  },
+  "repair_queue": {
+    "queued": true,
+    "failure_type": "code_error",
+    "queue_class": "automated_repair",
+    "next_step": "enqueue automated repair: split scope, reroute tools, and restart from planning"
+  },
+  "verification": {
+    "ci_setup": null,
+    "ci_summary": null,
+    "eval_summary": null,
+    "artifact_types": {
+      "repository_memory_context": 1,
+      "project_memory_index_context": 1,
+      "issue_backlog": 4,
+      "tool_contracts": 4,
+      "missing_auth": 4,
+      "tool_policy": 4,
+      "execution_log": 4,
+      "command": 4,
+      "working_directory": 4,
+      "exit_code": 4,
+      "stdout": 4,
+      "stderr": 4,
+      "self_repair_plan": 3
+    },
+    "reports_count": 22,
+    "trace_count": 87
+  },
+  "worktrees": [
+    "WT-91DA6FE0"
+  ],
+  "subagents": [],
+  "next_action": "enqueue automated repair: split scope, reroute tools, and restart from planning"
+}
