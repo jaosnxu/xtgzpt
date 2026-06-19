@@ -30,11 +30,11 @@
 - Current reviews: only `COMMENTED`, no `APPROVED`
 - Decision: do not self-approve or bypass reviewer gate
 - Runner: `npm run loop:merge-queue -- --queue 28,29,31 --apply`
-- Runner result: stopped at `#28` with GitHub `405`
-- GitHub message: `At least 1 approving review is required by reviewers with write access.`
+- Runner result after `#28` approval: `#28` merged, `#29` base switched to `main`, then stopped at `#29` with GitHub `405`
+- GitHub message for `#29`: `At least 1 approving review is required by reviewers with write access.`
 
 ## Remaining Platform Debt
 
 - `INTENT-002`: 本机未安装 / 未认证 `gh` CLI，当前继续使用 GitHub connector 与 local git。
 - `INTENT-003`: 真实生产 secrets 与上线 smoke test 等生产目标明确后再开启。
-- `INTENT-004`: PR 队列合并需要非作者 / 外部 reviewer approving review。
+- `INTENT-004`: PR 队列当前停在 `#29`，需要非作者 / 外部 reviewer approving review。
