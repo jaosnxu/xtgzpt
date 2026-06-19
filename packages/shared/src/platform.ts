@@ -135,6 +135,7 @@ export interface AiDraftRecord {
   title: string;
   content: string;
   sourceMessageIds: string[];
+  contextSourceIds: string[];
   frameworkVersion: string;
   isDraft: true;
   status: AiDraftStatus;
@@ -153,6 +154,7 @@ export interface KnowledgeItemRecord {
   creatorUserId: string;
   sourceDraftId: string;
   sourceMessageIds: string[];
+  sourceParticipantUserIds: string[];
   status: KnowledgeItemStatus;
   createdAt: string;
   updatedAt: string;
@@ -168,6 +170,23 @@ export interface ProjectMemoryRecord {
   creatorUserId: string;
   sourceDraftId: string;
   sourceMessageIds: string[];
+  sourceParticipantUserIds: string[];
+  createdAt: string;
+}
+
+export type KnowledgeSearchResultType = "knowledge_item" | "project_memory";
+
+export interface KnowledgeSearchResult {
+  id: string;
+  type: KnowledgeSearchResultType;
+  title: string;
+  content: string;
+  organizationId: string;
+  projectId: string | null;
+  sourceId: string;
+  sourceMessageIds: string[];
+  relevanceScore: number;
+  matchedFields: string[];
   createdAt: string;
 }
 

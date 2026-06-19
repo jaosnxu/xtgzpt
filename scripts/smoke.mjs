@@ -1,5 +1,3 @@
-/* global console, process */
-
 process.env.NODE_ENV = "test";
 
 const { buildServer } = await import("../apps/api/src/index.ts");
@@ -163,6 +161,24 @@ try {
     "confirmed knowledge item missing"
   );
 
+  const knowledgeQuery = await inject("POST", "/knowledge/query", superToken, {
+    query: "Smoke",
+    projectId
+  });
+  assert(knowledgeQuery.statusCode === 200, `knowledge query failed with ${knowledgeQuery.statusCode}`);
+  assert(
+    knowledgeQuery.body.results.some((item) => item.type === "project_memory"),
+    "knowledge query did not return project memory"
+  );
+  assert(
+    knowledgeQuery.body.results.some((item) => item.type === "knowledge_item"),
+    "knowledge query did not return knowledge item"
+  );
+
+  const reuseDraft = await inject("POST", `/chat/threads/${threadId}/ai/summarize`, memberToken);
+  assert(reuseDraft.statusCode === 200, `memory reuse draft failed with ${reuseDraft.statusCode}`);
+  assert(reuseDraft.body.draft.contextSourceIds.length > 0, "AI draft did not reuse memory context");
+
   const chatModule = await inject("GET", "/modules/chat", memberToken);
   const knowledgeModule = await inject("GET", "/modules/knowledge", superToken);
   assert(chatModule.body.status === "available", "chat module is not available");
@@ -185,7 +201,9 @@ try {
           "chat_ai_drafts",
           "ai_draft_confirmation",
           "knowledge_items",
-          "project_memory"
+          "project_memory",
+          "knowledge_query",
+          "memory_context_reuse"
         ]
       },
       null,

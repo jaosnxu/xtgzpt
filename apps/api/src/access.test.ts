@@ -234,7 +234,7 @@ describe("access control", () => {
     expect(tasksModule.json()).toEqual({ module: "tasks", status: "available" });
   });
 
-  it("applies file and AI guards before unfinished endpoints run", async () => {
+  it("applies file guards and validates implemented knowledge query", async () => {
     const server = buildServer();
     const memberToken = await loginOnServer(server, "member");
     const superToken = await loginOnServer(server, "super");
@@ -246,27 +246,33 @@ describe("access control", () => {
         authorization: `Bearer ${memberToken}`
       }
     });
-    const forbiddenAi = await server.inject({
+    const emptyAiQuery = await server.inject({
       method: "POST",
       url: "/knowledge/query",
       headers: {
         authorization: `Bearer ${memberToken}`
       }
     });
-    const superAi = await server.inject({
+    const superAiQuery = await server.inject({
       method: "POST",
       url: "/knowledge/query",
       headers: {
         authorization: `Bearer ${superToken}`
+      },
+      payload: {
+        query: "secret"
       }
     });
 
     expect(guessedFile.statusCode).toBe(403);
     expect(guessedFile.json()).toEqual({ error: "forbidden" });
-    expect(forbiddenAi.statusCode).toBe(403);
-    expect(forbiddenAi.json()).toEqual({ error: "forbidden" });
-    expect(superAi.statusCode).toBe(501);
-    expect(superAi.json()).toEqual({ error: "not_implemented", stage: "DEV-008" });
+    expect(emptyAiQuery.statusCode).toBe(400);
+    expect(emptyAiQuery.json()).toEqual({ error: "query_required" });
+    expect(superAiQuery.statusCode).toBe(200);
+    expect(superAiQuery.json()).toEqual({
+      query: "secret",
+      results: []
+    });
   });
 
   it("does not write guessed unknown module names into denial records", async () => {

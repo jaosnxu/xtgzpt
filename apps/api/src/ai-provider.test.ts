@@ -17,6 +17,13 @@ describe("AI provider", () => {
           senderName: "负责人",
           content: "请整理上线前检查项。"
         }
+      ],
+      memoryContexts: [
+        {
+          type: "project_memory",
+          title: "上线规则",
+          content: "上线前必须通过 smoke test。"
+        }
       ]
     });
 
@@ -24,6 +31,7 @@ describe("AI provider", () => {
     expect(payload.messages[0].content).toContain("只能整理、建议和生成草稿");
     expect(payload.messages[1].content).toContain("会话标题：交付会");
     expect(payload.messages[1].content).toContain("任务草稿");
+    expect(payload.messages[1].content).toContain("[project_memory] 上线规则");
     expect(payload.messages[1].content).toContain("负责人: 请整理上线前检查项。");
   });
 

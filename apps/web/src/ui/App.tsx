@@ -26,6 +26,7 @@ import {
   type ChatMessageRecord,
   type ChatThreadRecord,
   type KnowledgeItemRecord,
+  type KnowledgeSearchResult,
   type ModuleKey,
   type Organization,
   type PermissionSummary,
@@ -67,8 +68,8 @@ const menuIcon = {
 
 const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
   dashboard: {
-    stage: "DEV-007 进行中",
-    summary: "AI 草稿确认入库正在接入，聊天和项目任务闭环继续作为底座。"
+    stage: "DEV-008 进行中",
+    summary: "项目记忆检索与自动回用正在接入，聊天和项目任务闭环继续作为底座。"
   },
   workbench: {
     stage: "DEV-005 待开发",
@@ -83,12 +84,12 @@ const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
     summary: "任务列表、创建、负责人提交和人工确认已进入真实接口。"
   },
   chat: {
-    stage: "DEV-007 进行中",
-    summary: "聊天会话、消息、AI 草稿和人工确认入库已进入真实接口。"
+    stage: "DEV-008 进行中",
+    summary: "聊天会话、消息、AI 草稿、人工确认入库和记忆上下文回用已进入真实接口。"
   },
   knowledge: {
-    stage: "DEV-007 进行中",
-    summary: "AI 知识草稿经人工确认后发布为知识条目，摘要可沉淀为项目记忆。"
+    stage: "DEV-008 进行中",
+    summary: "正式知识和项目记忆支持权限过滤检索，并可作为 AI 草稿上下文。"
   },
   contracts: {
     stage: "DEV-009 待开发",
@@ -113,7 +114,8 @@ const stageGateItems = [
   { scope: "审计日志基础设施", owner: "API", status: "已验证", stage: "DEV-004" },
   { scope: "项目与任务闭环", owner: "API / Web", status: "已验证", stage: "DEV-005" },
   { scope: "聊天与 AI 草稿", owner: "API / Web", status: "已验证", stage: "DEV-006" },
-  { scope: "AI 草稿确认入库", owner: "API / Web", status: "开发中", stage: "DEV-007" },
+  { scope: "AI 草稿确认入库", owner: "API / Web", status: "已验证", stage: "DEV-007" },
+  { scope: "记忆检索与回用", owner: "API / Web", status: "开发中", stage: "DEV-008" },
   { scope: "审批真实流程", owner: "未开发", status: "待开发", stage: "DEV-010" }
 ];
 
@@ -134,6 +136,8 @@ export function App() {
   const [aiDrafts, setAiDrafts] = useState<AiDraftRecord[]>([]);
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItemRecord[]>([]);
   const [projectMemories, setProjectMemories] = useState<ProjectMemoryRecord[]>([]);
+  const [knowledgeQuery, setKnowledgeQuery] = useState("");
+  const [knowledgeResults, setKnowledgeResults] = useState<KnowledgeSearchResult[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [projectTitle, setProjectTitle] = useState("");
@@ -142,6 +146,7 @@ export function App() {
   const [chatMessage, setChatMessage] = useState("");
   const [workError, setWorkError] = useState<string | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [knowledgeError, setKnowledgeError] = useState<string | null>(null);
   const activeUser = session?.user ?? null;
 
   async function authorizedRequest<T>(path: string, init: RequestInit = {}) {
@@ -226,6 +231,7 @@ export function App() {
       setAiDrafts([]);
       setKnowledgeItems([]);
       setProjectMemories([]);
+      setKnowledgeResults([]);
       setSelectedProjectId(null);
       setSelectedThreadId(null);
       return;
@@ -340,7 +346,9 @@ export function App() {
       body: JSON.stringify({
         title: chatTitle.trim() || "新的工作会话",
         organizationId: session?.dataOrganizations[0]?.id ?? activeUser?.defaultOrganizationId,
-        memberUserIds: activeUser?.id === "user-member" ? ["user-owner"] : ["user-member"]
+        memberUserIds: activeUser?.id === "user-member" ? ["user-owner"] : ["user-member"],
+        relatedObjectType: selectedProjectId ? "project" : undefined,
+        relatedObjectId: selectedProjectId ?? undefined
       })
     });
     setChatTitle("");
@@ -387,12 +395,26 @@ export function App() {
     await authorizedRequest(`/ai/drafts/${draft.id}/confirm`, {
       method: "POST",
       body: JSON.stringify({
-        projectId: draft.kind === "task_draft" ? selectedProjectId ?? projects[0]?.id : undefined,
+        projectId:
+          draft.kind === "task_draft" || draft.kind === "chat_summary" ? selectedProjectId ?? projects[0]?.id : undefined,
         assigneeUserId: activeUser?.id,
         confirmerUserId: projects.find((project) => project.id === (selectedProjectId ?? projects[0]?.id))?.ownerUserId ?? activeUser?.id
       })
     });
     await Promise.all([refreshWorkData(), refreshChatData(selectedThreadId), refreshKnowledgeData()]);
+  }
+
+  async function queryKnowledge() {
+    setKnowledgeError(null);
+    const result = await authorizedRequest<{ results: KnowledgeSearchResult[] }>("/knowledge/query", {
+      method: "POST",
+      body: JSON.stringify({
+        query: knowledgeQuery.trim(),
+        projectId: selectedProjectId ?? undefined,
+        limit: 8
+      })
+    });
+    setKnowledgeResults(result.results);
   }
 
   if (!session || !activeUser) {
@@ -437,7 +459,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">已进入 DEV-007：AI 草稿确认入库</p>
+            <p className="eyebrow">已进入 DEV-008：项目记忆检索与回用</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
@@ -549,7 +571,20 @@ export function App() {
             threads={chatThreads}
           />
         ) : currentModule === "knowledge" ? (
-          <KnowledgeView knowledgeItems={knowledgeItems} projectMemories={projectMemories} />
+          <KnowledgeView
+            error={knowledgeError}
+            knowledgeItems={knowledgeItems}
+            knowledgeQuery={knowledgeQuery}
+            onQuery={() => {
+              void queryKnowledge().catch((error) => {
+                setKnowledgeError(error instanceof Error ? error.message : "知识检索失败");
+              });
+            }}
+            projectMemories={projectMemories}
+            queryProject={projects.find((project) => project.id === selectedProjectId) ?? null}
+            queryResults={knowledgeResults}
+            setKnowledgeQuery={setKnowledgeQuery}
+          />
         ) : currentModule === "settings" && canOpenSettings ? (
           <SettingsView activeUser={activeUser} permissions={session.permissions} visibleModuleCount={visibleModules.length} />
         ) : (
@@ -578,7 +613,7 @@ function DashboardView({
   return (
     <>
       <section className="metric-grid" aria-label="核心指标">
-        <MetricCard title="当前阶段" value="DEV-007" helper="AI 草稿确认入库" />
+        <MetricCard title="当前阶段" value="DEV-008" helper="项目记忆检索与回用" />
         <MetricCard title="可见菜单" value={String(visibleModuleCount)} helper="按角色裁剪" />
         <MetricCard title="可见组织" value={String(dataOrganizations.length)} helper={rolePolicies[activeUser.role].dataScope} />
         <MetricCard title="审计查询" value="已接入" helper="对象 / 用户 / 全局审计" />
@@ -992,7 +1027,7 @@ function ChatView({
       <div className="panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">DEV-007 真实数据</p>
+            <p className="eyebrow">DEV-008 真实数据</p>
             <h2>聊天会话</h2>
             <p>会话只对成员可见，AI 只能整理和生成草稿。</p>
           </div>
@@ -1115,20 +1150,69 @@ function ChatView({
 }
 
 function KnowledgeView({
+  error,
   knowledgeItems,
-  projectMemories
+  knowledgeQuery,
+  onQuery,
+  projectMemories,
+  queryProject,
+  queryResults,
+  setKnowledgeQuery
 }: {
+  error: string | null;
   knowledgeItems: KnowledgeItemRecord[];
+  knowledgeQuery: string;
+  onQuery: () => void;
   projectMemories: ProjectMemoryRecord[];
+  queryProject: ProjectSummary | null;
+  queryResults: KnowledgeSearchResult[];
+  setKnowledgeQuery: (value: string) => void;
 }) {
   return (
     <section className="content-grid">
       <div className="panel work-panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">DEV-007 正式入库</p>
+            <p className="eyebrow">DEV-008 检索</p>
+            <h2>知识与记忆检索</h2>
+            <p>检索只返回当前账号有权限读取的正式知识和项目记忆。</p>
+          </div>
+        </div>
+        {error ? <p className="inline-error">{error}</p> : null}
+        <div className="inline-form knowledge-search">
+          <input value={knowledgeQuery} onChange={(event) => setKnowledgeQuery(event.target.value)} placeholder="输入要回读的项目上下文" />
+          <button className="primary-button" disabled={knowledgeQuery.trim().length === 0} onClick={onQuery}>
+            检索
+          </button>
+        </div>
+        <div className="scope-note">
+          <span>当前检索范围</span>
+          <strong>{queryProject ? queryProject.title : "全部可见范围"}</strong>
+        </div>
+        <div className="record-list">
+          {queryResults.length > 0 ? (
+            queryResults.map((item) => (
+              <div className="record-row" key={`${item.type}:${item.id}`}>
+                <span>
+                  <strong>{item.title}</strong>
+                  <small>{item.content}</small>
+                </span>
+                <span className="status-pill">{item.type}</span>
+                <span className="count-pill">{item.relevanceScore} 分</span>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state">输入关键词后检索。没有结果时不会编造知识。</div>
+          )}
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">正式知识</p>
             <h2>知识条目</h2>
-            <p>这里只展示人工确认后的正式知识，AI 草稿不会直接出现在这里。</p>
+            <p>人工确认后的知识可被检索，也可作为后续 AI 草稿上下文。</p>
           </div>
         </div>
         <div className="record-list">
@@ -1154,7 +1238,7 @@ function KnowledgeView({
           <div>
             <p className="eyebrow">Memory Spine</p>
             <h2>项目记忆</h2>
-            <p>摘要草稿确认后进入项目记忆，用于后续开发前回读上下文。</p>
+            <p>摘要草稿确认后进入项目记忆，用于后续工作前回读上下文。</p>
           </div>
         </div>
         <div className="record-list">
