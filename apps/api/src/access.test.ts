@@ -190,13 +190,48 @@ describe("access control", () => {
       url: "/projects",
       headers: {
         authorization: `Bearer ${ownerToken}`
+      },
+      payload: {
+        title: "权限验证项目",
+        organizationId: "org-product"
       }
     });
 
     expect(memberCreateProject.statusCode).toBe(403);
     expect(memberCreateProject.json()).toEqual({ error: "forbidden" });
-    expect(ownerCreateProject.statusCode).toBe(501);
-    expect(ownerCreateProject.json()).toEqual({ error: "not_implemented", stage: "DEV-005" });
+    expect(ownerCreateProject.statusCode).toBe(201);
+    expect(ownerCreateProject.json().project).toEqual(
+      expect.objectContaining({
+        title: "权限验证项目",
+        ownerUserId: "user-owner",
+        status: "active"
+      })
+    );
+  });
+
+  it("marks implemented project and task modules as available", async () => {
+    const server = buildServer();
+    const ownerToken = await loginOnServer(server, "owner");
+
+    const projectsModule = await server.inject({
+      method: "GET",
+      url: "/modules/projects",
+      headers: {
+        authorization: `Bearer ${ownerToken}`
+      }
+    });
+    const tasksModule = await server.inject({
+      method: "GET",
+      url: "/modules/tasks",
+      headers: {
+        authorization: `Bearer ${ownerToken}`
+      }
+    });
+
+    expect(projectsModule.statusCode).toBe(200);
+    expect(projectsModule.json()).toEqual({ module: "projects", status: "available" });
+    expect(tasksModule.statusCode).toBe(200);
+    expect(tasksModule.json()).toEqual({ module: "tasks", status: "available" });
   });
 
   it("applies file and AI guards before unfinished endpoints run", async () => {

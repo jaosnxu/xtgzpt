@@ -64,6 +64,36 @@ export const permissionPolicyVersion = "seed-dev-003";
 
 export type AuditResult = "success" | "failure" | "denied";
 
+export type ProjectStatus = "draft" | "active" | "paused" | "completed" | "archived";
+
+export type TaskStatus = "draft" | "todo" | "in_progress" | "submitted" | "completed" | "blocked" | "cancelled" | "archived";
+
+export interface ProjectRecord {
+  id: string;
+  title: string;
+  summary: string;
+  organizationId: string;
+  ownerUserId: string;
+  memberUserIds: string[];
+  status: ProjectStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskRecord {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+  creatorUserId: string;
+  assigneeUserId: string;
+  confirmerUserId: string;
+  status: TaskStatus;
+  cancelReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AuditLogEntry {
   id: string;
   occurredAt: string;
