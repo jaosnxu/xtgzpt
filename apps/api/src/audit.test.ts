@@ -88,11 +88,16 @@ describe("audit infrastructure", () => {
       url: "/projects",
       headers: {
         authorization: `Bearer ${ownerToken}`
+      },
+      payload: {
+        title: "审计验证项目",
+        organizationId: "org-product"
       }
     });
+    const projectId = createProject.json().project.id as string;
     const objectAudit = await server.inject({
       method: "GET",
-      url: "/objects/project/dev005-not-implemented/audit-logs",
+      url: `/objects/project/${projectId}/audit-logs`,
       headers: {
         authorization: `Bearer ${superToken}`
       }
@@ -105,17 +110,17 @@ describe("audit infrastructure", () => {
       }
     });
 
-    expect(createProject.statusCode).toBe(501);
+    expect(createProject.statusCode).toBe(201);
     expect(objectAudit.statusCode).toBe(200);
     expect(userAudit.statusCode).toBe(200);
     expect(objectAudit.json().auditLogs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           actorUserId: "user-owner",
-          action: "project.create_requested",
+          action: "project.created",
           objectType: "project",
-          objectId: "dev005-not-implemented",
-          result: "failure"
+          objectId: projectId,
+          result: "success"
         })
       ])
     );
@@ -124,10 +129,10 @@ describe("audit infrastructure", () => {
         expect.objectContaining({
           actorUserId: "user-owner",
           actorRoleIds: ["project_owner"],
-          action: "project.create_requested",
+          action: "project.created",
           objectType: "project",
-          result: "failure",
-          reason: "permission_passed_but_dev005_not_implemented",
+          result: "success",
+          reason: "user_created_project",
           requestId: expect.any(String)
         })
       ])

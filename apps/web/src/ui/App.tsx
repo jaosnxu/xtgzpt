@@ -13,18 +13,21 @@ import {
   ShieldCheck,
   Users
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   canManageOrganizations,
   canManageRoles,
   roles,
   rolePolicies,
   seedOrganizations,
+  seedUsers,
   platformModules,
   type ModuleKey,
   type Organization,
   type PermissionSummary,
-  type PublicUser
+  type ProjectRecord,
+  type PublicUser,
+  type TaskRecord
 } from "@xtgzpt/shared";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api";
@@ -35,6 +38,10 @@ interface SessionState {
   visibleModules: ModuleKey[];
   dataOrganizations: Organization[];
   permissions: PermissionSummary;
+}
+
+interface ProjectSummary extends ProjectRecord {
+  taskCount: number;
 }
 
 const menuIcon = {
@@ -51,20 +58,20 @@ const menuIcon = {
 
 const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
   dashboard: {
-    stage: "DEV-004 已完成",
-    summary: "审计日志基础设施、对象审计查询和用户审计查询已合并，等待 AUDIT-004 收口。"
+    stage: "DEV-005 进行中",
+    summary: "项目与任务闭环正在接入真实 API，审计基础设施继续作为底座。"
   },
   workbench: {
     stage: "DEV-005 待开发",
     summary: "我的工作台将在项目、任务、审批真实数据接入后形成待办。"
   },
   projects: {
-    stage: "DEV-005 待开发",
-    summary: "项目创建、成员、任务拆解和归档流程尚未进入代码开发。"
+    stage: "DEV-005 进行中",
+    summary: "项目列表、创建、成员、状态和任务关联已进入真实接口。"
   },
   tasks: {
-    stage: "DEV-005 待开发",
-    summary: "任务创建、提交完成、确认和取消流程尚未进入代码开发。"
+    stage: "DEV-005 进行中",
+    summary: "任务列表、创建、负责人提交和人工确认已进入真实接口。"
   },
   chat: {
     stage: "DEV-006 待开发",
@@ -95,6 +102,7 @@ const stageGateItems = [
   { scope: "统一权限中间层", owner: "API / Web", status: "已验证", stage: "DEV-003" },
   { scope: "文件与 AI 权限", owner: "API", status: "已验证", stage: "DEV-003" },
   { scope: "审计日志基础设施", owner: "API", status: "已验证", stage: "DEV-004" },
+  { scope: "项目与任务闭环", owner: "API / Web", status: "开发中", stage: "DEV-005" },
   { scope: "审批真实流程", owner: "未开发", status: "待开发", stage: "DEV-010" }
 ];
 
@@ -108,7 +116,62 @@ const auditReadinessItems = [
 export function App() {
   const [session, setSession] = useState<SessionState | null>(null);
   const [activeModule, setActiveModule] = useState<ModuleKey>("dashboard");
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [tasks, setTasks] = useState<TaskRecord[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projectTitle, setProjectTitle] = useState("");
+  const [taskTitle, setTaskTitle] = useState("");
+  const [workError, setWorkError] = useState<string | null>(null);
   const activeUser = session?.user ?? null;
+
+  async function authorizedRequest<T>(path: string, init: RequestInit = {}) {
+    if (!session) {
+      throw new Error("未登录");
+    }
+
+    const response = await fetch(`${apiBaseUrl}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        authorization: `Bearer ${session.token}`,
+        ...init.headers
+      }
+    });
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error ?? "请求失败");
+    }
+
+    return (await response.json()) as T;
+  }
+
+  async function refreshWorkData() {
+    if (!session) {
+      return;
+    }
+
+    const [projectResult, taskResult] = await Promise.all([
+      authorizedRequest<{ projects: ProjectSummary[] }>("/projects"),
+      authorizedRequest<{ tasks: TaskRecord[] }>("/tasks")
+    ]);
+    setProjects(projectResult.projects);
+    setTasks(taskResult.tasks);
+    setSelectedProjectId((current) => current ?? projectResult.projects[0]?.id ?? null);
+  }
+
+  useEffect(() => {
+    if (!session) {
+      setProjects([]);
+      setTasks([]);
+      setSelectedProjectId(null);
+      return;
+    }
+
+    void refreshWorkData().catch((error) => {
+      setWorkError(error instanceof Error ? error.message : "项目任务数据加载失败");
+    });
+  }, [session?.token]);
 
   async function handleLogin(username: string, password: string) {
     const response = await fetch(`${apiBaseUrl}/auth/login`, {
@@ -127,6 +190,82 @@ export function App() {
     }
 
     setSession((await response.json()) as SessionState);
+  }
+
+  async function createProject() {
+    setWorkError(null);
+    const organizationId = session?.dataOrganizations[0]?.id ?? activeUser?.defaultOrganizationId;
+    const result = await authorizedRequest<{ project: ProjectSummary }>("/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: projectTitle.trim() || "新项目",
+        summary: "由前端工作台创建。",
+        organizationId
+      })
+    });
+    setProjectTitle("");
+    setSelectedProjectId(result.project.id);
+    await refreshWorkData();
+  }
+
+  async function addMemberToSelectedProject() {
+    if (!selectedProjectId) {
+      return;
+    }
+
+    setWorkError(null);
+    await authorizedRequest(`/projects/${selectedProjectId}/members`, {
+      method: "POST",
+      body: JSON.stringify({
+        userId: "user-member"
+      })
+    });
+    await refreshWorkData();
+  }
+
+  async function createTask() {
+    if (!selectedProjectId) {
+      return;
+    }
+
+    setWorkError(null);
+    const selectedProject = projects.find((project) => project.id === selectedProjectId);
+    const assigneeUserId = selectedProject?.memberUserIds.includes("user-member") ? "user-member" : activeUser?.id;
+    await authorizedRequest<{ task: TaskRecord }>("/tasks", {
+      method: "POST",
+      body: JSON.stringify({
+        projectId: selectedProjectId,
+        title: taskTitle.trim() || "新任务",
+        description: "由项目页面创建。",
+        assigneeUserId,
+        confirmerUserId: selectedProject?.ownerUserId ?? activeUser?.id
+      })
+    });
+    setTaskTitle("");
+    await refreshWorkData();
+  }
+
+  async function changeTaskStatus(task: TaskRecord, status: TaskRecord["status"]) {
+    setWorkError(null);
+    await authorizedRequest<{ task: TaskRecord }>(`/tasks/${task.id}/status`, {
+      method: "POST",
+      body: JSON.stringify({
+        status,
+        reason: status === "cancelled" ? "前端取消任务" : undefined
+      })
+    });
+    await refreshWorkData();
+  }
+
+  async function changeProjectStatus(project: ProjectSummary, status: ProjectRecord["status"]) {
+    setWorkError(null);
+    await authorizedRequest<{ project: ProjectSummary }>(`/projects/${project.id}/status`, {
+      method: "POST",
+      body: JSON.stringify({
+        status
+      })
+    });
+    await refreshWorkData();
   }
 
   if (!session || !activeUser) {
@@ -171,7 +310,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">DEV-004 已完成：等待 AUDIT-004 收口</p>
+            <p className="eyebrow">已进入 DEV-005：项目与任务闭环</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
@@ -201,6 +340,46 @@ export function App() {
             permissions={session.permissions}
             visibleModuleCount={visibleModules.length}
           />
+        ) : currentModule === "projects" || currentModule === "tasks" ? (
+          <ProjectTaskView
+            activeUser={activeUser}
+            canCreateProject={session.permissions.operations.includes("create_project")}
+            canCreateTask={session.permissions.operations.includes("create_task")}
+            error={workError}
+            onAddMember={() => {
+              void addMemberToSelectedProject().catch((error) => {
+                setWorkError(error instanceof Error ? error.message : "添加成员失败");
+              });
+            }}
+            onCreateProject={() => {
+              void createProject().catch((error) => {
+                setWorkError(error instanceof Error ? error.message : "创建项目失败");
+              });
+            }}
+            onCreateTask={() => {
+              void createTask().catch((error) => {
+                setWorkError(error instanceof Error ? error.message : "创建任务失败");
+              });
+            }}
+            onProjectStatusChange={(project, status) => {
+              void changeProjectStatus(project, status).catch((error) => {
+                setWorkError(error instanceof Error ? error.message : "项目状态变更失败");
+              });
+            }}
+            onSelectProject={setSelectedProjectId}
+            onTaskStatusChange={(task, status) => {
+              void changeTaskStatus(task, status).catch((error) => {
+                setWorkError(error instanceof Error ? error.message : "任务状态变更失败");
+              });
+            }}
+            projectTitle={projectTitle}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            setProjectTitle={setProjectTitle}
+            setTaskTitle={setTaskTitle}
+            taskTitle={taskTitle}
+            tasks={tasks}
+          />
         ) : currentModule === "settings" && canOpenSettings ? (
           <SettingsView activeUser={activeUser} permissions={session.permissions} visibleModuleCount={visibleModules.length} />
         ) : (
@@ -229,7 +408,7 @@ function DashboardView({
   return (
     <>
       <section className="metric-grid" aria-label="核心指标">
-        <MetricCard title="当前阶段" value="DEV-004" helper="审计日志基础设施" />
+        <MetricCard title="当前阶段" value="DEV-005" helper="项目与任务闭环" />
         <MetricCard title="可见菜单" value={String(visibleModuleCount)} helper="按角色裁剪" />
         <MetricCard title="可见组织" value={String(dataOrganizations.length)} helper={rolePolicies[activeUser.role].dataScope} />
         <MetricCard title="审计查询" value="已接入" helper="对象 / 用户 / 全局审计" />
@@ -386,6 +565,213 @@ function SettingsView({
       </div>
     </div>
   );
+}
+
+function ProjectTaskView({
+  activeUser,
+  canCreateProject,
+  canCreateTask,
+  error,
+  onAddMember,
+  onCreateProject,
+  onCreateTask,
+  onProjectStatusChange,
+  onSelectProject,
+  onTaskStatusChange,
+  projectTitle,
+  projects,
+  selectedProjectId,
+  setProjectTitle,
+  setTaskTitle,
+  taskTitle,
+  tasks
+}: {
+  activeUser: PublicUser;
+  canCreateProject: boolean;
+  canCreateTask: boolean;
+  error: string | null;
+  onAddMember: () => void;
+  onCreateProject: () => void;
+  onCreateTask: () => void;
+  onProjectStatusChange: (project: ProjectSummary, status: ProjectRecord["status"]) => void;
+  onSelectProject: (projectId: string) => void;
+  onTaskStatusChange: (task: TaskRecord, status: TaskRecord["status"]) => void;
+  projectTitle: string;
+  projects: ProjectSummary[];
+  selectedProjectId: string | null;
+  setProjectTitle: (value: string) => void;
+  setTaskTitle: (value: string) => void;
+  taskTitle: string;
+  tasks: TaskRecord[];
+}) {
+  const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
+  const selectedTasks = selectedProject ? tasks.filter((task) => task.projectId === selectedProject.id) : [];
+  const canManageSelectedProject = selectedProject?.ownerUserId === activeUser.id || activeUser.role === "super_admin";
+
+  return (
+    <section className="project-workspace">
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">DEV-005 真实数据</p>
+            <h2>项目</h2>
+            <p>项目是协作容器，成员、任务和状态都会进入审计。</p>
+          </div>
+        </div>
+        {error ? <p className="inline-error">{error}</p> : null}
+        {canCreateProject ? (
+          <div className="inline-form">
+            <input value={projectTitle} onChange={(event) => setProjectTitle(event.target.value)} placeholder="项目名称" />
+            <button className="primary-button" onClick={onCreateProject}>
+              创建项目
+            </button>
+          </div>
+        ) : null}
+        <div className="record-list">
+          {projects.length > 0 ? (
+            projects.map((project) => (
+              <button
+                className={selectedProject?.id === project.id ? "record-row active" : "record-row"}
+                key={project.id}
+                onClick={() => onSelectProject(project.id)}
+              >
+                <span>
+                  <strong>{project.title}</strong>
+                  <small>{organizationName(project.organizationId)} · {userName(project.ownerUserId)}</small>
+                </span>
+                <span className="status-pill">{project.status}</span>
+                <span className="count-pill">{project.taskCount} 任务</span>
+              </button>
+            ))
+          ) : (
+            <div className="empty-state">当前没有可见项目。</div>
+          )}
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">项目详情</p>
+            <h2>{selectedProject?.title ?? "未选择项目"}</h2>
+            <p>{selectedProject?.summary ?? "选择项目后查看成员、任务和状态。"}</p>
+          </div>
+          {selectedProject ? <span className="status-pill strong">{selectedProject.status}</span> : null}
+        </div>
+        {selectedProject ? (
+          <>
+            <div className="detail-grid">
+              <SettingsItem title="所属组织" value={organizationName(selectedProject.organizationId)} enabled />
+              <SettingsItem title="负责人" value={userName(selectedProject.ownerUserId)} enabled />
+              <SettingsItem title="成员数" value={`${selectedProject.memberUserIds.length} 人`} enabled />
+              <SettingsItem title="任务数" value={`${selectedTasks.length} 个`} enabled />
+            </div>
+            <div className="member-strip">
+              {selectedProject.memberUserIds.map((userId) => (
+                <span key={userId}>{userName(userId)}</span>
+              ))}
+            </div>
+            <div className="action-row">
+              {canManageSelectedProject && !selectedProject.memberUserIds.includes("user-member") ? (
+                <button className="secondary-button" onClick={onAddMember}>
+                  添加普通成员
+                </button>
+              ) : null}
+              {selectedProject.status === "active" ? (
+                <button className="secondary-button" onClick={() => onProjectStatusChange(selectedProject, "completed")}>
+                  完成项目
+                </button>
+              ) : null}
+              {selectedProject.status === "completed" ? (
+                <button className="secondary-button" onClick={() => onProjectStatusChange(selectedProject, "archived")}>
+                  归档项目
+                </button>
+              ) : null}
+            </div>
+          </>
+        ) : null}
+      </div>
+
+      <div className="panel project-task-panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">任务</p>
+            <h2>任务列表</h2>
+            <p>负责人提交完成后，必须由确认人或项目负责人确认。</p>
+          </div>
+        </div>
+        {canCreateTask && selectedProject ? (
+          <div className="inline-form">
+            <input value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="任务名称" />
+            <button className="primary-button" onClick={onCreateTask}>
+              创建任务
+            </button>
+          </div>
+        ) : null}
+        <div className="task-table">
+          <div className="task-row task-head">
+            <span>任务</span>
+            <span>负责人</span>
+            <span>确认人</span>
+            <span>状态</span>
+            <span>操作</span>
+          </div>
+          {selectedTasks.length > 0 ? (
+            selectedTasks.map((task) => (
+              <div className="task-row" key={task.id}>
+                <span>
+                  <strong>{task.title}</strong>
+                  <small>{task.description}</small>
+                </span>
+                <span>{userName(task.assigneeUserId)}</span>
+                <span>{userName(task.confirmerUserId)}</span>
+                <span className="status-pill">{task.status}</span>
+                <span className="task-actions">{taskActionButtons(task, onTaskStatusChange)}</span>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state">当前项目没有任务。</div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function organizationName(organizationId: string) {
+  return seedOrganizations.find((organization) => organization.id === organizationId)?.name ?? organizationId;
+}
+
+function userName(userId: string) {
+  return seedUsers.find((user) => user.id === userId)?.displayName ?? userId;
+}
+
+function taskActionButtons(task: TaskRecord, onTaskStatusChange: (task: TaskRecord, status: TaskRecord["status"]) => void) {
+  if (task.status === "todo") {
+    return (
+      <button className="secondary-button compact-button" onClick={() => onTaskStatusChange(task, "in_progress")}>
+        开始
+      </button>
+    );
+  }
+
+  if (task.status === "in_progress") {
+    return (
+      <button className="secondary-button compact-button" onClick={() => onTaskStatusChange(task, "submitted")}>
+        提交
+      </button>
+    );
+  }
+
+  if (task.status === "submitted") {
+    return (
+      <button className="secondary-button compact-button" onClick={() => onTaskStatusChange(task, "completed")}>
+        确认
+      </button>
+    );
+  }
+
+  return <span className="muted-text">无</span>;
 }
 
 function ModuleStatusView({ moduleKey, moduleName }: { moduleKey: ModuleKey; moduleName: string }) {
