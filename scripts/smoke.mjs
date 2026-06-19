@@ -119,7 +119,9 @@ try {
   const createThread = await inject("POST", "/chat/threads", ownerToken, {
     title: "Smoke 会话",
     organizationId: "org-product",
-    memberUserIds: ["user-member"]
+    memberUserIds: ["user-member", "user-super"],
+    relatedObjectType: "project",
+    relatedObjectId: projectId
   });
   assert(createThread.statusCode === 201, `create chat thread failed with ${createThread.statusCode}`);
   const threadId = createThread.body.thread.id;
@@ -139,8 +141,32 @@ try {
   assert(taskDraft.body.draft.kind === "task_draft", "task draft returned wrong kind");
   assert(knowledgeDraft.body.draft.kind === "knowledge_draft", "knowledge draft returned wrong kind");
 
+  const memoryConfirm = await inject("POST", `/ai/drafts/${summaryDraft.body.draft.id}/confirm`, memberToken);
+  const taskConfirm = await inject("POST", `/ai/drafts/${taskDraft.body.draft.id}/confirm`, ownerToken, {
+    projectId,
+    assigneeUserId: "user-member",
+    confirmerUserId: "user-owner"
+  });
+  const knowledgeConfirm = await inject("POST", `/ai/drafts/${knowledgeDraft.body.draft.id}/confirm`, superToken);
+  assert(memoryConfirm.statusCode === 201, `memory confirm failed with ${memoryConfirm.statusCode}`);
+  assert(memoryConfirm.body.draft.promotedObjectType === "project_memory", "summary was not promoted to memory");
+  assert(taskConfirm.statusCode === 201, `task confirm failed with ${taskConfirm.statusCode}`);
+  assert(taskConfirm.body.task.projectId === projectId, "task draft promoted to wrong project");
+  assert(knowledgeConfirm.statusCode === 201, `knowledge confirm failed with ${knowledgeConfirm.statusCode}`);
+  assert(knowledgeConfirm.body.knowledgeItem.status === "published", "knowledge draft was not published");
+
+  const memoryItems = await inject("GET", "/memory/items", memberToken);
+  const knowledgeItems = await inject("GET", "/knowledge/items", superToken);
+  assert(memoryItems.body.items.some((item) => item.id === memoryConfirm.body.memory.id), "confirmed memory missing");
+  assert(
+    knowledgeItems.body.items.some((item) => item.id === knowledgeConfirm.body.knowledgeItem.id),
+    "confirmed knowledge item missing"
+  );
+
   const chatModule = await inject("GET", "/modules/chat", memberToken);
+  const knowledgeModule = await inject("GET", "/modules/knowledge", superToken);
   assert(chatModule.body.status === "available", "chat module is not available");
+  assert(knowledgeModule.body.status === "available", "knowledge module is not available");
 
   console.log(
     JSON.stringify(
@@ -156,7 +182,10 @@ try {
           "module_status",
           "task_audit",
           "chat_thread",
-          "chat_ai_drafts"
+          "chat_ai_drafts",
+          "ai_draft_confirmation",
+          "knowledge_items",
+          "project_memory"
         ]
       },
       null,

@@ -287,4 +287,182 @@ describe("chat and AI draft loop", () => {
       ])
     );
   });
+
+  it("confirms AI drafts into task, knowledge item and project memory", async () => {
+    const server = buildServer();
+    const superToken = await loginOnServer(server, "super");
+
+    const createProject = await server.inject({
+      method: "POST",
+      url: "/projects",
+      headers: {
+        authorization: `Bearer ${superToken}`
+      },
+      payload: {
+        title: "DEV-007 项目",
+        organizationId: "org-product"
+      }
+    });
+    const projectId = createProject.json().project.id as string;
+    const createThread = await server.inject({
+      method: "POST",
+      url: "/chat/threads",
+      headers: {
+        authorization: `Bearer ${superToken}`
+      },
+      payload: {
+        title: "DEV-007 会话",
+        organizationId: "org-product",
+        relatedObjectType: "project",
+        relatedObjectId: projectId
+      }
+    });
+    const threadId = createThread.json().thread.id as string;
+
+    const message = await server.inject({
+      method: "POST",
+      url: `/chat/threads/${threadId}/messages`,
+      headers: {
+        authorization: `Bearer ${superToken}`
+      },
+      payload: {
+        content: "把这次沟通沉淀为正式任务、知识和项目记忆。"
+      }
+    });
+    expect(message.statusCode).toBe(201);
+
+    const summaryDraft = await server.inject({
+      method: "POST",
+      url: `/chat/threads/${threadId}/ai/summarize`,
+      headers: {
+        authorization: `Bearer ${superToken}`
+      }
+    });
+    const taskDraft = await server.inject({
+      method: "POST",
+      url: `/chat/threads/${threadId}/ai/task-draft`,
+      headers: {
+        authorization: `Bearer ${superToken}`
+      }
+    });
+    const knowledgeDraft = await server.inject({
+      method: "POST",
+      url: `/chat/threads/${threadId}/ai/knowledge-draft`,
+      headers: {
+        authorization: `Bearer ${superToken}`
+      }
+    });
+
+    expect(summaryDraft.statusCode).toBe(200);
+    expect(taskDraft.statusCode).toBe(200);
+    expect(knowledgeDraft.statusCode).toBe(200);
+
+    const summaryDraftId = summaryDraft.json().draft.id as string;
+    const taskDraftId = taskDraft.json().draft.id as string;
+    const knowledgeDraftId = knowledgeDraft.json().draft.id as string;
+    const confirmSummary = await server.inject({
+      method: "POST",
+      url: `/ai/drafts/${summaryDraftId}/confirm`,
+      headers: {
+        authorization: `Bearer ${superToken}`
+      }
+    });
+    const confirmTask = await server.inject({
+      method: "POST",
+      url: `/ai/drafts/${taskDraftId}/confirm`,
+      headers: {
+        authorization: `Bearer ${superToken}`
+      },
+      payload: {
+        projectId
+      }
+    });
+    const confirmKnowledge = await server.inject({
+      method: "POST",
+      url: `/ai/drafts/${knowledgeDraftId}/confirm`,
+      headers: {
+        authorization: `Bearer ${superToken}`
+      }
+    });
+    const duplicateConfirm = await server.inject({
+      method: "POST",
+      url: `/ai/drafts/${taskDraftId}/confirm`,
+      headers: {
+        authorization: `Bearer ${superToken}`
+      },
+      payload: {
+        projectId
+      }
+    });
+
+    expect(confirmSummary.statusCode).toBe(201);
+    expect(confirmSummary.json().draft).toEqual(
+      expect.objectContaining({
+        status: "confirmed",
+        promotedObjectType: "project_memory"
+      })
+    );
+    expect(confirmTask.statusCode).toBe(201);
+    expect(confirmTask.json().task).toEqual(
+      expect.objectContaining({
+        projectId,
+        status: "todo"
+      })
+    );
+    expect(confirmTask.json().draft).toEqual(
+      expect.objectContaining({
+        status: "confirmed",
+        promotedObjectType: "task"
+      })
+    );
+    expect(confirmKnowledge.statusCode).toBe(201);
+    expect(confirmKnowledge.json().knowledgeItem).toEqual(
+      expect.objectContaining({
+        organizationId: "org-product",
+        status: "published"
+      })
+    );
+    expect(duplicateConfirm.statusCode).toBe(409);
+    expect(duplicateConfirm.json()).toEqual({ error: "draft_already_confirmed" });
+
+    const tasks = await server.inject({
+      method: "GET",
+      url: "/tasks",
+      headers: {
+        authorization: `Bearer ${superToken}`
+      }
+    });
+    const knowledgeItems = await server.inject({
+      method: "GET",
+      url: "/knowledge/items",
+      headers: {
+        authorization: `Bearer ${superToken}`
+      }
+    });
+    const memories = await server.inject({
+      method: "GET",
+      url: "/memory/items",
+      headers: {
+        authorization: `Bearer ${superToken}`
+      }
+    });
+    const audit = await server.inject({
+      method: "GET",
+      url: "/audit-logs",
+      headers: {
+        authorization: `Bearer ${superToken}`
+      }
+    });
+
+    expect(tasks.json().tasks).toEqual(expect.arrayContaining([expect.objectContaining({ projectId })]));
+    expect(knowledgeItems.json().items).toHaveLength(1);
+    expect(memories.json().items).toHaveLength(1);
+    expect(audit.json().auditLogs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: "task.created_from_ai_draft" }),
+        expect.objectContaining({ action: "knowledge.published_from_ai_draft" }),
+        expect.objectContaining({ action: "memory.created_from_ai_summary" })
+      ])
+    );
+  });
 });

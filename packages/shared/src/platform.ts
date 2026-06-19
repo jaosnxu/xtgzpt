@@ -74,6 +74,10 @@ export type ChatMessageStatus = "sent" | "edited" | "withdrawn";
 
 export type AiDraftKind = "chat_summary" | "task_draft" | "knowledge_draft";
 
+export type AiDraftStatus = "draft" | "confirmed";
+
+export type KnowledgeItemStatus = "published" | "archived";
+
 export interface ProjectRecord {
   id: string;
   title: string;
@@ -133,6 +137,37 @@ export interface AiDraftRecord {
   sourceMessageIds: string[];
   frameworkVersion: string;
   isDraft: true;
+  status: AiDraftStatus;
+  confirmedByUserId: string | null;
+  confirmedAt: string | null;
+  promotedObjectType: "task" | "knowledge_item" | "project_memory" | null;
+  promotedObjectId: string | null;
+  createdAt: string;
+}
+
+export interface KnowledgeItemRecord {
+  id: string;
+  title: string;
+  content: string;
+  organizationId: string;
+  creatorUserId: string;
+  sourceDraftId: string;
+  sourceMessageIds: string[];
+  status: KnowledgeItemStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectMemoryRecord {
+  id: string;
+  title: string;
+  content: string;
+  organizationId: string;
+  projectId: string | null;
+  threadId: string;
+  creatorUserId: string;
+  sourceDraftId: string;
+  sourceMessageIds: string[];
   createdAt: string;
 }
 
