@@ -143,11 +143,12 @@ AI 结果不得自动发布或自动创建正式对象。
 | POST | `/contracts/{id}/execution-events` | 执行跟踪 |
 | GET | `/contracts/{id}/audit-logs` | 审计 |
 
-DEV-014 当前实现要求：
+DEV-014 / DEV-015 当前实现要求：
 
 - 合同入口只开放 `/contracts/upload` 和 `/contracts/paste`，不提供其他创建入口。
 - AI 审查返回风险清单、原文高亮和 A/B/C 方案，但风险确认和方案选择必须由人类账号完成。
-- `/contracts/{id}/submit-approval` 只表示审批边界 handoff 和 `approval_pending` 状态，不创建完整审批节点、不执行审批结果。
+- DEV-014 中 `/contracts/{id}/submit-approval` 只表示审批边界 handoff 和 `approval_pending` 状态，不创建完整审批节点、不执行审批结果。
+- DEV-015 起 `/contracts/{id}/submit-approval` 会创建真实人工审批实例、节点和当前处理人，并把 handoff 关联到 approval id；审批结果由 `/approvals/{id}/*` 人工动作写回合同状态。
 - `/contracts/{id}/execution-events` 只记录提醒、执行记录和状态事项，不触发外部通知、签署、付款或执行完成确认。
 - 无权限访问必须返回不泄露合同标题、正文、风险、来源证据或 AI 上下文的拒绝响应。
 
@@ -166,6 +167,14 @@ DEV-014 当前实现要求：
 | POST | `/approvals/{id}/ai-suggestion` | AI 建议 |
 
 审批决策接口必须校验当前节点审批人。
+
+DEV-015 当前实现要求：
+
+- 合同来源审批实例包含法务、财务和业务审批人节点，处理人必须是人类账号。
+- 非当前节点处理人不能调用同意、驳回、退回、转交或加签。
+- `/approvals/{id}` 对无权限账号返回非泄露 `404`，不得泄露来源合同标题、正文、风险或证据。
+- 同意最终节点后合同写回 `approved`；驳回写回 `rejected`；退回写回 `revision_required`。
+- 转交和加签只改变人工节点处理链路并写审计，不代表审批通过。
 
 ## 11. 文件
 

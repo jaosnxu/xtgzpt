@@ -29,10 +29,15 @@ import {
   seedUsers,
   visibleOrganizationsForUser,
   type AiDraftRecord,
+  type ApprovalActionRecord,
+  type ApprovalActionType,
+  type ApprovalNodeRecord,
+  type ApprovalPermission,
+  type ApprovalRecord,
+  type ApprovalWithDetails,
   type AuditLogEntry,
   type AuditLogFilter,
   type AuditResult,
-  type ApprovalPermission,
   type AiCapability,
   type ChatMessageRecord,
   type ChatThreadRecord,
@@ -212,6 +217,17 @@ interface ContractExecutionEventBody {
   dueAt?: string | null;
 }
 
+interface CreateApprovalBody {
+  sourceObjectType?: "contract";
+  sourceObjectId?: string;
+  reason?: string;
+}
+
+interface ApprovalActionBody {
+  targetUserId?: string;
+  reason?: string;
+}
+
 const sessionPrefix = "dev-session";
 const devCredentials: Record<string, string> = {
   super: "113113",
@@ -315,6 +331,9 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     knowledgeItems,
     knowledgeVersions,
     projectMemories,
+    approvals,
+    approvalNodes,
+    approvalActions,
     contracts,
     contractVersions,
     contractReviews,
@@ -637,6 +656,260 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         .filter((event) => event.contractId === contract.id)
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     };
+  }
+
+  function nodesForApproval(approvalId: string) {
+    return approvalNodes
+      .filter((node) => node.approvalId === approvalId)
+      .sort((left, right) => left.sequence - right.sequence || left.createdAt.localeCompare(right.createdAt));
+  }
+
+  function actionsForApproval(approvalId: string) {
+    return approvalActions
+      .filter((action) => action.approvalId === approvalId)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  }
+
+  function sourceContractForApproval(approval: ApprovalRecord) {
+    return contracts.find((contract) => contract.id === approval.sourceObjectId);
+  }
+
+  function canReadApproval(user: UserAccount, approval: ApprovalRecord) {
+    if (approval.initiatedByUserId === user.id || approval.currentApproverUserId === user.id) {
+      return true;
+    }
+
+    if (nodesForApproval(approval.id).some((node) => node.approverUserId === user.id)) {
+      return true;
+    }
+
+    const contract = sourceContractForApproval(approval);
+    return Boolean(contract && canReadContract(user, contract));
+  }
+
+  function approvalSourceSummary(approval: ApprovalRecord) {
+    const contract = sourceContractForApproval(approval);
+
+    return {
+      objectType: approval.sourceObjectType,
+      objectId: approval.sourceObjectId,
+      title: contract?.title ?? "审批来源",
+      status: contract?.status ?? "unknown"
+    };
+  }
+
+  function approvalWithDetails(approval: ApprovalRecord): ApprovalWithDetails {
+    const currentApprover = approval.currentApproverUserId
+      ? seedUsers.find((candidate) => candidate.id === approval.currentApproverUserId) ?? null
+      : null;
+
+    return {
+      ...approval,
+      nodes: nodesForApproval(approval.id),
+      actions: actionsForApproval(approval.id),
+      currentApprover: currentApprover ? getPublicUser(currentApprover) : null,
+      sourceSummary: approvalSourceSummary(approval)
+    };
+  }
+
+  function visibleApprovalsForUser(user: UserAccount) {
+    return approvals.filter((approval) => canReadApproval(user, approval));
+  }
+
+  function findVisibleApproval(user: UserAccount, approvalId: string) {
+    const approval = approvals.find((candidate) => candidate.id === approvalId);
+
+    if (!approval || !canReadApproval(user, approval)) {
+      return undefined;
+    }
+
+    return approval;
+  }
+
+  function currentApprovalNode(approval: ApprovalRecord) {
+    return approval.currentNodeId
+      ? approvalNodes.find((node) => node.id === approval.currentNodeId && node.approvalId === approval.id)
+      : undefined;
+  }
+
+  function approvalResource(approval: ApprovalRecord) {
+    const contract = sourceContractForApproval(approval);
+
+    return {
+      organizationId: approval.organizationId,
+      ownerUserId: approval.initiatedByUserId,
+      participantUserIds: [
+        approval.initiatedByUserId,
+        approval.currentApproverUserId,
+        ...(contract?.participantUserIds ?? []),
+        ...nodesForApproval(approval.id).map((node) => node.approverUserId)
+      ].filter((userId): userId is string => Boolean(userId))
+    };
+  }
+
+  function isHumanApprover(userId: string | undefined) {
+    if (!userId) {
+      return false;
+    }
+
+    const user = seedUsers.find((candidate) => candidate.id === userId && candidate.status === "active");
+    return Boolean(user && rolePolicies[user.role].approval.some((permission) =>
+      ["approve_current_node", "reject_current_node", "return_for_revision"].includes(permission)
+    ));
+  }
+
+  function shiftApprovalNodeSequences(approvalId: string, fromSequence: number) {
+    for (const node of approvalNodes) {
+      if (node.approvalId === approvalId && node.sequence >= fromSequence) {
+        node.sequence += 1;
+        node.updatedAt = nowIso();
+      }
+    }
+  }
+
+  function setApprovalCurrentNode(approval: ApprovalRecord, node: ApprovalNodeRecord | null, timestamp: string) {
+    approval.currentNodeId = node?.id ?? null;
+    approval.currentApproverUserId = node?.approverUserId ?? null;
+    approval.updatedAt = timestamp;
+
+    if (node) {
+      node.status = "processing";
+      node.enteredAt = node.enteredAt ?? timestamp;
+      node.updatedAt = timestamp;
+    }
+  }
+
+  function writeBackApprovalResult(approval: ApprovalRecord, status: "approved" | "rejected" | "returned", timestamp: string) {
+    const contract = sourceContractForApproval(approval);
+
+    if (!contract) {
+      return;
+    }
+
+    if (status === "approved") {
+      contract.status = "approved";
+      approval.resultWritebackStatus = "contract.approved";
+    }
+
+    if (status === "rejected") {
+      contract.status = "rejected";
+      approval.resultWritebackStatus = "contract.rejected";
+    }
+
+    if (status === "returned") {
+      contract.status = "revision_required";
+      approval.resultWritebackStatus = "contract.revision_required";
+    }
+
+    contract.updatedAt = timestamp;
+  }
+
+  function createContractApprovalInstance({
+    contract,
+    version,
+    handoff,
+    user,
+    timestamp
+  }: {
+    contract: ContractRecord;
+    version: ContractVersionRecord;
+    handoff: ContractApprovalHandoffRecord;
+    user: UserAccount;
+    timestamp: string;
+    reason: string;
+  }) {
+    const existing = approvals.find(
+      (approval) =>
+        approval.sourceObjectType === "contract" &&
+        approval.sourceObjectId === contract.id &&
+        ["submitted", "processing"].includes(approval.status)
+    );
+
+    if (existing) {
+      handoff.approvalEngineImplemented = true;
+      handoff.approvalId = existing.id;
+      contract.approvalHandoffId = handoff.id;
+      contract.status = "approval_pending";
+      contract.updatedAt = timestamp;
+      return existing;
+    }
+
+    const approval: ApprovalRecord = {
+      id: `approval-${randomUUID()}`,
+      title: `${contract.title} 合同审批`,
+      organizationId: contract.organizationId,
+      sourceObjectType: "contract",
+      sourceObjectId: contract.id,
+      sourceSnapshotRef: version.id,
+      initiatedByUserId: user.id,
+      status: "processing",
+      currentNodeId: null,
+      currentApproverUserId: null,
+      resultWritebackStatus: null,
+      createdAt: timestamp,
+      submittedAt: timestamp,
+      completedAt: null,
+      updatedAt: timestamp
+    };
+    const nodes: ApprovalNodeRecord[] = [
+      {
+        id: `approval-node-${randomUUID()}`,
+        approvalId: approval.id,
+        sequence: 1,
+        name: "法务审批",
+        approverUserId: "user-legal",
+        status: "processing",
+        enteredAt: timestamp,
+        decidedAt: null,
+        decidedByUserId: null,
+        decisionReason: null,
+        fromNodeId: null,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      },
+      {
+        id: `approval-node-${randomUUID()}`,
+        approvalId: approval.id,
+        sequence: 2,
+        name: "财务审批",
+        approverUserId: "user-finance",
+        status: "pending",
+        enteredAt: null,
+        decidedAt: null,
+        decidedByUserId: null,
+        decisionReason: null,
+        fromNodeId: null,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      },
+      {
+        id: `approval-node-${randomUUID()}`,
+        approvalId: approval.id,
+        sequence: 3,
+        name: "业务审批",
+        approverUserId: "user-approver",
+        status: "pending",
+        enteredAt: null,
+        decidedAt: null,
+        decidedByUserId: null,
+        decisionReason: null,
+        fromNodeId: null,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      }
+    ];
+
+    approval.currentNodeId = nodes[0].id;
+    approval.currentApproverUserId = nodes[0].approverUserId;
+    approvals.push(approval);
+    approvalNodes.push(...nodes);
+    handoff.approvalEngineImplemented = true;
+    handoff.approvalId = approval.id;
+    contract.approvalHandoffId = handoff.id;
+    contract.status = "approval_pending";
+    contract.updatedAt = timestamp;
+
+    return approval;
   }
 
   function contractSourceEvidence({
@@ -1369,7 +1642,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         task.status !== "archived"
     );
     const contractConfirmations = visibleContractsForUser(user)
-      .filter((contract) => ["risk_pending_confirm", "revision_required", "approval_pending"].includes(contract.status))
+      .filter((contract) => ["risk_pending_confirm", "revision_required"].includes(contract.status))
       .map((contract) =>
         workbenchItem({
           id: `contract-confirmation:${contract.id}`,
@@ -1385,6 +1658,22 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
           objectId: contract.id,
           organizationId: contract.organizationId,
           updatedAt: contract.updatedAt
+        })
+      );
+    const pendingApprovalItems = visibleApprovalsForUser(user)
+      .filter((approval) => approval.status === "processing" && approval.currentApproverUserId === user.id)
+      .map((approval) =>
+        workbenchItem({
+          id: `pending-approval:${approval.id}`,
+          kind: "pending_approval",
+          title: approval.title,
+          description: `${approvalSourceSummary(approval).title} 当前节点需要你人工处理。`,
+          module: "approvals",
+          status: approval.status,
+          objectType: "approval",
+          objectId: approval.id,
+          organizationId: approval.organizationId,
+          updatedAt: approval.updatedAt
         })
       );
     const aiConfirmations = aiDrafts
@@ -1499,10 +1788,16 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       workbenchNotification({
         user,
         type: "approval",
-        severity: canHandleApproval ? "info" : "warning",
-        title: canHandleApproval ? "暂无待审批节点" : "无审批处理权限",
-        body: "完整审批实例和节点流转保留到 DEV-015；当前不会生成可处理的正式审批单。",
-        module: "approvals"
+        severity: pendingApprovalItems.length > 0 ? "warning" : canHandleApproval ? "info" : "warning",
+        title: pendingApprovalItems.length > 0
+          ? `${pendingApprovalItems.length} 个审批节点待处理`
+          : canHandleApproval
+            ? "暂无待审批节点"
+            : "无审批处理权限",
+        body: pendingApprovalItems[0]?.description ?? "审批必须由当前节点人类处理，AI 不能审批、驳回、退回、转交或加签。",
+        module: "approvals",
+        relatedObjectType: pendingApprovalItems[0]?.objectType ?? null,
+        relatedObjectId: pendingApprovalItems[0]?.objectId ?? null
       })
     );
 
@@ -1557,21 +1852,21 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         user,
         type: "system_status",
         severity: "info",
-        title: "DEV-012 文件生产存储",
-        body: "文件能力进入项目等既有页面；外部通知、完整合同和完整审批流不在本阶段范围。",
+        title: "DEV-015 审批闭环",
+        body: "审批实例、当前节点、人工决策和合同结果写回已接入；仍不做外部通知、签署或付款。",
         module: "workbench"
       })
     );
 
     const visibleWorkCount =
-      pendingTaskItems.length + responsibleTaskItems.length + projectItems.length + contractConfirmations.length + aiConfirmations.length;
+      pendingTaskItems.length + responsibleTaskItems.length + projectItems.length + pendingApprovalItems.length + contractConfirmations.length + aiConfirmations.length;
 
     return {
       summary: {
         pendingWorkCount: pendingTaskItems.length,
         responsibleTaskCount: responsibleTaskItems.length,
         participatingProjectCount: projectItems.length,
-        pendingApprovalCount: 0,
+        pendingApprovalCount: pendingApprovalItems.length,
         contractConfirmationCount: contractConfirmations.length,
         aiResultConfirmationCount: aiConfirmations.length,
         notificationCount: notifications.length,
@@ -1582,7 +1877,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         pendingWork: pendingTaskItems,
         responsibleTasks: responsibleTaskItems,
         participatingProjects: projectItems,
-        pendingApprovals: [],
+        pendingApprovals: pendingApprovalItems,
         contractConfirmations,
         aiConfirmations
       },
@@ -4038,14 +4333,20 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       submittedByUserId: user.id,
       status: "submitted_boundary",
       approvalEngineImplemented: false,
+      approvalId: null,
       reason: request.body?.reason?.trim() || "contract_ready_for_human_approval_engine",
       createdAt: timestamp
     };
+    const approval = createContractApprovalInstance({
+      contract,
+      version,
+      handoff,
+      user,
+      timestamp,
+      reason: handoff.reason
+    });
 
     contractApprovalHandoffs.push(handoff);
-    contract.approvalHandoffId = handoff.id;
-    contract.status = "approval_pending";
-    contract.updatedAt = timestamp;
     store.save();
     recordAudit({
       request,
@@ -4055,14 +4356,38 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       objectId: contract.id,
       organizationId: contract.organizationId,
       beforeSnapshotRef: review.id,
-      afterSnapshotRef: handoff.id,
-      reason: "bounded_approval_handoff_only:no_approval_engine",
+      afterSnapshotRef: approval.id,
+      reason: "approval_instance_created:human_only",
+      result: "success"
+    });
+    recordAudit({
+      request,
+      user,
+      action: "approval.initiated",
+      objectType: "approval",
+      objectId: approval.id,
+      organizationId: approval.organizationId,
+      beforeSnapshotRef: handoff.id,
+      afterSnapshotRef: approval.currentNodeId,
+      reason: handoff.reason,
+      result: "success"
+    });
+    recordAudit({
+      request,
+      user,
+      action: "approval.node_entered",
+      objectType: "approval",
+      objectId: approval.id,
+      organizationId: approval.organizationId,
+      afterSnapshotRef: approval.currentNodeId,
+      reason: `current_approver:${approval.currentApproverUserId}`,
       result: "success"
     });
 
     return {
       contract: contractWithDetails(contract),
-      handoff
+      handoff,
+      approval: approvalWithDetails(approval)
     };
   });
 
@@ -4099,7 +4424,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       return reply.code(403).send({ error: "forbidden" });
     }
 
-    if (contract.status !== "approval_pending" && contract.status !== "execution_tracking") {
+    if (!["approval_pending", "approved", "execution_tracking"].includes(contract.status)) {
       return reply.code(409).send({ error: "approval_handoff_required_before_execution_tracking" });
     }
 
@@ -4124,6 +4449,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
 
     contractExecutionEvents.push(event);
     contract.executionStatus = "tracking";
+    contract.status = "execution_tracking";
     contract.updatedAt = timestamp;
     store.save();
     recordAudit({
@@ -4143,6 +4469,435 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       event
     });
   });
+
+  server.get("/approvals", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "approvals");
+
+    if (!user) {
+      return;
+    }
+
+    return {
+      approvals: visibleApprovalsForUser(user).map(approvalWithDetails)
+    };
+  });
+
+  server.post<{ Body: CreateApprovalBody }>("/approvals", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "approvals");
+
+    if (!user) {
+      return;
+    }
+
+    if (request.body?.sourceObjectType !== "contract" || !request.body.sourceObjectId) {
+      return reply.code(400).send({ error: "approval_source_required" });
+    }
+
+    const contract = findVisibleContract(user, request.body.sourceObjectId);
+
+    if (!contract) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "approval",
+        reason: "approval:create_source",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    if (!canPerformApprovalAction(user, "initiate_approval", contractResource(contract))) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "approval",
+        action: "initiate_approval",
+        resourceType: "approval",
+        reason: "forbidden"
+      });
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    const version = currentContractVersion(contract);
+    const review = latestContractReview(contract);
+    const allRisksConfirmed = Boolean(review && review.risks.every((risk) => risk.humanConfirmed && risk.selectedOption));
+
+    if (!version || contract.currentVersion < 2 || review?.reviewType !== "second" || review.version !== contract.currentVersion || !allRisksConfirmed) {
+      return reply.code(409).send({ error: "second_review_and_human_confirmation_required" });
+    }
+
+    const timestamp = nowIso();
+    const handoff: ContractApprovalHandoffRecord = {
+      id: `contract-approval-handoff-${randomUUID()}`,
+      contractId: contract.id,
+      versionId: version.id,
+      submittedByUserId: user.id,
+      status: "submitted_boundary",
+      approvalEngineImplemented: false,
+      approvalId: null,
+      reason: request.body?.reason?.trim() || "approval_api_contract_source",
+      createdAt: timestamp
+    };
+    const approval = createContractApprovalInstance({
+      contract,
+      version,
+      handoff,
+      user,
+      timestamp,
+      reason: handoff.reason
+    });
+
+    contractApprovalHandoffs.push(handoff);
+    store.save();
+    recordAudit({
+      request,
+      user,
+      action: "approval.initiated",
+      objectType: "approval",
+      objectId: approval.id,
+      organizationId: approval.organizationId,
+      beforeSnapshotRef: handoff.id,
+      afterSnapshotRef: approval.currentNodeId,
+      reason: handoff.reason,
+      result: "success"
+    });
+
+    return reply.code(201).send({
+      approval: approvalWithDetails(approval)
+    });
+  });
+
+  server.get<{ Params: { id: string } }>("/approvals/:id", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "approvals");
+
+    if (!user) {
+      return;
+    }
+
+    const approval = findVisibleApproval(user, request.params.id);
+
+    if (!approval) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "approval",
+        reason: "approval:read",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    return {
+      approval: approvalWithDetails(approval)
+    };
+  });
+
+  async function handleApprovalAction(
+    request: FastifyRequest<{ Body: ApprovalActionBody; Params: { id: string } }>,
+    reply: FastifyReply,
+    action: ApprovalActionType
+  ) {
+    const user = await requireMenuAccess(request, reply, "approvals");
+
+    if (!user) {
+      return undefined;
+    }
+
+    const approval = findVisibleApproval(user, request.params.id);
+
+    if (!approval) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "approval",
+        reason: `approval:${action}`,
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    if (approval.status !== "processing") {
+      return reply.code(409).send({ error: "approval_not_processing" });
+    }
+
+    const node = currentApprovalNode(approval);
+
+    if (!node) {
+      return reply.code(409).send({ error: "current_node_required" });
+    }
+
+    const permissionByAction: Record<ApprovalActionType, ApprovalPermission> = {
+      approve: "approve_current_node",
+      reject: "reject_current_node",
+      return: "return_for_revision",
+      transfer: "transfer_approval",
+      add_sign: "add_sign"
+    };
+    const permission = permissionByAction[action];
+
+    if (!canPerformApprovalAction(user, permission, {
+      ...approvalResource(approval),
+      currentNodeApproverUserIds: [node.approverUserId]
+    })) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "approval",
+        action: permission,
+        resourceType: "approval",
+        reason: "forbidden"
+      });
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    if ((action === "transfer" || action === "add_sign") && !isHumanApprover(request.body?.targetUserId)) {
+      return reply.code(400).send({ error: "human_approver_required" });
+    }
+
+    const reason = request.body?.reason?.trim();
+
+    if (!reason) {
+      return reply.code(400).send({ error: "reason_required" });
+    }
+
+    const timestamp = nowIso();
+    const previousNodeId = node.id;
+    const previousApproverId = node.approverUserId;
+    const actionRecord: ApprovalActionRecord = {
+      id: `approval-action-${randomUUID()}`,
+      approvalId: approval.id,
+      nodeId: node.id,
+      action,
+      actorUserId: user.id,
+      targetUserId: action === "transfer" || action === "add_sign" ? request.body.targetUserId! : null,
+      reason,
+      createdAt: timestamp
+    };
+
+    approvalActions.push(actionRecord);
+
+    if (action === "approve") {
+      node.status = "approved";
+      node.decidedAt = timestamp;
+      node.decidedByUserId = user.id;
+      node.decisionReason = reason;
+      node.updatedAt = timestamp;
+
+      const nextNode = nodesForApproval(approval.id).find((candidate) => candidate.status === "pending");
+
+      if (nextNode) {
+        setApprovalCurrentNode(approval, nextNode, timestamp);
+        recordAudit({
+          request,
+          user,
+          action: "approval.approved",
+          objectType: "approval",
+          objectId: approval.id,
+          organizationId: approval.organizationId,
+          beforeSnapshotRef: previousNodeId,
+          afterSnapshotRef: nextNode.id,
+          reason,
+          result: "success"
+        });
+        recordAudit({
+          request,
+          user,
+          action: "approval.node_entered",
+          objectType: "approval",
+          objectId: approval.id,
+          organizationId: approval.organizationId,
+          beforeSnapshotRef: previousNodeId,
+          afterSnapshotRef: nextNode.id,
+          reason: `current_approver:${nextNode.approverUserId}`,
+          result: "success"
+        });
+      } else {
+        approval.status = "approved";
+        approval.completedAt = timestamp;
+        setApprovalCurrentNode(approval, null, timestamp);
+        writeBackApprovalResult(approval, "approved", timestamp);
+        recordAudit({
+          request,
+          user,
+          action: "approval.approved",
+          objectType: "approval",
+          objectId: approval.id,
+          organizationId: approval.organizationId,
+          beforeSnapshotRef: previousNodeId,
+          afterSnapshotRef: `${approval.sourceObjectType}:${approval.sourceObjectId}:approved`,
+          reason,
+          result: "success"
+        });
+        recordAudit({
+          request,
+          user,
+          action: "approval.completed",
+          objectType: "approval",
+          objectId: approval.id,
+          organizationId: approval.organizationId,
+          afterSnapshotRef: approval.resultWritebackStatus,
+          reason: "approval_result_writeback_completed",
+          result: "success"
+        });
+        recordAudit({
+          request,
+          user,
+          action: "contract.approval_result_written_back",
+          objectType: "contract",
+          objectId: approval.sourceObjectId,
+          organizationId: approval.organizationId,
+          afterSnapshotRef: approval.resultWritebackStatus,
+          reason: "approval_approved_human_decision",
+          result: "success"
+        });
+      }
+    }
+
+    if (action === "reject" || action === "return") {
+      const nextStatus = action === "reject" ? "rejected" : "returned";
+      node.status = nextStatus;
+      node.decidedAt = timestamp;
+      node.decidedByUserId = user.id;
+      node.decisionReason = reason;
+      node.updatedAt = timestamp;
+      approval.status = nextStatus;
+      approval.completedAt = timestamp;
+      setApprovalCurrentNode(approval, null, timestamp);
+      writeBackApprovalResult(approval, nextStatus, timestamp);
+      recordAudit({
+        request,
+        user,
+        action: action === "reject" ? "approval.rejected" : "approval.returned",
+        objectType: "approval",
+        objectId: approval.id,
+        organizationId: approval.organizationId,
+        beforeSnapshotRef: previousNodeId,
+        afterSnapshotRef: approval.resultWritebackStatus,
+        reason,
+        result: "success"
+      });
+      recordAudit({
+        request,
+        user,
+        action: "contract.approval_result_written_back",
+        objectType: "contract",
+        objectId: approval.sourceObjectId,
+        organizationId: approval.organizationId,
+        afterSnapshotRef: approval.resultWritebackStatus,
+        reason: `approval_${nextStatus}_human_decision`,
+        result: "success"
+      });
+    }
+
+    if (action === "transfer") {
+      node.status = "transferred";
+      node.decidedAt = timestamp;
+      node.decidedByUserId = user.id;
+      node.decisionReason = reason;
+      node.updatedAt = timestamp;
+      shiftApprovalNodeSequences(approval.id, node.sequence + 1);
+
+      const transferNode: ApprovalNodeRecord = {
+        id: `approval-node-${randomUUID()}`,
+        approvalId: approval.id,
+        sequence: node.sequence + 1,
+        name: `${node.name}（转交）`,
+        approverUserId: request.body.targetUserId!,
+        status: "processing",
+        enteredAt: timestamp,
+        decidedAt: null,
+        decidedByUserId: null,
+        decisionReason: null,
+        fromNodeId: node.id,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      };
+      approvalNodes.push(transferNode);
+      approval.status = "transferred";
+      setApprovalCurrentNode(approval, transferNode, timestamp);
+      approval.status = "processing";
+      recordAudit({
+        request,
+        user,
+        action: "approval.transferred",
+        objectType: "approval",
+        objectId: approval.id,
+        organizationId: approval.organizationId,
+        beforeSnapshotRef: `${previousNodeId}:${previousApproverId}`,
+        afterSnapshotRef: `${transferNode.id}:${transferNode.approverUserId}`,
+        reason,
+        result: "success"
+      });
+    }
+
+    if (action === "add_sign") {
+      shiftApprovalNodeSequences(approval.id, node.sequence);
+      node.status = "pending";
+      node.enteredAt = null;
+      node.updatedAt = timestamp;
+
+      const addSignNode: ApprovalNodeRecord = {
+        id: `approval-node-${randomUUID()}`,
+        approvalId: approval.id,
+        sequence: node.sequence - 1,
+        name: "加签审批",
+        approverUserId: request.body.targetUserId!,
+        status: "processing",
+        enteredAt: timestamp,
+        decidedAt: null,
+        decidedByUserId: null,
+        decisionReason: null,
+        fromNodeId: node.id,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      };
+      approvalNodes.push(addSignNode);
+      setApprovalCurrentNode(approval, addSignNode, timestamp);
+      recordAudit({
+        request,
+        user,
+        action: "approval.add_signed",
+        objectType: "approval",
+        objectId: approval.id,
+        organizationId: approval.organizationId,
+        beforeSnapshotRef: `${previousNodeId}:${previousApproverId}`,
+        afterSnapshotRef: `${addSignNode.id}:${addSignNode.approverUserId}`,
+        reason,
+        result: "success"
+      });
+    }
+
+    store.save();
+
+    return {
+      approval: approvalWithDetails(approval),
+      contract: sourceContractForApproval(approval) ? contractWithDetails(sourceContractForApproval(approval)!) : null,
+      action: actionRecord
+    };
+  }
+
+  server.post<{ Body: ApprovalActionBody; Params: { id: string } }>("/approvals/:id/approve", async (request, reply) =>
+    handleApprovalAction(request, reply, "approve")
+  );
+
+  server.post<{ Body: ApprovalActionBody; Params: { id: string } }>("/approvals/:id/reject", async (request, reply) =>
+    handleApprovalAction(request, reply, "reject")
+  );
+
+  server.post<{ Body: ApprovalActionBody; Params: { id: string } }>("/approvals/:id/return", async (request, reply) =>
+    handleApprovalAction(request, reply, "return")
+  );
+
+  server.post<{ Body: ApprovalActionBody; Params: { id: string } }>("/approvals/:id/transfer", async (request, reply) =>
+    handleApprovalAction(request, reply, "transfer")
+  );
+
+  server.post<{ Body: ApprovalActionBody; Params: { id: string } }>("/approvals/:id/add-sign", async (request, reply) =>
+    handleApprovalAction(request, reply, "add_sign")
+  );
 
   server.get("/memory/items", async (request, reply) => {
     const user = await requireUser(request, reply);
@@ -4491,7 +5246,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
 
   server.get<{ Params: { module: string } }>("/modules/:module", async (request, reply) => {
     const moduleKey = request.params.module;
-    const availableModules: ModuleKey[] = ["dashboard", "settings", "projects", "tasks", "chat", "knowledge", "contracts"];
+    const availableModules: ModuleKey[] = ["dashboard", "settings", "projects", "tasks", "chat", "knowledge", "contracts", "approvals"];
 
     if (!platformModules.some((module) => module.key === moduleKey)) {
       return reply.code(404).send({ error: "not_found" });

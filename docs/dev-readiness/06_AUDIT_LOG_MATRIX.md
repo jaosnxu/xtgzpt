@@ -136,6 +136,11 @@ DEV-014 要求：
 - `contract.execution_event_recorded` 只记录 reminder / record / status_update，不代表签署、付款或执行完成。
 - 合同无权限读取或 AI 审查必须写拒绝审计，且响应不得泄露合同内容、风险、来源证据或 AI 上下文。
 
+DEV-015 要求：
+
+- `contract.approval_submitted` 必须关联真实 approval id，但不代表审批通过。
+- `contract.approval_result_written_back` 必须记录审批结果写回合同状态。
+
 ## 9. 审批审计
 
 | 动作 | 必须审计 |
@@ -150,6 +155,12 @@ DEV-014 要求：
 | AI 审批建议 | 是 |
 | 审批完成 | 是 |
 | 审批超时 | 是 |
+
+DEV-015 要求：
+
+- `approval.initiated`、`approval.node_entered`、`approval.approved`、`approval.rejected`、`approval.returned`、`approval.transferred`、`approval.add_signed`、`approval.completed` 必须记录 actor、object、reason、before/after snapshot ref 和 result。
+- 非当前节点处理人调用审批动作必须写权限拒绝审计。
+- AI 不得写入上述人工审批动作审计。
 
 ## 10. 文件审计
 

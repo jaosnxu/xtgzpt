@@ -180,7 +180,15 @@ describe("DEV-014 contract closure", () => {
     expect(handoff.json().handoff).toEqual(
       expect.objectContaining({
         status: "submitted_boundary",
-        approvalEngineImplemented: false
+        approvalEngineImplemented: true,
+        approvalId: expect.any(String)
+      })
+    );
+    expect(handoff.json().approval).toEqual(
+      expect.objectContaining({
+        sourceObjectType: "contract",
+        sourceObjectId: contractId,
+        currentApproverUserId: "user-legal"
       })
     );
 

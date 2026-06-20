@@ -3,6 +3,9 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   AiDraftRecord,
+  ApprovalActionRecord,
+  ApprovalNodeRecord,
+  ApprovalRecord,
   AuditLogEntry,
   ChatMessageRecord,
   ChatThreadRecord,
@@ -44,6 +47,9 @@ export interface RuntimeData {
   knowledgeItems: KnowledgeItemRecord[];
   knowledgeVersions: KnowledgeVersionRecord[];
   projectMemories: ProjectMemoryRecord[];
+  approvals: ApprovalRecord[];
+  approvalNodes: ApprovalNodeRecord[];
+  approvalActions: ApprovalActionRecord[];
   contracts: ContractRecord[];
   contractVersions: ContractVersionRecord[];
   contractReviews: ContractReviewRecord[];
@@ -78,6 +84,9 @@ function emptyRuntimeData(): RuntimeData {
     knowledgeItems: [],
     knowledgeVersions: [],
     projectMemories: [],
+    approvals: [],
+    approvalNodes: [],
+    approvalActions: [],
     contracts: [],
     contractVersions: [],
     contractReviews: [],
@@ -141,6 +150,9 @@ function normalizeRuntimeData(value: unknown): RuntimeData {
     knowledgeItems: normalizeKnowledgeItems(source.knowledgeItems),
     knowledgeVersions: arrayOrEmpty<KnowledgeVersionRecord>(source.knowledgeVersions),
     projectMemories: arrayOrEmpty<ProjectMemoryRecord>(source.projectMemories),
+    approvals: arrayOrEmpty<ApprovalRecord>(source.approvals),
+    approvalNodes: arrayOrEmpty<ApprovalNodeRecord>(source.approvalNodes),
+    approvalActions: arrayOrEmpty<ApprovalActionRecord>(source.approvalActions),
     contracts: arrayOrEmpty<ContractRecord>(source.contracts),
     contractVersions: arrayOrEmpty<ContractVersionRecord>(source.contractVersions),
     contractReviews: arrayOrEmpty<ContractReviewRecord>(source.contractReviews),

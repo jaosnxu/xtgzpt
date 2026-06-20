@@ -1,0 +1,71 @@
+{
+  "schema_version": "loop.run_summary.v1",
+  "task_id": "TASK-XTGZPT-DEV-015-CODEX-1",
+  "goal": "Complete DEV-015 for xtgzpt: approval closure in the current working tree.",
+  "scope": {
+    "include": [
+      "real human approval instances",
+      "approval nodes and current approver",
+      "approve, reject, return, transfer and add-sign actions",
+      "backend approval permission and current handler checks",
+      "source contract approval writeback",
+      "workbench and in-app notification integration",
+      "approval audit records",
+      "permission-safe approval detail APIs",
+      "PostgreSQL-compatible migration assets",
+      "frontend approval workspace inside the existing Approval menu",
+      "DEV-015 and AUDIT-015 logs"
+    ],
+    "exclude": [
+      "finance workflow",
+      "procurement workflow",
+      "inventory workflow",
+      "ERP expansion",
+      "external OCR",
+      "external e-signature",
+      "external notifications",
+      "production writes",
+      "deployment",
+      "secrets",
+      "mobile app",
+      "new top-level menu",
+      "AI approval, rejection, return, transfer, add-sign, signing, payment, or execution confirmation"
+    ]
+  },
+  "status": "completed_with_environment_exception",
+  "current_stage": "completed",
+  "created_at": "2026-06-20T09:40:00+00:00",
+  "updated_at": "2026-06-20T09:40:00+00:00",
+  "verification": {
+    "passed": [
+      "git diff --check",
+      "static source scan for old approval placeholder text"
+    ],
+    "blocked": [
+      {
+        "command": "npm run ci",
+        "reason": "node/npm are not available in the current shell"
+      },
+      {
+        "command": "npm audit --audit-level=low --offline",
+        "reason": "npm is not available in the current shell"
+      },
+      {
+        "command": "npm run smoke:api",
+        "reason": "node/npm are not available in the current shell"
+      },
+      {
+        "command": "browser 1440 approval validation",
+        "reason": "browser/dev-server validation unavailable in current environment"
+      }
+    ],
+    "test_summary": "Added approval-closure regression coverage for approval creation, current-node denial, approve, reject, return, transfer, add-sign, workbench notifications and contract writeback; execution blocked until Node/npm is available."
+  },
+  "artifacts": [
+    "apps/api/src/approval-closure.test.ts",
+    "packages/database/migrations/0009_approval_closure.sql",
+    "docs/dev-log/DEV-015.md",
+    "docs/dev-log/AUDIT-015.md"
+  ],
+  "next_action": "Run npm gates, audit, smoke:api and 1440 desktop browser validation in a Node/npm-capable PR environment."
+}

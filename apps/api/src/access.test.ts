@@ -147,7 +147,7 @@ describe("access control", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().permissions).toEqual(
       expect.objectContaining({
-        policyVersion: "seed-dev-014",
+        policyVersion: "seed-dev-015",
         role: "admin",
         data: expect.objectContaining({
           scope: "assigned_organizations",
@@ -174,7 +174,7 @@ describe("access control", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(
       expect.objectContaining({
-        policyVersion: "seed-dev-014",
+        policyVersion: "seed-dev-015",
         policies: expect.arrayContaining([
           expect.objectContaining({
             role: "legal_approver",
@@ -203,7 +203,7 @@ describe("access control", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(
       expect.objectContaining({
-        policyVersion: "seed-dev-014",
+        policyVersion: "seed-dev-015",
         dimension: "approval",
         approval: expect.arrayContaining([
           expect.objectContaining({

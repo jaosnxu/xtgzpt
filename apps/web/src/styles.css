@@ -16,7 +16,9 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -467,8 +469,18 @@ h2 {
   gap: 18px;
 }
 
+.approval-workspace {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.7fr) minmax(0, 1.3fr);
+  gap: 18px;
+}
+
 .contract-detail-panel {
   grid-column: 1 / -1;
+}
+
+.approval-detail-panel {
+  min-height: 420px;
 }
 
 .contract-entry {
@@ -593,6 +605,40 @@ h2 {
   border: 1px solid #d8dee8;
   border-radius: 8px;
   outline: 0;
+}
+
+.inline-form select {
+  height: 44px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #ffffff;
+  outline: 0;
+}
+
+.approval-current-node {
+  min-height: 78px;
+  margin: 12px 0;
+  padding: 14px;
+  border: 1px solid #b8dadd;
+  border-radius: 8px;
+  background: #f3fbfb;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.approval-current-node strong,
+.approval-current-node small {
+  display: block;
+}
+
+.approval-current-node small {
+  margin-top: 5px;
+  color: #667085;
+  font-size: 12px;
 }
 
 .file-upload-box {
