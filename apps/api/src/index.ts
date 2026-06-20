@@ -2067,7 +2067,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         key: "expired",
         label: "已过期",
         status: "available",
-        evidence: "后续合同和审批期限对象接入后展示；当前 DEV-012 不创建期限实例。"
+        evidence: "合同和审批期限对象按到期状态展示；未产生期限实例时保持空状态。"
       },
       {
         key: "archived",

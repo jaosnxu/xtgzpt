@@ -20,7 +20,6 @@ import {
   MessageSquare,
   Search,
   Settings,
-  ShieldCheck,
   Upload,
   Users,
   XCircle
@@ -121,49 +120,42 @@ const menuIcon = {
 
 const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
   dashboard: {
-    stage: "DEV-013 已接入",
-    summary: "首页按角色汇总待处理工作、AI 待确认结果、通知、权限状态、文件和知识审核边界。"
+    stage: "经营总览",
+    summary: "首页按当前角色聚合待办、项目、任务、审批、合同和系统通知。"
   },
   workbench: {
-    stage: "DEV-012 已接入",
+    stage: "个人工作",
     summary: "我的工作台展示本人待办、负责任务、参与项目、AI 待确认结果和系统内通知。"
   },
   projects: {
-    stage: "DEV-012 文件已接入",
-    summary: "项目列表、创建、成员、状态、任务关联和项目附件进入真实接口，并展示空、加载、错误、无权限和归档状态。"
+    stage: "项目协同",
+    summary: "项目列表、创建、成员、状态、任务关联和项目附件进入统一工作流。"
   },
   tasks: {
-    stage: "DEV-012 文件边界已接入",
-    summary: "任务列表、创建、负责人提交和人工确认已进入真实接口；文件附件通过所属项目权限继承。"
+    stage: "任务执行",
+    summary: "任务列表、创建、负责人提交和人工确认按项目权限运行。"
   },
   chat: {
-    stage: "DEV-016 AI Run 已接入",
-    summary: "聊天、AI 草稿、人工确认、人工驳回、记忆上下文回用、AI 文件引用和 AI Run 证据已进入真实接口。"
+    stage: "协作会话",
+    summary: "聊天、AI 草稿、人工确认、人工驳回和记忆上下文回用在会话内闭环。"
   },
   knowledge: {
-    stage: "DEV-016 AI Run 已接入",
-    summary: "知识草稿、提交审核、发布、驳回、归档、版本历史、来源证据和知识问答 AI Run 进入真实接口；AI 不能自动发布。"
+    stage: "知识沉淀",
+    summary: "知识草稿、提交审核、发布、驳回、归档、版本历史和来源证据形成可追溯资产。"
   },
   contracts: {
-    stage: "DEV-016 AI Run 已接入",
-    summary: "合同入口只支持上传或粘贴；版本、原文证据、AI 风险审查 AI Run、人工确认、二次审查、审批边界和执行跟踪已接入。"
+    stage: "合同管理",
+    summary: "合同上传或粘贴后进入版本、风险、人工确认、二次审查、审批和执行跟踪流程。"
   },
   approvals: {
-    stage: "DEV-015 已接入",
-    summary: "审批实例、当前节点、同意、驳回、退回、转交、加签和合同结果写回已接入；AI 不能执行审批动作。"
+    stage: "审批中心",
+    summary: "审批实例、当前节点、同意、驳回、退回、转交、加签和结果写回由人类处理。"
   },
   settings: {
-    stage: "DEV-016 AI 框架已接入",
-    summary: "权限摘要、组织、角色、审批、文件、AI 权限、AI Framework 和 AI Run 证据按角色展示。"
+    stage: "系统配置",
+    summary: "组织、账号、角色、菜单、数据权限、审批权限、文件权限、AI 治理和审计入口集中配置。"
   }
 };
-
-const auditReadinessItems = [
-  "登录成功/失败、无权限访问和关键未实现动作已写 AuditLog",
-  "对象审计和用户审计查询已接入权限控制",
-  "文件上传、预览、下载、归档、AI 引用和权限拒绝已写审计",
-  "审计记录不提供物理删除入口"
-];
 
 export function App() {
   const [session, setSession] = useState<SessionState | null>(null);
@@ -1097,7 +1089,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">DEV-017：页面状态与响应式</p>
+            <p className="eyebrow">协同工作平台 · {roles[activeUser.role]}</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
@@ -1136,15 +1128,16 @@ export function App() {
         ) : currentModule === "dashboard" ? (
           <DashboardView
             activeUser={activeUser}
-            canOpenSettings={canOpenSettings}
             dataOrganizations={dataOrganizations}
             error={workError}
             isLoading={isWorkbenchLoading}
             onOpenApprovals={() => setActiveModule("approvals")}
             onOpenWorkItem={openRelatedObject}
             onOpenWorkbench={() => setActiveModule("workbench")}
-            permissions={session.permissions}
-            visibleModuleCount={visibleModules.length}
+            projects={projects}
+            tasks={tasks}
+            contracts={contracts}
+            approvals={approvals}
             workbench={workbench}
           />
         ) : currentModule === "workbench" ? (
@@ -1423,38 +1416,44 @@ export function App() {
 
 function DashboardView({
   activeUser,
-  canOpenSettings,
   dataOrganizations,
   error,
   isLoading,
   onOpenApprovals,
   onOpenWorkItem,
   onOpenWorkbench,
-  permissions,
-  visibleModuleCount,
+  projects,
+  tasks,
+  contracts,
+  approvals,
   workbench
 }: {
   activeUser: PublicUser;
-  canOpenSettings: boolean;
   dataOrganizations: Organization[];
   error: string | null;
   isLoading: boolean;
   onOpenApprovals: () => void;
   onOpenWorkItem: (objectType: string | null, objectId: string | null, moduleHint?: ModuleKey | null) => void;
   onOpenWorkbench: () => void;
-  permissions: PermissionSummary;
-  visibleModuleCount: number;
+  projects: ProjectSummary[];
+  tasks: TaskRecord[];
+  contracts: ContractWithDetails[];
+  approvals: ApprovalWithDetails[];
   workbench: WorkbenchResponse | null;
 }) {
   const summary = workbench?.summary;
+  const activeProjects = projects.filter((project) => project.status !== "archived");
+  const openTasks = tasks.filter((task) => !["completed", "cancelled", "archived"].includes(task.status));
+  const activeContracts = contracts.filter((contract) => !["completed", "cancelled", "archived"].includes(contract.status));
+  const activeApprovals = approvals.filter((approval) => ["submitted", "processing", "transferred"].includes(approval.status));
 
   return (
     <>
       <section className="metric-grid" aria-label="核心指标">
         <MetricCard title="我的待办" value={String(summary?.pendingWorkCount ?? 0)} helper="任务处理与人工确认" />
-        <MetricCard title="AI 待确认" value={String(summary?.aiResultConfirmationCount ?? 0)} helper="草稿不能自动入库" />
-        <MetricCard title="参与项目" value={String(summary?.participatingProjectCount ?? 0)} helper="按数据权限裁剪" />
-        <MetricCard title="通知" value={String(summary?.notificationCount ?? 0)} helper="仅系统内通知" />
+        <MetricCard title="进行中项目" value={String(activeProjects.length)} helper="可见范围内未归档项目" />
+        <MetricCard title="待推进任务" value={String(openTasks.length)} helper="未完成任务和确认项" />
+        <MetricCard title="合同 / 审批" value={`${activeContracts.length}/${activeApprovals.length}`} helper="未完结合同与审批" />
       </section>
 
       <PageStateNotice state="loading" title="正在加载首页工作入口" body="工作台、项目、任务、聊天和知识数据正在通过 API 读取。" active={isLoading} />
@@ -1464,8 +1463,8 @@ function DashboardView({
         <div className="panel work-panel">
           <div className="panel-header">
             <div>
-              <h2>今日工作入口</h2>
-              <p>{activeUser.displayName} 的首页只展示当前账号有权限访问的工作。</p>
+              <h2>今日待处理</h2>
+              <p>{activeUser.displayName} 当前需要处理的任务、审批、合同确认和 AI 草稿。</p>
             </div>
             <button className="secondary-button" onClick={onOpenWorkbench}>
               <LayoutDashboard size={17} />
@@ -1498,22 +1497,10 @@ function DashboardView({
           </div>
         </div>
 
-        <BoundaryPanel />
+        <ProjectHealthPanel projects={activeProjects} tasks={openTasks} onOpenWorkItem={onOpenWorkItem} />
+        <ContractApprovalPanel contracts={activeContracts} approvals={activeApprovals} onOpenApprovals={onOpenApprovals} onOpenWorkItem={onOpenWorkItem} />
         <OrganizationPanel dataOrganizations={dataOrganizations} />
-        <PermissionPanel permissions={permissions} />
-        <AuditPreviewPanel />
-
-        {canOpenSettings ? (
-          <SettingsView
-            activeUser={activeUser}
-            aiError={null}
-            aiFrameworks={[]}
-            aiRuns={[]}
-            pageStates={workbench?.pageStates ?? []}
-            permissions={permissions}
-            visibleModuleCount={visibleModuleCount}
-          />
-        ) : null}
+        <SystemNoticePanel notifications={workbench?.notifications ?? []} onOpenWorkItem={onOpenWorkItem} />
       </section>
     </>
   );
@@ -1596,7 +1583,7 @@ function WorkbenchView({
           <div className="panel-header compact">
             <div>
               <h2>审批与合同</h2>
-              <p>当前只展示状态和权限入口，不实现完整流程。</p>
+              <p>合同确认、审批节点和结果回写集中进入工作台。</p>
             </div>
           </div>
           <WorkbenchSection title="我待审批" items={workbench?.sections.pendingApprovals ?? []} emptyText="暂无当前节点审批。" onOpenItem={onOpenWorkItem} />
@@ -1654,6 +1641,155 @@ function WorkbenchSection({
         ) : (
           <div className="empty-state">{emptyText}</div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ProjectHealthPanel({
+  onOpenWorkItem,
+  projects,
+  tasks
+}: {
+  onOpenWorkItem: (objectType: string | null, objectId: string | null, moduleHint?: ModuleKey | null) => void;
+  projects: ProjectSummary[];
+  tasks: TaskRecord[];
+}) {
+  const recentProjects = projects.slice(0, 4);
+  const blockedTasks = tasks.filter((task) => task.status === "blocked");
+  const submittedTasks = tasks.filter((task) => task.status === "submitted");
+
+  return (
+    <div className="panel">
+      <div className="panel-header compact">
+        <div>
+          <h2>项目运行</h2>
+          <p>跟踪可见项目、待确认任务和阻塞事项。</p>
+        </div>
+        <BriefcaseBusiness size={22} />
+      </div>
+      <div className="detail-grid dashboard-detail-grid">
+        <SettingsItem title="可见项目" value={`${projects.length} 个`} enabled />
+        <SettingsItem title="待确认任务" value={`${submittedTasks.length} 个`} enabled />
+        <SettingsItem title="阻塞任务" value={`${blockedTasks.length} 个`} enabled />
+        <SettingsItem title="进行中任务" value={`${tasks.filter((task) => task.status === "in_progress").length} 个`} enabled />
+      </div>
+      <div className="record-list">
+        {recentProjects.length > 0 ? (
+          recentProjects.map((project) => (
+            <button className="workbench-row" key={project.id} onClick={() => onOpenWorkItem("project", project.id, "projects")}>
+              <span>
+                <strong>{project.title}</strong>
+                <small>{organizationName(project.organizationId)} · {project.memberUserIds.length} 成员</small>
+              </span>
+              <span className="status-pill">{project.status}</span>
+              <span className="count-pill">{project.taskCount} 任务</span>
+            </button>
+          ))
+        ) : (
+          <div className="empty-state">暂无可见项目。</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ContractApprovalPanel({
+  approvals,
+  contracts,
+  onOpenApprovals,
+  onOpenWorkItem
+}: {
+  approvals: ApprovalWithDetails[];
+  contracts: ContractWithDetails[];
+  onOpenApprovals: () => void;
+  onOpenWorkItem: (objectType: string | null, objectId: string | null, moduleHint?: ModuleKey | null) => void;
+}) {
+  const waitingContracts = contracts.filter((contract) =>
+    ["risk_pending_confirm", "revision_required", "approval_pending", "execution_tracking"].includes(contract.status)
+  );
+  const currentApprovals = approvals.filter((approval) => approval.status === "processing");
+
+  return (
+    <div className="panel">
+      <div className="panel-header compact">
+        <div>
+          <h2>合同与审批</h2>
+          <p>合同风险确认、二次审查和审批节点集中跟踪。</p>
+        </div>
+        <ClipboardList size={22} />
+      </div>
+      <div className="detail-grid dashboard-detail-grid">
+        <SettingsItem title="待处理合同" value={`${waitingContracts.length} 份`} enabled />
+        <SettingsItem title="审批中" value={`${currentApprovals.length} 单`} enabled />
+        <SettingsItem title="全部合同" value={`${contracts.length} 份`} enabled />
+        <SettingsItem title="全部审批" value={`${approvals.length} 单`} enabled />
+      </div>
+      <div className="record-list">
+        {waitingContracts.slice(0, 3).map((contract) => (
+          <button className="workbench-row" key={contract.id} onClick={() => onOpenWorkItem("contract", contract.id, "contracts")}>
+            <span>
+              <strong>{contract.title}</strong>
+              <small>v{contract.currentVersion} · {organizationName(contract.organizationId)}</small>
+            </span>
+            <span className="status-pill">{contract.status}</span>
+            <span className="count-pill">{contract.reviews.length} 审查</span>
+          </button>
+        ))}
+        {currentApprovals.slice(0, 3).map((approval) => (
+          <button className="workbench-row" key={approval.id} onClick={() => onOpenWorkItem("approval", approval.id, "approvals")}>
+            <span>
+              <strong>{approval.title}</strong>
+              <small>当前处理人：{approval.currentApprover?.displayName ?? "无"}</small>
+            </span>
+            <span className="status-pill">{approval.status}</span>
+            <span className="count-pill">{approval.nodes.length} 节点</span>
+          </button>
+        ))}
+        {waitingContracts.length === 0 && currentApprovals.length === 0 ? <div className="empty-state">暂无合同或审批待处理事项。</div> : null}
+      </div>
+      <div className="action-row section-actions">
+        <button className="secondary-button" onClick={onOpenApprovals}>
+          <ClipboardList size={17} />
+          打开审批中心
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SystemNoticePanel({
+  notifications,
+  onOpenWorkItem
+}: {
+  notifications: WorkbenchNotification[];
+  onOpenWorkItem: (objectType: string | null, objectId: string | null, moduleHint?: ModuleKey | null) => void;
+}) {
+  return (
+    <div className="panel">
+      <div className="panel-header compact">
+        <div>
+          <h2>系统提醒</h2>
+          <p>只展示系统内提醒，点击后进入对应业务对象。</p>
+        </div>
+        <Bell size={22} />
+      </div>
+      <div className="record-list">
+        {notifications.slice(0, 5).map((notification) => (
+          <button
+            className={`workbench-row severity-${notification.severity}`}
+            key={notification.id}
+            onClick={() => onOpenWorkItem(notification.relatedObjectType, notification.relatedObjectId, notification.module)}
+          >
+            <span>
+              <strong>{notification.title}</strong>
+              <small>{notification.body}</small>
+            </span>
+            <span className="status-pill">{notification.severity}</span>
+            <span className="count-pill">{platformModules.find((module) => module.key === notification.module)?.name ?? notification.module}</span>
+          </button>
+        ))}
+        {notifications.length === 0 ? <div className="empty-state">暂无系统提醒。</div> : null}
       </div>
     </div>
   );
@@ -1775,11 +1911,19 @@ function PageStateGrid({ states }: { states: PageStateDescriptor[] }) {
       {states.map((state) => (
         <div className={`state-chip ${state.status}`} key={state.key}>
           <strong>{state.label}</strong>
-          <span>{state.evidence}</span>
+          <span>{cleanDisplayText(state.evidence)}</span>
         </div>
       ))}
     </div>
   );
+}
+
+function cleanDisplayText(value: string) {
+  return value.replace(/DEV-\d+/g, "当前阶段");
+}
+
+function displayPolicyVersion(value: string) {
+  return value.replace(/^seed-dev-(\d+)$/i, "策略版本 $1");
 }
 
 function NoPermissionView({ moduleName }: { moduleName: string }) {
@@ -1792,26 +1936,6 @@ function NoPermissionView({ moduleName }: { moduleName: string }) {
         <p>系统不会通过前端隐藏代替后端校验；无权限访问由 API 返回拒绝并写入审计。</p>
       </div>
     </section>
-  );
-}
-
-function BoundaryPanel() {
-  return (
-    <aside className="panel guard-panel">
-      <div className="panel-header compact">
-        <div>
-          <h2>权限边界</h2>
-          <p>系统管理员可配置系统，但不默认拥有全部业务数据。</p>
-        </div>
-        <ShieldCheck size={22} />
-      </div>
-      <ul className="guard-list">
-        <li>审批必须人工完成</li>
-        <li>配置入口仅管理员角色可见</li>
-        <li>业务数据按授权范围裁剪</li>
-        <li>文件和 AI 必须继承来源对象权限</li>
-      </ul>
-    </aside>
   );
 }
 
@@ -1832,44 +1956,6 @@ function OrganizationPanel({ dataOrganizations }: { dataOrganizations: Organizat
           <span>仅本人相关数据</span>
         )}
       </div>
-    </div>
-  );
-}
-
-function PermissionPanel({ permissions }: { permissions: PermissionSummary }) {
-  return (
-    <div className="panel">
-      <div className="panel-header compact">
-        <div>
-          <h2>权限摘要</h2>
-          <p>来自 API 会话上下文，前端只负责展示与裁剪。</p>
-        </div>
-        <ShieldCheck size={22} />
-      </div>
-      <div className="permission-stack">
-        <span>操作权限：{permissions.operation.length}</span>
-        <span>审批权限：{permissions.approval.length}</span>
-        <span>文件权限：{permissions.file.length}</span>
-        <span>AI 权限：{permissions.ai.length}</span>
-      </div>
-    </div>
-  );
-}
-
-function AuditPreviewPanel() {
-  return (
-    <div className="panel">
-      <div className="panel-header compact">
-        <div>
-          <h2>审计边界</h2>
-          <p>这里只展示审计能力边界，不展示模拟业务审计事实。</p>
-        </div>
-      </div>
-      <ol className="audit-list">
-        {auditReadinessItems.map((event) => (
-          <li key={event}>{event}</li>
-        ))}
-      </ol>
     </div>
   );
 }
@@ -1896,31 +1982,56 @@ function SettingsView({
       <div className="panel-header compact">
         <div>
           <h2>系统设置</h2>
-          <p>组织、角色、菜单、操作、文件和 AI 权限进入统一策略。</p>
+          <p>账号、组织、角色、权限、审批、文件、AI 和审计能力集中维护。</p>
         </div>
         <Settings size={22} />
       </div>
       <div className="action-row section-actions">
         <button className="secondary-button compact-button" onClick={() => document.getElementById("settings-permission-governance")?.scrollIntoView()}>
-          权限治理
+          账号权限
         </button>
         <button className="secondary-button compact-button" onClick={() => document.getElementById("settings-ai-governance")?.scrollIntoView()}>
           AI 治理
         </button>
         <button className="secondary-button compact-button" onClick={() => document.getElementById("settings-page-state-governance")?.scrollIntoView()}>
-          页面状态
+          运行状态
         </button>
       </div>
-      <div className="settings-grid" id="settings-permission-governance">
+      <div className="settings-grid settings-module-grid" id="settings-permission-governance">
         <SettingsItem title="组织管理" value={`${seedOrganizations.length} 个组织`} enabled={canManageOrganizations(activeUser.role)} />
-        <SettingsItem title="角色管理" value={`${Object.keys(rolePolicies).length} 个角色`} enabled={canManageRoles(activeUser.role)} />
-        <SettingsItem title="菜单权限" value={`${visibleModuleCount} 个可见菜单`} enabled />
-        <SettingsItem title="操作权限" value={`${permissions.operation.length} 项`} enabled />
-        <SettingsItem title="审批权限" value={`${permissions.approval.length} 项`} enabled />
-        <SettingsItem title="文件权限" value={`${permissions.file.length} 项`} enabled />
-        <SettingsItem title="AI 权限" value={`${permissions.ai.length} 项`} enabled />
+        <SettingsItem title="用户账号" value={`${seedUsers.length} 个账号`} enabled={canManageRoles(activeUser.role)} />
+        <SettingsItem title="角色体系" value={`${Object.keys(rolePolicies).length} 类角色`} enabled={canManageRoles(activeUser.role)} />
+        <SettingsItem title="菜单访问" value={`${visibleModuleCount} 个菜单`} enabled />
         <SettingsItem title="数据范围" value={permissions.data.scope} enabled />
-        <SettingsItem title="策略版本" value={permissions.policyVersion} enabled />
+        <SettingsItem title="操作权限" value={`${permissions.operation.length} 项规则`} enabled />
+        <SettingsItem title="审批权限" value={`${permissions.approval.length} 项规则`} enabled />
+        <SettingsItem title="文件权限" value={`${permissions.file.length} 项规则`} enabled />
+        <SettingsItem title="AI 权限" value={`${permissions.ai.length} 项能力`} enabled />
+        <SettingsItem title="审计策略" value="关键动作留痕" enabled />
+        <SettingsItem title="策略版本" value={displayPolicyVersion(permissions.policyVersion)} enabled />
+        <SettingsItem title="当前角色" value={roles[activeUser.role]} enabled />
+      </div>
+      <div className="settings-section-grid">
+        <SettingsModuleCard
+          title="组织与账号"
+          body="维护组织、账号状态、所属组织和默认角色。前台不直接暴露高权限账号清单。"
+          stats={[`${seedOrganizations.length} 组织`, `${seedUsers.length} 账号`]}
+        />
+        <SettingsModuleCard
+          title="角色与数据范围"
+          body="按角色控制菜单、数据范围和业务动作。系统管理员不默认拥有全部业务数据。"
+          stats={[`${Object.keys(rolePolicies).length} 角色`, permissions.data.scope]}
+        />
+        <SettingsModuleCard
+          title="审批与文件"
+          body="审批动作独立授权，文件预览、下载、上传、归档和 AI 引用继承来源对象权限。"
+          stats={[`${permissions.approval.length} 审批规则`, `${permissions.file.length} 文件规则`]}
+        />
+        <SettingsModuleCard
+          title="审计与运行"
+          body="登录、无权限访问、文件、AI、审批和关键业务操作进入审计记录，不提供物理删除入口。"
+          stats={["审计保留", "无物理删除"]}
+        />
       </div>
       <AiGovernancePanel
         aiError={aiError}
@@ -1930,9 +2041,29 @@ function SettingsView({
         canReadRuns={permissions.ai.includes("read_ai_runs")}
       />
       <div id="settings-page-state-governance">
+        <div className="panel-header compact settings-subheader">
+          <div>
+            <h2>运行状态</h2>
+            <p>页面加载、空状态、错误、无权限、归档、过期和 AI 运行状态使用统一展示规则。</p>
+          </div>
+        </div>
         <PageStateGrid states={pageStates} />
       </div>
     </div>
+  );
+}
+
+function SettingsModuleCard({ title, body, stats }: { title: string; body: string; stats: string[] }) {
+  return (
+    <article className="settings-module-card">
+      <strong>{title}</strong>
+      <p>{body}</p>
+      <div>
+        {stats.map((stat) => (
+          <span key={stat}>{stat}</span>
+        ))}
+      </div>
+    </article>
   );
 }
 
@@ -2099,7 +2230,7 @@ function ProjectTaskView({
       <div className="panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">DEV-005 真实数据</p>
+            <p className="eyebrow">项目协同</p>
             <h2>项目</h2>
             <p>项目是协作容器，成员、任务和状态都会进入审计。</p>
           </div>
@@ -2300,7 +2431,7 @@ function ProjectFilePanel({
     <div className="panel project-file-panel">
       <div className="panel-header">
         <div>
-          <p className="eyebrow">DEV-012 文件</p>
+          <p className="eyebrow">项目文件</p>
           <h2>项目附件</h2>
           <p>文件绑定当前项目，预览、下载、归档和 AI 引用都继承项目权限。</p>
         </div>
@@ -2479,7 +2610,7 @@ function ChatView({
       <div className="panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">DEV-008 真实数据</p>
+            <p className="eyebrow">协作会话</p>
             <h2>聊天会话</h2>
             <p>会话只对成员可见，AI 只能整理和生成草稿。</p>
           </div>
@@ -2593,7 +2724,7 @@ function ChatView({
       <div className="panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">AI 边界</p>
+            <p className="eyebrow">AI 草稿</p>
             <h2>整理与草稿</h2>
             <p>当前用户：{activeUser.displayName}。AI 输出必须人工确认后才能进入正式对象。</p>
           </div>
@@ -2699,7 +2830,7 @@ function KnowledgeView({
       <div className="panel work-panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">DEV-013 本地检索</p>
+            <p className="eyebrow">知识检索</p>
             <h2>知识与记忆检索</h2>
             <p>检索只返回当前账号有权限读取的已发布知识和项目记忆，每条结果都带来源证据。</p>
           </div>
@@ -3444,7 +3575,7 @@ function ModuleStatusView({
           active={moduleKey === "contracts"}
           state="expired"
           title="期限状态已预留"
-          body="合同期限和执行跟踪将在 DEV-014 接入。"
+          body="合同期限和执行跟踪按合同状态展示，未授权用户不会看到执行详情。"
         />
         <PageStateNotice
           active={moduleKey === "approvals"}

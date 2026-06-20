@@ -493,6 +493,60 @@ h2 {
   gap: 12px;
 }
 
+.settings-module-grid {
+  margin-top: 16px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.settings-section-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-module-card {
+  min-height: 148px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfcfe;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.settings-module-card strong {
+  color: #17202a;
+  font-size: 15px;
+}
+
+.settings-module-card p {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settings-module-card div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-module-card span {
+  min-height: 28px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #eef6f6;
+  color: #175b66;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settings-subheader {
+  margin-top: 16px;
+}
+
 .ai-governance {
   margin-top: 16px;
   display: grid;
@@ -975,6 +1029,10 @@ button.workbench-row:disabled {
   margin-bottom: 12px;
 }
 
+.dashboard-detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .member-strip,
 .action-row,
 .task-actions {
@@ -1404,6 +1462,8 @@ button.workbench-row:disabled {
 
   .metric-grid,
   .settings-grid,
+  .settings-module-grid,
+  .settings-section-grid,
   .state-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -1497,6 +1557,8 @@ button.workbench-row:disabled {
   .project-workspace,
   .workbench-layout,
   .settings-grid,
+  .settings-module-grid,
+  .settings-section-grid,
   .state-grid,
   .stage-checklist,
   .login-shell {
