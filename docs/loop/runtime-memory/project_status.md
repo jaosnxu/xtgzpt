@@ -2,16 +2,16 @@
 
 Current source of truth:
 - Repository: xtgzpt current managed worktree
-- Current phase: DEV-011 workbench, in-app notifications, page states and responsive acceptance
-- Active branch or PR: `loop/dev-011-workbench-notifications-page-states` target
+- Current phase: DEV-012 file production storage
+- Active branch or PR: `loop/dev-012-file-production-storage` target
 - Required gates: lint, typecheck, test, build-smoke, audit
 
 Latest update:
-- 2026-06-20 DEV-011 workbench, notifications and page states are code-verified locally.
-- `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`, `npm run smoke:api` and `git diff --check` passed.
-- `npm run test` passed with 9 test files / 43 tests.
+- 2026-06-20 DEV-012 file production storage is code-verified locally.
+- File metadata, versions, object bindings, archive status, inherited permissions, preview/download, audit and AI file-reference checks are implemented.
+- `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`, `npm run smoke:api`, `npm run ci` and `git diff --check` passed.
+- `npm run test` passed with 10 test files / 46 tests.
 - `npm audit --audit-level=low --offline` passed with 0 vulnerabilities.
 - Online `npm audit --audit-level=low` must be rerun in a network-enabled PR environment.
-- Browser plugin `iab` and local port binding are unavailable in this sandbox; 1440 / 1280 / 960 browser screenshot validation must be rerun in a browser-capable environment.
 
 Update this file whenever a project milestone changes.

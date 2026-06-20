@@ -76,7 +76,7 @@ export type AiCapability =
 
 export type PermissionDimension = "menu" | "data" | "operation" | "approval" | "file" | "ai";
 
-export const permissionPolicyVersion = "seed-dev-010";
+export const permissionPolicyVersion = "seed-dev-012";
 
 export type AuditResult = "success" | "failure" | "denied";
 
@@ -191,6 +191,66 @@ export interface ProjectMemoryRecord {
 }
 
 export type KnowledgeSearchResultType = "knowledge_item" | "project_memory";
+
+export type FileAssetStatus = "uploaded" | "linked" | "locked" | "archived";
+
+export type FileSourceObjectType = "project" | "task" | "chat_thread" | "knowledge_item" | "project_memory";
+
+export interface FileObjectBindingRecord {
+  id: string;
+  fileId: string;
+  objectType: FileSourceObjectType;
+  objectId: string;
+  organizationId: string;
+  createdByUserId: string;
+  createdAt: string;
+}
+
+export interface FileAssetRecord {
+  id: string;
+  organizationId: string;
+  displayName: string;
+  mimeType: string;
+  sizeBytes: number;
+  checksum: string;
+  uploaderUserId: string;
+  status: FileAssetStatus;
+  currentVersionId: string;
+  sourceObjectType: FileSourceObjectType;
+  sourceObjectId: string;
+  formalProcess: boolean;
+  archivedByUserId: string | null;
+  archivedAt: string | null;
+  archiveReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FileVersionRecord {
+  id: string;
+  fileId: string;
+  versionNumber: number;
+  storageKey: string;
+  checksum: string;
+  sizeBytes: number;
+  mimeType: string;
+  originalName: string;
+  contentText: string;
+  createdByUserId: string;
+  createdAt: string;
+}
+
+export interface FilePreviewResponse {
+  file: FileAssetRecord;
+  version: Omit<FileVersionRecord, "contentText">;
+  previewText: string;
+}
+
+export interface FileDownloadResponse {
+  file: FileAssetRecord;
+  version: Omit<FileVersionRecord, "contentText">;
+  contentText: string;
+}
 
 export interface KnowledgeSearchResult {
   id: string;

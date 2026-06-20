@@ -8,6 +8,8 @@ import {
   CheckSquare,
   Clock,
   ClipboardList,
+  Download,
+  Eye,
   FileText,
   Home,
   Inbox,
@@ -18,6 +20,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Upload,
   Users,
   XCircle
 } from "lucide-react";
@@ -33,6 +36,9 @@ import {
   type AiDraftRecord,
   type ChatMessageRecord,
   type ChatThreadRecord,
+  type FileAssetRecord,
+  type FileDownloadResponse,
+  type FilePreviewResponse,
   type KnowledgeItemRecord,
   type KnowledgeSearchResult,
   type ModuleKey,
@@ -66,6 +72,12 @@ interface ChatThreadSummary extends ChatThreadRecord {
   messageCount: number;
 }
 
+interface FilePreviewState {
+  fileId: string;
+  previewText: string;
+  versionNumber: number;
+}
+
 const menuIcon = {
   dashboard: Home,
   workbench: LayoutDashboard,
@@ -80,39 +92,39 @@ const menuIcon = {
 
 const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
   dashboard: {
-    stage: "DEV-011 已接入",
-    summary: "首页按角色汇总待处理工作、AI 待确认结果、通知和权限状态。"
+    stage: "DEV-012 已接入",
+    summary: "首页按角色汇总待处理工作、AI 待确认结果、通知、权限状态和文件权限边界。"
   },
   workbench: {
-    stage: "DEV-011 已接入",
+    stage: "DEV-012 已接入",
     summary: "我的工作台展示本人待办、负责任务、参与项目、AI 待确认结果和系统内通知。"
   },
   projects: {
-    stage: "DEV-011 状态已接入",
-    summary: "项目列表、创建、成员、状态和任务关联已进入真实接口，并展示空、加载、错误和归档状态。"
+    stage: "DEV-012 文件已接入",
+    summary: "项目列表、创建、成员、状态、任务关联和项目附件进入真实接口，并展示空、加载、错误、无权限和归档状态。"
   },
   tasks: {
-    stage: "DEV-011 状态已接入",
-    summary: "任务列表、创建、负责人提交和人工确认已进入真实接口，并保持人工确认边界。"
+    stage: "DEV-012 文件边界已接入",
+    summary: "任务列表、创建、负责人提交和人工确认已进入真实接口；文件附件通过所属项目权限继承。"
   },
   chat: {
-    stage: "DEV-011 状态已接入",
-    summary: "聊天、AI 草稿、人工确认入库和记忆上下文回用已进入真实接口。"
+    stage: "DEV-012 AI 文件引用已接入",
+    summary: "聊天、AI 草稿、人工确认入库、记忆上下文回用和 AI 文件引用权限检查已进入真实接口。"
   },
   knowledge: {
-    stage: "DEV-011 状态已接入",
+    stage: "DEV-012 状态已接入",
     summary: "正式知识和项目记忆支持权限过滤检索，并可作为 AI 草稿上下文。"
   },
   contracts: {
     stage: "DEV-014 待开发",
-    summary: "当前仅展示权限、空状态和人工确认边界；合同上传、AI 审查、二次审查和执行跟踪不在 DEV-011 范围。"
+    summary: "当前仅展示权限、空状态和人工确认边界；合同上传、AI 审查、二次审查和执行跟踪不在 DEV-012 范围。"
   },
   approvals: {
     stage: "DEV-015 待开发",
-    summary: "当前仅展示权限、空状态和人工审批边界；审批实例、当前节点、退回、转交和加签不在 DEV-011 范围。"
+    summary: "当前仅展示权限、空状态和人工审批边界；审批实例、当前节点、退回、转交和加签不在 DEV-012 范围。"
   },
   settings: {
-    stage: "DEV-011 状态已接入",
+    stage: "DEV-012 状态已接入",
     summary: "权限摘要、组织、角色、审批、文件和 AI 权限维度按角色展示。"
   }
 };
@@ -120,7 +132,7 @@ const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
 const auditReadinessItems = [
   "登录成功/失败、无权限访问和关键未实现动作已写 AuditLog",
   "对象审计和用户审计查询已接入权限控制",
-  "项目、合同、任务、审批事件未开发前不能出现在最近审计",
+  "文件上传、预览、下载、归档、AI 引用和权限拒绝已写审计",
   "审计记录不提供物理删除入口"
 ];
 
@@ -135,6 +147,8 @@ export function App() {
   const [workbench, setWorkbench] = useState<WorkbenchResponse | null>(null);
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItemRecord[]>([]);
   const [projectMemories, setProjectMemories] = useState<ProjectMemoryRecord[]>([]);
+  const [projectFiles, setProjectFiles] = useState<FileAssetRecord[]>([]);
+  const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
   const [knowledgeQuery, setKnowledgeQuery] = useState("");
   const [knowledgeResults, setKnowledgeResults] = useState<KnowledgeSearchResult[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -143,15 +157,19 @@ export function App() {
   const [isWorkLoading, setIsWorkLoading] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isKnowledgeLoading, setIsKnowledgeLoading] = useState(false);
+  const [isFileLoading, setIsFileLoading] = useState(false);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiFailure, setAiFailure] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [projectTitle, setProjectTitle] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [fileContent, setFileContent] = useState("");
   const [chatTitle, setChatTitle] = useState("");
   const [chatMessage, setChatMessage] = useState("");
   const [workError, setWorkError] = useState<string | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [knowledgeError, setKnowledgeError] = useState<string | null>(null);
   const activeUser = session?.user ?? null;
 
@@ -237,6 +255,18 @@ export function App() {
     setProjectMemories(memoryResult.items);
   }
 
+  async function refreshProjectFiles(projectId = selectedProjectId) {
+    if (!session || !projectId) {
+      setProjectFiles([]);
+      return;
+    }
+
+    const result = await authorizedRequest<{ files: FileAssetRecord[] }>(
+      `/files?objectType=project&objectId=${encodeURIComponent(projectId)}`
+    );
+    setProjectFiles(result.files);
+  }
+
   useEffect(() => {
     if (!session) {
       setWorkbench(null);
@@ -247,6 +277,8 @@ export function App() {
       setAiDrafts([]);
       setKnowledgeItems([]);
       setProjectMemories([]);
+      setProjectFiles([]);
+      setFilePreview(null);
       setKnowledgeResults([]);
       setSelectedProjectId(null);
       setSelectedThreadId(null);
@@ -254,6 +286,7 @@ export function App() {
       setIsWorkLoading(false);
       setIsChatLoading(false);
       setIsKnowledgeLoading(false);
+      setIsFileLoading(false);
       setShowNotifications(false);
       return;
     }
@@ -265,6 +298,7 @@ export function App() {
     setWorkError(null);
     setChatError(null);
     setKnowledgeError(null);
+    setFileError(null);
 
     void Promise.allSettled([refreshWorkbenchData(), refreshWorkData(), refreshChatData(), refreshKnowledgeData()]).then((results) => {
       const [workbenchResult, workResult, chatResult, knowledgeResult] = results;
@@ -295,6 +329,24 @@ export function App() {
       setIsKnowledgeLoading(false);
     });
   }, [session?.token]);
+
+  useEffect(() => {
+    if (!session || !selectedProjectId) {
+      setProjectFiles([]);
+      setFilePreview(null);
+      return;
+    }
+
+    setIsFileLoading(true);
+    setFileError(null);
+    void refreshProjectFiles(selectedProjectId)
+      .catch((error) => {
+        setFileError(error instanceof Error ? error.message : "文件加载失败");
+      })
+      .finally(() => {
+        setIsFileLoading(false);
+      });
+  }, [session?.token, selectedProjectId]);
 
   async function handleLogin(username: string, password: string) {
     const response = await fetch(`${apiBaseUrl}/auth/login`, {
@@ -366,6 +418,61 @@ export function App() {
     });
     setTaskTitle("");
     await Promise.all([refreshWorkData(), refreshWorkbenchData()]);
+  }
+
+  async function uploadProjectFile() {
+    if (!selectedProjectId) {
+      return;
+    }
+
+    setFileError(null);
+    const result = await authorizedRequest<{ file: FileAssetRecord }>("/files", {
+      method: "POST",
+      body: JSON.stringify({
+        sourceObjectType: "project",
+        sourceObjectId: selectedProjectId,
+        displayName: fileName.trim() || "project-note.txt",
+        mimeType: "text/plain",
+        contentText: fileContent.trim() || "项目附件内容。",
+        formalProcess: false
+      })
+    });
+    setFileName("");
+    setFileContent("");
+    setFilePreview(null);
+    await refreshProjectFiles(result.file.sourceObjectId);
+  }
+
+  async function previewProjectFile(file: FileAssetRecord) {
+    setFileError(null);
+    const result = await authorizedRequest<FilePreviewResponse>(`/files/${file.id}/preview`);
+    setFilePreview({
+      fileId: file.id,
+      previewText: result.previewText,
+      versionNumber: result.version.versionNumber
+    });
+  }
+
+  async function downloadProjectFile(file: FileAssetRecord) {
+    setFileError(null);
+    const result = await authorizedRequest<FileDownloadResponse>(`/files/${file.id}/download`);
+    setFilePreview({
+      fileId: file.id,
+      previewText: result.contentText,
+      versionNumber: result.version.versionNumber
+    });
+  }
+
+  async function archiveProjectFile(file: FileAssetRecord) {
+    setFileError(null);
+    await authorizedRequest(`/files/${file.id}/archive`, {
+      method: "POST",
+      body: JSON.stringify({
+        reason: file.formalProcess ? "正式流程文件作废" : "项目附件归档"
+      })
+    });
+    setFilePreview(null);
+    await refreshProjectFiles(file.sourceObjectId);
   }
 
   async function changeTaskStatus(task: TaskRecord, status: TaskRecord["status"]) {
@@ -523,7 +630,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">DEV-011：工作入口、通知和页面状态</p>
+            <p className="eyebrow">DEV-012：文件生产存储</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
@@ -574,11 +681,23 @@ export function App() {
             activeUser={activeUser}
             canCreateProject={session.permissions.operation.includes("create_project")}
             canCreateTask={session.permissions.operation.includes("create_task")}
+            canUploadFile={session.permissions.file.includes("upload")}
             error={workError}
+            fileContent={fileContent}
+            fileError={fileError}
+            fileName={fileName}
+            filePreview={filePreview}
+            files={projectFiles}
+            isFileLoading={isFileLoading}
             isLoading={isWorkLoading}
             onAddMember={() => {
               void addMemberToSelectedProject().catch((error) => {
                 setWorkError(error instanceof Error ? error.message : "添加成员失败");
+              });
+            }}
+            onArchiveFile={(file) => {
+              void archiveProjectFile(file).catch((error) => {
+                setFileError(error instanceof Error ? error.message : "文件归档失败");
               });
             }}
             onCreateProject={() => {
@@ -589,6 +708,16 @@ export function App() {
             onCreateTask={() => {
               void createTask().catch((error) => {
                 setWorkError(error instanceof Error ? error.message : "创建任务失败");
+              });
+            }}
+            onDownloadFile={(file) => {
+              void downloadProjectFile(file).catch((error) => {
+                setFileError(error instanceof Error ? error.message : "文件下载失败");
+              });
+            }}
+            onPreviewFile={(file) => {
+              void previewProjectFile(file).catch((error) => {
+                setFileError(error instanceof Error ? error.message : "文件预览失败");
               });
             }}
             onProjectStatusChange={(project, status) => {
@@ -602,9 +731,16 @@ export function App() {
                 setWorkError(error instanceof Error ? error.message : "任务状态变更失败");
               });
             }}
+            onUploadFile={() => {
+              void uploadProjectFile().catch((error) => {
+                setFileError(error instanceof Error ? error.message : "文件上传失败");
+              });
+            }}
             projectTitle={projectTitle}
             projects={projects}
             selectedProjectId={selectedProjectId}
+            setFileContent={setFileContent}
+            setFileName={setFileName}
             setProjectTitle={setProjectTitle}
             setTaskTitle={setTaskTitle}
             taskTitle={taskTitle}
@@ -1132,17 +1268,30 @@ function ProjectTaskView({
   activeUser,
   canCreateProject,
   canCreateTask,
+  canUploadFile,
   error,
+  fileContent,
+  fileError,
+  fileName,
+  filePreview,
+  files,
+  isFileLoading,
   isLoading,
   onAddMember,
+  onArchiveFile,
   onCreateProject,
   onCreateTask,
+  onDownloadFile,
+  onPreviewFile,
   onProjectStatusChange,
   onSelectProject,
   onTaskStatusChange,
+  onUploadFile,
   projectTitle,
   projects,
   selectedProjectId,
+  setFileContent,
+  setFileName,
   setProjectTitle,
   setTaskTitle,
   taskTitle,
@@ -1151,17 +1300,30 @@ function ProjectTaskView({
   activeUser: PublicUser;
   canCreateProject: boolean;
   canCreateTask: boolean;
+  canUploadFile: boolean;
   error: string | null;
+  fileContent: string;
+  fileError: string | null;
+  fileName: string;
+  filePreview: FilePreviewState | null;
+  files: FileAssetRecord[];
+  isFileLoading: boolean;
   isLoading: boolean;
   onAddMember: () => void;
+  onArchiveFile: (file: FileAssetRecord) => void;
   onCreateProject: () => void;
   onCreateTask: () => void;
+  onDownloadFile: (file: FileAssetRecord) => void;
+  onPreviewFile: (file: FileAssetRecord) => void;
   onProjectStatusChange: (project: ProjectSummary, status: ProjectRecord["status"]) => void;
   onSelectProject: (projectId: string) => void;
   onTaskStatusChange: (task: TaskRecord, status: TaskRecord["status"]) => void;
+  onUploadFile: () => void;
   projectTitle: string;
   projects: ProjectSummary[];
   selectedProjectId: string | null;
+  setFileContent: (value: string) => void;
+  setFileName: (value: string) => void;
   setProjectTitle: (value: string) => void;
   setTaskTitle: (value: string) => void;
   taskTitle: string;
@@ -1262,6 +1424,23 @@ function ProjectTaskView({
         ) : null}
       </div>
 
+      <ProjectFilePanel
+        canUploadFile={canUploadFile}
+        fileContent={fileContent}
+        fileError={fileError}
+        fileName={fileName}
+        filePreview={filePreview}
+        files={files}
+        isFileLoading={isFileLoading}
+        onArchiveFile={onArchiveFile}
+        onDownloadFile={onDownloadFile}
+        onPreviewFile={onPreviewFile}
+        onUploadFile={onUploadFile}
+        selectedProject={selectedProject}
+        setFileContent={setFileContent}
+        setFileName={setFileName}
+      />
+
       <div className="panel project-task-panel">
         <div className="panel-header">
           <div>
@@ -1305,6 +1484,109 @@ function ProjectTaskView({
         </div>
       </div>
     </section>
+  );
+}
+
+function ProjectFilePanel({
+  canUploadFile,
+  fileContent,
+  fileError,
+  fileName,
+  filePreview,
+  files,
+  isFileLoading,
+  onArchiveFile,
+  onDownloadFile,
+  onPreviewFile,
+  onUploadFile,
+  selectedProject,
+  setFileContent,
+  setFileName
+}: {
+  canUploadFile: boolean;
+  fileContent: string;
+  fileError: string | null;
+  fileName: string;
+  filePreview: FilePreviewState | null;
+  files: FileAssetRecord[];
+  isFileLoading: boolean;
+  onArchiveFile: (file: FileAssetRecord) => void;
+  onDownloadFile: (file: FileAssetRecord) => void;
+  onPreviewFile: (file: FileAssetRecord) => void;
+  onUploadFile: () => void;
+  selectedProject: ProjectSummary | null;
+  setFileContent: (value: string) => void;
+  setFileName: (value: string) => void;
+}) {
+  return (
+    <div className="panel project-file-panel">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">DEV-012 文件</p>
+          <h2>项目附件</h2>
+          <p>文件绑定当前项目，预览、下载、归档和 AI 引用都继承项目权限。</p>
+        </div>
+        <FileText size={22} />
+      </div>
+      <PageStateNotice state="loading" title="正在加载文件" body="正在读取当前项目绑定的文件元数据。" active={isFileLoading} />
+      <PageStateNotice state="error" title="文件操作失败" body={fileError ?? ""} active={Boolean(fileError)} />
+      <PageStateNotice
+        state="no-permission"
+        title="无文件上传权限"
+        body="当前账号只能查看有权限的文件；上传控件按后端文件权限裁剪。"
+        active={Boolean(selectedProject) && !canUploadFile}
+      />
+      {selectedProject && canUploadFile ? (
+        <div className="file-upload-box">
+          <input value={fileName} onChange={(event) => setFileName(event.target.value)} placeholder="文件名" />
+          <input value={fileContent} onChange={(event) => setFileContent(event.target.value)} placeholder="文件内容" />
+          <button className="primary-button" onClick={onUploadFile}>
+            <Upload size={16} />
+            上传
+          </button>
+        </div>
+      ) : null}
+      <div className="file-list">
+        {files.length > 0 ? (
+          files.map((file) => (
+            <article className={file.status === "archived" ? "file-row archived" : "file-row"} key={file.id}>
+              <div>
+                <strong>{file.displayName}</strong>
+                <small>
+                  {file.mimeType} · {file.sizeBytes} bytes · 版本历史 v1 当前
+                </small>
+              </div>
+              <span className="status-pill">{file.status}</span>
+              <div className="file-actions">
+                <button className="icon-button" disabled={file.status === "archived"} onClick={() => onPreviewFile(file)} title="预览">
+                  <Eye size={16} />
+                </button>
+                <button className="icon-button" disabled={file.status === "archived"} onClick={() => onDownloadFile(file)} title="下载">
+                  <Download size={16} />
+                </button>
+                <button className="secondary-button compact-button" disabled={file.status === "archived"} onClick={() => onArchiveFile(file)}>
+                  归档
+                </button>
+              </div>
+              {filePreview?.fileId === file.id ? (
+                <div className="file-preview">
+                  <strong>预览 / 版本 v{filePreview.versionNumber}</strong>
+                  <p>{filePreview.previewText}</p>
+                </div>
+              ) : null}
+              <PageStateNotice
+                state="archived"
+                title="文件已归档"
+                body="归档文件不允许继续预览或下载；审计记录保留。"
+                active={file.status === "archived"}
+              />
+            </article>
+          ))
+        ) : (
+          <PageStateNotice active={!isFileLoading && Boolean(selectedProject)} state="empty" title="当前项目没有文件" body="上传后会创建文件元数据、版本记录和项目绑定。" />
+        )}
+      </div>
+    </div>
   );
 }
 

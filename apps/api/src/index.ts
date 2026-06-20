@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { AiProviderError, fallbackAiFrameworkVersion, generateAiDraftContent } from "./ai-provider";
 import { loadLocalEnv } from "./env";
 import {
@@ -36,7 +36,11 @@ import {
   type AiCapability,
   type ChatMessageRecord,
   type ChatThreadRecord,
+  type FileAssetRecord,
   type FilePermission,
+  type FilePreviewResponse,
+  type FileSourceObjectType,
+  type FileVersionRecord,
   type KnowledgeItemRecord,
   type KnowledgeSearchResult,
   type ModuleKey,
@@ -117,6 +121,23 @@ interface KnowledgeQueryBody {
   limit?: number;
 }
 
+interface UploadFileBody {
+  sourceObjectType?: FileSourceObjectType;
+  sourceObjectId?: string;
+  displayName?: string;
+  mimeType?: string;
+  contentText?: string;
+  formalProcess?: boolean;
+}
+
+interface ArchiveFileBody {
+  reason?: string;
+}
+
+interface AiFileReferenceBody {
+  fileIds?: string[];
+}
+
 const sessionPrefix = "dev-session";
 const devCredentials: Record<string, string> = {
   super: "113113",
@@ -151,6 +172,14 @@ const allowedTaskTransitions: Record<TaskStatus, TaskStatus[]> = {
   archived: []
 };
 
+const supportedFileSourceObjectTypes: FileSourceObjectType[] = [
+  "project",
+  "task",
+  "chat_thread",
+  "knowledge_item",
+  "project_memory"
+];
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -158,6 +187,10 @@ function nowIso() {
 function textOrDefault(value: string | undefined, fallback: string) {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : fallback;
+}
+
+function isFileSourceObjectType(value: unknown): value is FileSourceObjectType {
+  return typeof value === "string" && supportedFileSourceObjectTypes.includes(value as FileSourceObjectType);
 }
 
 interface AuditRecordInput {
@@ -191,7 +224,10 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     chatMessages,
     aiDrafts,
     knowledgeItems,
-    projectMemories
+    projectMemories,
+    files,
+    fileVersions,
+    fileObjectBindings
   } = store.state;
   const server = Fastify({
     logger: true
@@ -553,6 +589,157 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     };
   }
 
+  function fileVersionPublic(version: FileVersionRecord) {
+    const { contentText: _contentText, ...publicVersion } = version;
+    return publicVersion;
+  }
+
+  function checksumForContent(content: string) {
+    return createHash("sha256").update(content).digest("hex");
+  }
+
+  function sourceResourceForUser(
+    user: UserAccount,
+    objectType: FileSourceObjectType,
+    objectId: string
+  ):
+    | {
+        organizationId: string;
+        ownerUserId?: string;
+        participantUserIds: string[];
+      }
+    | undefined {
+    if (objectType === "project") {
+      const project = findVisibleProject(user, objectId);
+
+      if (!project) {
+        return undefined;
+      }
+
+      return {
+        organizationId: project.organizationId,
+        ownerUserId: project.ownerUserId,
+        participantUserIds: project.memberUserIds
+      };
+    }
+
+    if (objectType === "task") {
+      const visibleTask = findVisibleTask(user, objectId);
+
+      if (!visibleTask) {
+        return undefined;
+      }
+
+      const { task, project } = visibleTask;
+      return {
+        organizationId: project.organizationId,
+        ownerUserId: task.creatorUserId,
+        participantUserIds: Array.from(
+          new Set([project.ownerUserId, ...project.memberUserIds, task.assigneeUserId, task.confirmerUserId])
+        )
+      };
+    }
+
+    if (objectType === "chat_thread") {
+      const thread = findVisibleChatThread(user, objectId);
+
+      if (!thread) {
+        return undefined;
+      }
+
+      return {
+        organizationId: thread.organizationId,
+        ownerUserId: thread.creatorUserId,
+        participantUserIds: thread.memberUserIds
+      };
+    }
+
+    if (objectType === "knowledge_item") {
+      const item = knowledgeItems.find((candidate) => candidate.id === objectId);
+
+      if (!item || !canReadKnowledgeItem(user, item)) {
+        return undefined;
+      }
+
+      return {
+        organizationId: item.organizationId,
+        ownerUserId: item.creatorUserId,
+        participantUserIds: item.sourceParticipantUserIds
+      };
+    }
+
+    const memory = projectMemories.find((candidate) => candidate.id === objectId);
+
+    if (!memory || !canReadProjectMemory(user, memory)) {
+      return undefined;
+    }
+
+    return {
+      organizationId: memory.organizationId,
+      ownerUserId: memory.creatorUserId,
+      participantUserIds: memory.sourceParticipantUserIds
+    };
+  }
+
+  function fileSourceResourceForUser(user: UserAccount, file: FileAssetRecord) {
+    return sourceResourceForUser(user, file.sourceObjectType, file.sourceObjectId);
+  }
+
+  function canUseFile(user: UserAccount, file: FileAssetRecord, action: FilePermission) {
+    if (file.status === "archived" && action !== "view") {
+      return false;
+    }
+
+    const resource = fileSourceResourceForUser(user, file);
+    return Boolean(resource && canAccessFileAction(user, action, resource));
+  }
+
+  function findAccessibleFile(user: UserAccount, fileId: string, action: FilePermission) {
+    const file = files.find((candidate) => candidate.id === fileId);
+
+    if (!file || !canUseFile(user, file, action)) {
+      return undefined;
+    }
+
+    const version = fileVersions.find((candidate) => candidate.id === file.currentVersionId && candidate.fileId === file.id);
+
+    if (!version) {
+      return undefined;
+    }
+
+    return {
+      file,
+      version
+    };
+  }
+
+  function recordFileDenied(request: FastifyRequest, user: UserAccount | undefined, action: string) {
+    recordDeniedAccess({
+      request,
+      user,
+      dimension: "file",
+      action,
+      resourceType: "file",
+      reason: user ? "forbidden" : "unauthenticated"
+    });
+  }
+
+  function visibleFilesForObject(user: UserAccount, objectType: FileSourceObjectType, objectId: string) {
+    const resource = sourceResourceForUser(user, objectType, objectId);
+
+    if (!resource || !canAccessFileAction(user, "view", resource)) {
+      return undefined;
+    }
+
+    const fileIds = new Set(
+      fileObjectBindings
+        .filter((binding) => binding.objectType === objectType && binding.objectId === objectId)
+        .map((binding) => binding.fileId)
+    );
+
+    return files.filter((file) => fileIds.has(file.id) && canUseFile(user, file, "view"));
+  }
+
   function latestThreadMessageIds(threadId: string) {
     return chatMessages
       .filter((message) => message.threadId === threadId && message.status !== "withdrawn")
@@ -716,7 +903,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         key: "expired",
         label: "已过期",
         status: "available",
-        evidence: "后续合同和审批期限对象接入后展示；当前 DEV-011 不创建期限实例。"
+        evidence: "后续合同和审批期限对象接入后展示；当前 DEV-012 不创建期限实例。"
       },
       {
         key: "archived",
@@ -908,8 +1095,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         user,
         type: "system_status",
         severity: "info",
-        title: "DEV-011 工作台状态",
-        body: "仅启用系统内通知；外部通知、完整合同和完整审批流不在本阶段范围。",
+        title: "DEV-012 文件生产存储",
+        body: "文件能力进入项目等既有页面；外部通知、完整合同和完整审批流不在本阶段范围。",
         module: "workbench"
       })
     );
@@ -1076,34 +1263,6 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         dimension: "approval",
         action: approval,
         resourceType: "approval_policy",
-        reason: "forbidden"
-      });
-      reply.code(403).send({ error: "forbidden" });
-      return undefined;
-    }
-
-    return user;
-  }
-
-  async function requireFileAccess(
-    request: FastifyRequest,
-    reply: FastifyReply,
-    action: FilePermission,
-    resource: ResourceAccessContext
-  ) {
-    const user = await requireUser(request, reply);
-
-    if (!user) {
-      return undefined;
-    }
-
-    if (!canAccessFileAction(user, action, resource)) {
-      recordDeniedAccess({
-        request,
-        user,
-        dimension: "file",
-        action,
-        resourceType: "file",
         reason: "forbidden"
       });
       reply.code(403).send({ error: "forbidden" });
@@ -1996,7 +2155,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
   });
 
   async function createChatAiDraft(
-    request: FastifyRequest<{ Params: { id: string } }>,
+    request: FastifyRequest<{ Body: AiFileReferenceBody; Params: { id: string } }>,
     reply: FastifyReply,
     capability: AiCapability,
     kind: AiDraftRecord["kind"]
@@ -2060,6 +2219,48 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       return undefined;
     }
 
+    const requestedFileIds = request.body?.fileIds ?? [];
+
+    if (requestedFileIds.length > 0) {
+      const accessibleFiles = requestedFileIds
+        .map((fileId) => findAccessibleFile(user, fileId, "reference_ai"))
+        .filter(Boolean);
+
+      if (accessibleFiles.length !== requestedFileIds.length) {
+        recordFileDenied(request, user, "reference_ai");
+        recordAudit({
+          request,
+          user,
+          action: "file.ai_reference_denied",
+          objectType: "file",
+          organizationId: thread.organizationId,
+          reason: "ai_file_reference_blocked_by_permission",
+          result: "denied",
+          aiInvolved: true,
+          aiFrameworkVersion: fallbackAiFrameworkVersion
+        });
+        reply.code(403).send({ error: "forbidden" });
+        return undefined;
+      }
+
+      for (const accessibleFile of accessibleFiles) {
+        if (accessibleFile) {
+          recordAudit({
+            request,
+            user,
+            action: "file.ai_referenced",
+            objectType: "file",
+            objectId: accessibleFile.file.id,
+            organizationId: accessibleFile.file.organizationId,
+            reason: "ai_file_reference_permission_passed",
+            result: "success",
+            aiInvolved: true,
+            aiFrameworkVersion: fallbackAiFrameworkVersion
+          });
+        }
+      }
+    }
+
     const aiResult = await generateAiDraftContent({
       kind,
       threadTitle: thread.title,
@@ -2112,7 +2313,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
             : `${thread.title} 知识草稿`,
       content: aiResult.content,
       sourceMessageIds,
-      contextSourceIds: contextResults.map((item) => item.id),
+      contextSourceIds: [...contextResults.map((item) => item.id), ...requestedFileIds],
       frameworkVersion: aiResult.frameworkVersion,
       isDraft: true,
       status: "draft",
@@ -2148,15 +2349,15 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     };
   }
 
-  server.post<{ Params: { id: string } }>("/chat/threads/:id/ai/summarize", async (request, reply) =>
+  server.post<{ Body: AiFileReferenceBody; Params: { id: string } }>("/chat/threads/:id/ai/summarize", async (request, reply) =>
     createChatAiDraft(request, reply, "chat_summarize", "chat_summary")
   );
 
-  server.post<{ Params: { id: string } }>("/chat/threads/:id/ai/task-draft", async (request, reply) =>
+  server.post<{ Body: AiFileReferenceBody; Params: { id: string } }>("/chat/threads/:id/ai/task-draft", async (request, reply) =>
     createChatAiDraft(request, reply, "task_draft", "task_draft")
   );
 
-  server.post<{ Params: { id: string } }>("/chat/threads/:id/ai/knowledge-draft", async (request, reply) =>
+  server.post<{ Body: AiFileReferenceBody; Params: { id: string } }>("/chat/threads/:id/ai/knowledge-draft", async (request, reply) =>
     createChatAiDraft(request, reply, "knowledge_query", "knowledge_draft")
   );
 
@@ -2421,45 +2622,266 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     };
   });
 
-  server.post("/files", async (request, reply) => {
-    const user = await requireOperationAccess(request, reply, "upload_file");
+  server.get<{ Querystring: { objectType?: FileSourceObjectType; objectId?: string } }>("/files", async (request, reply) => {
+    const user = await requireUser(request, reply);
 
     if (!user) {
       return;
     }
 
-    recordAudit({
-      request,
-      user,
-      action: "file.upload_requested",
-      objectType: "file",
-      objectId: "dev005-not-implemented",
-      organizationId: user.defaultOrganizationId,
-      reason: "permission_passed_but_dev005_not_implemented",
-      result: "failure"
-    });
-    return reply.code(501).send({ error: "not_implemented", stage: "DEV-005" });
+    const objectType = request.query.objectType;
+    const objectId = request.query.objectId;
+
+    if (!isFileSourceObjectType(objectType) || !objectId) {
+      return reply.code(400).send({ error: "object_binding_required" });
+    }
+
+    const visibleFiles = visibleFilesForObject(user, objectType, objectId);
+
+    if (!visibleFiles) {
+      recordFileDenied(request, user, "view");
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    return {
+      files: visibleFiles
+    };
   });
 
-  server.get("/files/:id/download", async (request, reply) => {
-    const user = await requireFileAccess(request, reply, "download", {
-      participantUserIds: []
-    });
+  server.post<{ Body: UploadFileBody }>("/files", async (request, reply) => {
+    const user = await requireUser(request, reply);
 
     if (!user) {
       return;
     }
 
+    const sourceObjectType = request.body?.sourceObjectType;
+    const sourceObjectId = request.body?.sourceObjectId;
+
+    if (!isFileSourceObjectType(sourceObjectType) || !sourceObjectId) {
+      return reply.code(400).send({ error: "object_binding_required" });
+    }
+
+    const sourceResource = sourceResourceForUser(user, sourceObjectType, sourceObjectId);
+
+    if (!sourceResource) {
+      recordFileDenied(request, user, "upload");
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    if (
+      !canPerformOperation(user, "upload_file", sourceResource) ||
+      !canAccessFileAction(user, "upload", sourceResource)
+    ) {
+      recordFileDenied(request, user, "upload");
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    const contentText = request.body?.contentText ?? "";
+    const displayName = textOrDefault(request.body?.displayName, "untitled.txt");
+    const mimeType = textOrDefault(request.body?.mimeType, "text/plain");
+    const timestamp = nowIso();
+    const fileId = `file-${randomUUID()}`;
+    const versionId = `file-version-${randomUUID()}`;
+    const checksum = checksumForContent(contentText);
+    const file: FileAssetRecord = {
+      id: fileId,
+      organizationId: sourceResource.organizationId,
+      displayName,
+      mimeType,
+      sizeBytes: Buffer.byteLength(contentText, "utf8"),
+      checksum,
+      uploaderUserId: user.id,
+      status: request.body?.formalProcess ? "locked" : "linked",
+      currentVersionId: versionId,
+      sourceObjectType,
+      sourceObjectId,
+      formalProcess: request.body?.formalProcess === true,
+      archivedByUserId: null,
+      archivedAt: null,
+      archiveReason: null,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    const version: FileVersionRecord = {
+      id: versionId,
+      fileId,
+      versionNumber: 1,
+      storageKey: `runtime://${fileId}/v1`,
+      checksum,
+      sizeBytes: file.sizeBytes,
+      mimeType,
+      originalName: displayName,
+      contentText,
+      createdByUserId: user.id,
+      createdAt: timestamp
+    };
+    const binding = {
+      id: `file-binding-${randomUUID()}`,
+      fileId,
+      objectType: sourceObjectType,
+      objectId: sourceObjectId,
+      organizationId: sourceResource.organizationId,
+      createdByUserId: user.id,
+      createdAt: timestamp
+    };
+
+    files.push(file);
+    fileVersions.push(version);
+    fileObjectBindings.push(binding);
+    store.save();
     recordAudit({
       request,
       user,
-      action: "file.download_requested",
+      action: "file.uploaded",
       objectType: "file",
-      objectId: "dev005-not-implemented",
-      reason: "permission_passed_but_dev005_not_implemented",
-      result: "failure"
+      objectId: file.id,
+      organizationId: file.organizationId,
+      reason: `file_uploaded:${sourceObjectType}`,
+      result: "success"
     });
-    return reply.code(501).send({ error: "not_implemented", stage: "DEV-005" });
+    recordAudit({
+      request,
+      user,
+      action: "file.bound_to_object",
+      objectType: sourceObjectType,
+      objectId: sourceObjectId,
+      organizationId: file.organizationId,
+      afterSnapshotRef: file.id,
+      reason: "file_object_binding_created",
+      result: "success"
+    });
+
+    return reply.code(201).send({
+      file,
+      version: fileVersionPublic(version),
+      binding
+    });
+  });
+
+  server.get<{ Params: { id: string } }>("/files/:id", async (request, reply) => {
+    const user = await requireUser(request, reply);
+
+    if (!user) {
+      return;
+    }
+
+    const accessibleFile = findAccessibleFile(user, request.params.id, "view");
+
+    if (!accessibleFile) {
+      recordFileDenied(request, user, "view");
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    return {
+      file: accessibleFile.file,
+      version: fileVersionPublic(accessibleFile.version)
+    };
+  });
+
+  server.get<{ Params: { id: string } }>("/files/:id/preview", async (request, reply) => {
+    const user = await requireUser(request, reply);
+
+    if (!user) {
+      return;
+    }
+
+    const accessibleFile = findAccessibleFile(user, request.params.id, "preview");
+
+    if (!accessibleFile) {
+      recordFileDenied(request, user, "preview");
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    recordAudit({
+      request,
+      user,
+      action: "file.previewed",
+      objectType: "file",
+      objectId: accessibleFile.file.id,
+      organizationId: accessibleFile.file.organizationId,
+      reason: "file_preview",
+      result: "success"
+    });
+
+    const response: FilePreviewResponse = {
+      file: accessibleFile.file,
+      version: fileVersionPublic(accessibleFile.version),
+      previewText: accessibleFile.version.contentText.slice(0, 500)
+    };
+    return response;
+  });
+
+  server.get<{ Params: { id: string } }>("/files/:id/download", async (request, reply) => {
+    const user = await requireUser(request, reply);
+
+    if (!user) {
+      return;
+    }
+
+    const accessibleFile = findAccessibleFile(user, request.params.id, "download");
+
+    if (!accessibleFile) {
+      recordFileDenied(request, user, "download");
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    recordAudit({
+      request,
+      user,
+      action: "file.downloaded",
+      objectType: "file",
+      objectId: accessibleFile.file.id,
+      organizationId: accessibleFile.file.organizationId,
+      reason: "file_download",
+      result: "success"
+    });
+
+    return {
+      file: accessibleFile.file,
+      version: fileVersionPublic(accessibleFile.version),
+      contentText: accessibleFile.version.contentText
+    };
+  });
+
+  server.post<{ Body: ArchiveFileBody; Params: { id: string } }>("/files/:id/archive", async (request, reply) => {
+    const user = await requireUser(request, reply);
+
+    if (!user) {
+      return;
+    }
+
+    const accessibleFile = findAccessibleFile(user, request.params.id, "archive");
+
+    if (!accessibleFile) {
+      recordFileDenied(request, user, "archive");
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    const timestamp = nowIso();
+    accessibleFile.file.status = "archived";
+    accessibleFile.file.archivedByUserId = user.id;
+    accessibleFile.file.archivedAt = timestamp;
+    accessibleFile.file.archiveReason = textOrDefault(
+      request.body?.reason,
+      accessibleFile.file.formalProcess ? "formal_process_file_voided" : "file_archived"
+    );
+    accessibleFile.file.updatedAt = timestamp;
+    store.save();
+    recordAudit({
+      request,
+      user,
+      action: accessibleFile.file.formalProcess ? "file.voided" : "file.archived",
+      objectType: "file",
+      objectId: accessibleFile.file.id,
+      organizationId: accessibleFile.file.organizationId,
+      reason: accessibleFile.file.archiveReason,
+      result: "success"
+    });
+
+    return {
+      file: accessibleFile.file
+    };
   });
 
   server.post<{ Body: KnowledgeQueryBody }>("/knowledge/query", async (request, reply) => {

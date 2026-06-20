@@ -105,8 +105,8 @@
 
 下一阶段：
 
-- 已完成 `DEV-001` 到 `DEV-011`
-- 当前进入 `DEV-012` 文件生产存储准备
+- 已完成 `DEV-001` 到 `DEV-012`
+- 当前进入 `DEV-013` 知识库生产化准备
 
 ## 5. 第一阶段代码开发顺序和当前状态
 
@@ -321,6 +321,34 @@
 - 合同确认和审批实例不在 DEV-011 创建，页面只展示空状态和权限/边界
 - `npm run lint`、`npm run typecheck`、`npm run test`、`npm run build`、`npm run smoke:api`、`git diff --check` 通过
 - `npm audit --audit-level=low --offline` 通过；在线 audit 需网络环境补跑
+
+### DEV-012 文件生产存储
+
+状态：已完成。本阶段建立文件元数据、版本、对象绑定、归档和权限继承边界；完整合同闭环、完整审批闭环、外部网盘和文件中心一级菜单继续禁止。
+
+范围：
+
+- 共享文件元数据、版本、对象绑定和预览/下载响应契约
+- API 运行时持久化文件元数据、版本和对象绑定
+- PostgreSQL 兼容迁移资产覆盖 `file_assets`、`file_versions`、`file_object_bindings`、`file_archive_events` 和审计文件字段
+- `/files` 上传、按对象查询、元数据、预览、下载和归档接口
+- 文件绑定既有项目、任务、聊天、知识和项目记忆对象
+- 文件权限继承来源对象权限，并叠加文件维度的 view / preview / download / upload / archive / reference_ai
+- 无权限预览、下载和 AI 引用返回非泄露错误，不返回文件名或敏感对象名
+- 正式流程文件使用 locked / archived 状态表达作废，不提供物理删除
+- 上传、绑定、预览、下载、归档、AI 引用和权限拒绝写审计
+- 前端文件控件只出现在既有项目/任务页面组件内，不新增文件中心一级菜单
+
+验收：
+
+- 无权限用户不能预览或下载文件，错误响应不泄露文件名或对象名
+- 上传同时创建元数据、版本和对象绑定记录
+- 文件预览、下载、归档和 AI 引用权限均由后端校验
+- 归档后文件不可继续预览或下载，审计保留
+- AI 使用文件前必须通过当前用户文件权限检查
+- 页面状态覆盖 normal / empty / loading / no-permission / error / archived / version history
+- `npm run ci`、`npm audit --audit-level=low --offline`、`git diff --check` 通过
+- 在线 `npm audit --audit-level=low` 需网络环境补跑
 
 ## 6. 第一批建议 issue
 

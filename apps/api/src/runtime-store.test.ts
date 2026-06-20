@@ -425,4 +425,79 @@ describe("runtime persistence store", () => {
 
     await secondServer.close();
   });
+
+  it("keeps file metadata, versions and bindings after the API runtime restarts", async () => {
+    const dataFilePath = createDataFilePath();
+    const firstServer = buildServer({ dataFilePath });
+    const ownerToken = await loginOnServer(firstServer, "owner");
+
+    const createProject = await firstServer.inject({
+      method: "POST",
+      url: "/projects",
+      headers: {
+        authorization: `Bearer ${ownerToken}`
+      },
+      payload: {
+        title: "DEV-012 文件持久化项目",
+        organizationId: "org-product"
+      }
+    });
+    const projectId = createProject.json().project.id as string;
+    const uploadFile = await firstServer.inject({
+      method: "POST",
+      url: "/files",
+      headers: {
+        authorization: `Bearer ${ownerToken}`
+      },
+      payload: {
+        sourceObjectType: "project",
+        sourceObjectId: projectId,
+        displayName: "restart-file.txt",
+        contentText: "file survives restart"
+      }
+    });
+    const fileId = uploadFile.json().file.id as string;
+    const versionId = uploadFile.json().version.id as string;
+
+    expect(createProject.statusCode).toBe(201);
+    expect(uploadFile.statusCode).toBe(201);
+    await firstServer.close();
+
+    const secondServer = buildServer({ dataFilePath });
+    const secondOwnerToken = await loginOnServer(secondServer, "owner");
+    const files = await secondServer.inject({
+      method: "GET",
+      url: `/files?objectType=project&objectId=${projectId}`,
+      headers: {
+        authorization: `Bearer ${secondOwnerToken}`
+      }
+    });
+    const preview = await secondServer.inject({
+      method: "GET",
+      url: `/files/${fileId}/preview`,
+      headers: {
+        authorization: `Bearer ${secondOwnerToken}`
+      }
+    });
+
+    expect(files.statusCode).toBe(200);
+    expect(preview.statusCode).toBe(200);
+    expect(files.json().files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: fileId,
+          currentVersionId: versionId,
+          sourceObjectType: "project",
+          sourceObjectId: projectId
+        })
+      ])
+    );
+    expect(preview.json()).toEqual(
+      expect.objectContaining({
+        previewText: "file survives restart"
+      })
+    );
+
+    await secondServer.close();
+  });
 });
