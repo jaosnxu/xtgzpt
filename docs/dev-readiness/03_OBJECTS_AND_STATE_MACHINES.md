@@ -82,14 +82,22 @@
 
 ## 6. 知识状态
 
-`draft -> pending_review -> published -> archived`
+`draft -> submitted_for_review -> published`
+
+异常状态：
+
+- `rejected`
+- `archived`
 
 规则：
 
 - AI 只能生成 draft。
-- pending_review 必须由知识管理员处理。
+- AI 知识草稿经人工确认后只能进入 `submitted_for_review`，不得自动进入 `published`。
+- `submitted_for_review` 必须由知识管理员或具备知识发布权限的人类管理员处理。
+- `rejected` 可由作者创建新版本后重新提交审核。
 - published 后变更必须生成新版本。
-- archived 不得作为默认 AI 来源。
+- archived 不得作为默认检索来源、证据来源或 AI 输入上下文。
+- 每个知识版本必须记录 author、reviewer、version、status、时间戳和 source evidence。
 
 ## 7. 合同状态
 

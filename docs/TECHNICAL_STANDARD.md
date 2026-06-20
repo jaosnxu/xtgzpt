@@ -66,6 +66,11 @@ API 必须遵守：
 - `/chat/threads`
 - `/ai/drafts/:id/confirm`
 - `/knowledge/items`
+- `/knowledge/items/:id/submit-review`
+- `/knowledge/items/:id/versions`
+- `/knowledge/items/:id/publish`
+- `/knowledge/items/:id/reject`
+- `/knowledge/items/:id/archive`
 - `/memory/items`
 - `/knowledge/query`
 - `/modules/:module`
@@ -99,7 +104,7 @@ API 必须遵守：
 
 - 已有迁移目录。
 - 已有运行时持久化边界覆盖项目、任务、聊天、AI 草稿、知识、项目记忆、审计和文件元数据。
-- PostgreSQL 兼容 migration 资产已覆盖当前运行时对象和文件元数据/版本/对象绑定/归档事件。
+- PostgreSQL 兼容 migration 资产已覆盖当前运行时对象、文件元数据/版本/对象绑定/归档事件，以及知识审核状态、版本历史和来源证据。
 - 仍未接入真实 PostgreSQL adapter、连接池、事务和备份恢复。
 
 生产目标：
@@ -166,6 +171,20 @@ AI Run 生产字段必须包含：
 - `failureClass`
 - `createdAt`
 - `completedAt`
+
+## 7.1 知识检索技术策略
+
+DEV-013 当前实现：
+
+- 保持本地、可测试、确定性的全文检索，不接外部搜索服务。
+- 检索候选只来自当前用户有权读取的 `published` 知识和项目记忆。
+- `draft`、`submitted_for_review`、`rejected`、`archived` 知识不得进入检索、证据或 AI 输入上下文。
+- 每条检索结果必须返回 source evidence。
+
+后续向量策略：
+
+- 可在本地 adapter 中增加 embedding/vector 字段和测试替身。
+- 外部向量数据库、外部搜索服务和网络检索不属于 DEV-013，必须另立阶段和安全评审。
 
 ## 8. CI 和 Gate
 

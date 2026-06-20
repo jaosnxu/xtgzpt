@@ -96,10 +96,18 @@
 | 创建知识草稿 | 是 |
 | 提交审核 | 是 |
 | 发布知识 | 是 |
+| 驳回知识 | 是 |
 | 修改知识 | 是 |
+| 创建知识版本 | 是 |
 | 归档知识 | 是 |
 | AI 引用来源 | 是 |
 | 权限阻断来源 | 是 |
+
+DEV-013 要求：
+
+- AI 草稿确认只能写 `knowledge.submitted_for_review_from_ai_draft`，不能写自动发布。
+- `knowledge.published`、`knowledge.rejected`、`knowledge.archived`、`knowledge.version_created` 必须记录 actor、object、reason、before/after snapshot ref。
+- 知识问答审计必须能证明结果来自权限过滤后的本地来源，且每条结果带 source evidence。
 
 ## 8. 合同审计
 

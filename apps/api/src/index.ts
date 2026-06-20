@@ -43,6 +43,8 @@ import {
   type FileVersionRecord,
   type KnowledgeItemRecord,
   type KnowledgeSearchResult,
+  type KnowledgeSourceEvidence,
+  type KnowledgeVersionRecord,
   type ModuleKey,
   type OperationPermission,
   type PageStateDescriptor,
@@ -119,6 +121,22 @@ interface KnowledgeQueryBody {
   organizationId?: string;
   projectId?: string;
   limit?: number;
+}
+
+interface CreateKnowledgeItemBody {
+  title?: string;
+  content?: string;
+  organizationId?: string;
+}
+
+interface KnowledgeActionBody {
+  reason?: string;
+}
+
+interface CreateKnowledgeVersionBody {
+  title?: string;
+  content?: string;
+  submitForReview?: boolean;
 }
 
 interface UploadFileBody {
@@ -224,6 +242,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     chatMessages,
     aiDrafts,
     knowledgeItems,
+    knowledgeVersions,
     projectMemories,
     files,
     fileVersions,
@@ -438,6 +457,14 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     });
   }
 
+  function canReviewKnowledgeItem(user: UserAccount, item: KnowledgeItemRecord) {
+    return canPerformOperation(user, "publish_knowledge", {
+      organizationId: item.organizationId,
+      ownerUserId: item.creatorUserId,
+      participantUserIds: item.sourceParticipantUserIds
+    });
+  }
+
   function canReadProjectMemory(user: UserAccount, item: ProjectMemoryRecord) {
     return canAccessResourceData(user, {
       organizationId: item.organizationId,
@@ -447,7 +474,11 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
   }
 
   function visibleKnowledgeItemsForUser(user: UserAccount) {
-    return knowledgeItems.filter((item) => item.status !== "archived" && canReadKnowledgeItem(user, item));
+    return knowledgeItems.filter((item) => canReadKnowledgeItem(user, item) || canReviewKnowledgeItem(user, item));
+  }
+
+  function retrievableKnowledgeItemsForUser(user: UserAccount) {
+    return knowledgeItems.filter((item) => item.status === "published" && canReadKnowledgeItem(user, item));
   }
 
   function visibleProjectMemoriesForUser(user: UserAccount) {
@@ -489,6 +520,50 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       .filter(Boolean);
   }
 
+  function evidenceFromDraftAndThread(draft: AiDraftRecord, thread: ChatThreadRecord): KnowledgeSourceEvidence[] {
+    return [
+      {
+        sourceType: "ai_draft",
+        sourceId: draft.id,
+        sourceMessageIds: draft.sourceMessageIds,
+        sourceParticipantUserIds: thread.memberUserIds,
+        title: draft.title,
+        excerpt: draft.content.slice(0, 240)
+      },
+      ...draft.sourceMessageIds.map((messageId) => {
+        const message = chatMessages.find((candidate) => candidate.id === messageId);
+
+        return {
+          sourceType: "chat_message" as const,
+          sourceId: messageId,
+          sourceMessageIds: [messageId],
+          sourceParticipantUserIds: thread.memberUserIds,
+          title: thread.title,
+          excerpt: message?.content.slice(0, 240) ?? "source_message"
+        };
+      })
+    ];
+  }
+
+  function evidenceForProjectMemory(item: ProjectMemoryRecord): KnowledgeSourceEvidence[] {
+    return [
+      {
+        sourceType: "project_memory",
+        sourceId: item.sourceDraftId,
+        sourceMessageIds: item.sourceMessageIds,
+        sourceParticipantUserIds: item.sourceParticipantUserIds,
+        title: item.title,
+        excerpt: item.content.slice(0, 240)
+      }
+    ];
+  }
+
+  function currentKnowledgeVersion(item: KnowledgeItemRecord) {
+    return knowledgeVersions.find(
+      (version) => version.knowledgeItemId === item.id && version.version === item.currentVersion
+    );
+  }
+
   function searchKnowledgeAndMemory({
     user,
     query,
@@ -508,7 +583,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       return [];
     }
 
-    const knowledgeResults: KnowledgeSearchResult[] = visibleKnowledgeItemsForUser(user)
+    const knowledgeResults: KnowledgeSearchResult[] = retrievableKnowledgeItemsForUser(user)
       .filter((item) => !organizationId || item.organizationId === organizationId)
       .map((item) => {
         const score = scoreSearchCandidate(queryTerms, item.title, item.content);
@@ -522,6 +597,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
           projectId: null,
           sourceId: item.sourceDraftId,
           sourceMessageIds: item.sourceMessageIds,
+          sourceEvidence: item.sourceEvidence,
           relevanceScore: score.relevanceScore,
           matchedFields: score.matchedFields,
           createdAt: item.createdAt
@@ -542,6 +618,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
           projectId: item.projectId,
           sourceId: item.sourceDraftId,
           sourceMessageIds: item.sourceMessageIds,
+          sourceEvidence: evidenceForProjectMemory(item),
           relevanceScore: score.relevanceScore,
           matchedFields: score.matchedFields,
           createdAt: item.createdAt
@@ -2494,20 +2571,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (draft.kind === "knowledge_draft") {
-      if (!canPerformOperation(user, "publish_knowledge", {
-        organizationId: thread.organizationId,
-        participantUserIds: thread.memberUserIds
-      })) {
-        recordDeniedAccess({
-          request,
-          user,
-          dimension: "operation",
-          action: "publish_knowledge",
-          resourceType: "ai_draft",
-          reason: "forbidden"
-        });
-        return reply.code(403).send({ error: "forbidden" });
-      }
+      const sourceEvidence = evidenceFromDraftAndThread(draft, thread);
 
       const item: KnowledgeItemRecord = {
         id: `knowledge-${randomUUID()}`,
@@ -2515,15 +2579,41 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         content,
         organizationId: thread.organizationId,
         creatorUserId: user.id,
+        reviewerUserId: null,
+        currentVersion: 1,
         sourceDraftId: draft.id,
         sourceMessageIds: draft.sourceMessageIds,
         sourceParticipantUserIds: thread.memberUserIds,
-        status: "published",
+        sourceEvidence,
+        status: "submitted_for_review",
         createdAt: timestamp,
-        updatedAt: timestamp
+        updatedAt: timestamp,
+        submittedAt: timestamp,
+        reviewedAt: null,
+        publishedAt: null,
+        rejectedAt: null,
+        archivedAt: null
+      };
+      const version: KnowledgeVersionRecord = {
+        id: `knowledge-version-${randomUUID()}`,
+        knowledgeItemId: item.id,
+        version: 1,
+        title,
+        content,
+        authorUserId: user.id,
+        reviewerUserId: null,
+        status: "submitted_for_review",
+        sourceEvidence,
+        createdAt: timestamp,
+        submittedAt: timestamp,
+        reviewedAt: null,
+        publishedAt: null,
+        rejectedAt: null,
+        archivedAt: null
       };
 
       knowledgeItems.push(item);
+      knowledgeVersions.push(version);
       draft.status = "confirmed";
       draft.confirmedByUserId = user.id;
       draft.confirmedAt = timestamp;
@@ -2533,12 +2623,13 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       recordAudit({
         request,
         user,
-        action: "knowledge.published_from_ai_draft",
+        action: "knowledge.submitted_for_review_from_ai_draft",
         objectType: "knowledge_item",
         objectId: item.id,
         organizationId: item.organizationId,
         beforeSnapshotRef: draft.id,
-        reason: "ai_draft_confirmed:knowledge",
+        afterSnapshotRef: version.id,
+        reason: "ai_draft_confirmed:knowledge_submitted_for_human_review",
         result: "success",
         aiInvolved: true,
         aiFrameworkVersion: draft.frameworkVersion
@@ -2598,6 +2689,96 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     });
   });
 
+  server.post<{ Body: CreateKnowledgeItemBody }>("/knowledge/items", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "knowledge");
+
+    if (!user) {
+      return;
+    }
+
+    const title = request.body?.title?.trim();
+    const content = request.body?.content?.trim();
+    const organizationId = request.body?.organizationId ?? user.defaultOrganizationId;
+
+    if (!title || !content) {
+      return reply.code(400).send({ error: "title_content_required" });
+    }
+
+    if (!canUseOrganizationScope(user, organizationId) && !user.organizationIds.includes(organizationId)) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    const timestamp = nowIso();
+    const sourceEvidence: KnowledgeSourceEvidence[] = [
+      {
+        sourceType: "manual",
+        sourceId: user.id,
+        sourceMessageIds: [],
+        sourceParticipantUserIds: [user.id],
+        title,
+        excerpt: content.slice(0, 240)
+      }
+    ];
+    const item: KnowledgeItemRecord = {
+      id: `knowledge-${randomUUID()}`,
+      title,
+      content,
+      organizationId,
+      creatorUserId: user.id,
+      reviewerUserId: null,
+      currentVersion: 1,
+      sourceDraftId: `manual-${randomUUID()}`,
+      sourceMessageIds: [],
+      sourceParticipantUserIds: [user.id],
+      sourceEvidence,
+      status: "draft",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      submittedAt: null,
+      reviewedAt: null,
+      publishedAt: null,
+      rejectedAt: null,
+      archivedAt: null
+    };
+    const version: KnowledgeVersionRecord = {
+      id: `knowledge-version-${randomUUID()}`,
+      knowledgeItemId: item.id,
+      version: 1,
+      title,
+      content,
+      authorUserId: user.id,
+      reviewerUserId: null,
+      status: "draft",
+      sourceEvidence,
+      createdAt: timestamp,
+      submittedAt: null,
+      reviewedAt: null,
+      publishedAt: null,
+      rejectedAt: null,
+      archivedAt: null
+    };
+
+    knowledgeItems.push(item);
+    knowledgeVersions.push(version);
+    store.save();
+    recordAudit({
+      request,
+      user,
+      action: "knowledge.draft_created",
+      objectType: "knowledge_item",
+      objectId: item.id,
+      organizationId: item.organizationId,
+      afterSnapshotRef: version.id,
+      reason: "knowledge_manual_draft_created",
+      result: "success"
+    });
+
+    return reply.code(201).send({
+      item,
+      version
+    });
+  });
+
   server.get("/knowledge/items", async (request, reply) => {
     const user = await requireMenuAccess(request, reply, "knowledge");
 
@@ -2606,8 +2787,312 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     return {
-      items: visibleKnowledgeItemsForUser(user)
+      items: visibleKnowledgeItemsForUser(user).map((item) => ({
+        ...item,
+        versions: knowledgeVersions
+          .filter((version) => version.knowledgeItemId === item.id)
+          .sort((left, right) => right.version - left.version)
+      }))
     };
+  });
+
+  server.get<{ Params: { id: string } }>("/knowledge/items/:id/versions", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "knowledge");
+
+    if (!user) {
+      return;
+    }
+
+    const item = knowledgeItems.find((candidate) => candidate.id === request.params.id);
+
+    if (!item || !visibleKnowledgeItemsForUser(user).some((candidate) => candidate.id === item.id)) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "knowledge_item",
+        reason: "knowledge_versions",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    return {
+      item,
+      versions: knowledgeVersions
+        .filter((version) => version.knowledgeItemId === item.id)
+        .sort((left, right) => right.version - left.version)
+    };
+  });
+
+  server.post<{ Body: KnowledgeActionBody; Params: { id: string } }>("/knowledge/items/:id/submit-review", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "knowledge");
+
+    if (!user) {
+      return;
+    }
+
+    const item = knowledgeItems.find((candidate) => candidate.id === request.params.id);
+
+    if (!item || !canReadKnowledgeItem(user, item)) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "knowledge_item",
+        reason: "knowledge_submit_review",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    if (!["draft", "rejected"].includes(item.status)) {
+      return reply.code(409).send({ error: "invalid_knowledge_status" });
+    }
+
+    const version = currentKnowledgeVersion(item);
+    const timestamp = nowIso();
+    item.status = "submitted_for_review";
+    item.submittedAt = timestamp;
+    item.updatedAt = timestamp;
+
+    if (version) {
+      version.status = "submitted_for_review";
+      version.submittedAt = timestamp;
+    }
+
+    store.save();
+    recordAudit({
+      request,
+      user,
+      action: "knowledge.submitted_for_review",
+      objectType: "knowledge_item",
+      objectId: item.id,
+      organizationId: item.organizationId,
+      beforeSnapshotRef: version?.id ?? null,
+      afterSnapshotRef: version?.id ?? null,
+      reason: request.body?.reason?.trim() || "knowledge_submit_review",
+      result: "success"
+    });
+
+    return {
+      item,
+      version
+    };
+  });
+
+  async function handleKnowledgeReviewAction(
+    request: FastifyRequest<{ Body: KnowledgeActionBody; Params: { id: string } }>,
+    reply: FastifyReply,
+    nextStatus: "published" | "rejected" | "archived"
+  ) {
+    const user = await requireMenuAccess(request, reply, "knowledge");
+
+    if (!user) {
+      return undefined;
+    }
+
+    const item = knowledgeItems.find((candidate) => candidate.id === request.params.id);
+
+    if (!item || !canReviewKnowledgeItem(user, item)) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "operation",
+        action: nextStatus === "published" ? "publish_knowledge" : `knowledge_${nextStatus}`,
+        resourceType: "knowledge_item",
+        reason: "forbidden"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    if (nextStatus === "published" && item.status !== "submitted_for_review") {
+      return reply.code(409).send({ error: "invalid_knowledge_status" });
+    }
+
+    if (nextStatus === "rejected" && item.status !== "submitted_for_review") {
+      return reply.code(409).send({ error: "invalid_knowledge_status" });
+    }
+
+    if (nextStatus === "archived" && item.status === "archived") {
+      return reply.code(409).send({ error: "invalid_knowledge_status" });
+    }
+
+    const version = currentKnowledgeVersion(item);
+    const timestamp = nowIso();
+    const previousStatus = item.status;
+    item.status = nextStatus;
+    item.reviewerUserId = user.id;
+    item.reviewedAt = timestamp;
+    item.updatedAt = timestamp;
+
+    if (nextStatus === "published") {
+      item.publishedAt = timestamp;
+    }
+
+    if (nextStatus === "rejected") {
+      item.rejectedAt = timestamp;
+    }
+
+    if (nextStatus === "archived") {
+      item.archivedAt = timestamp;
+    }
+
+    if (version) {
+      version.status = nextStatus;
+      version.reviewerUserId = user.id;
+      version.reviewedAt = timestamp;
+
+      if (nextStatus === "published") {
+        version.publishedAt = timestamp;
+      }
+
+      if (nextStatus === "rejected") {
+        version.rejectedAt = timestamp;
+      }
+
+      if (nextStatus === "archived") {
+        version.archivedAt = timestamp;
+      }
+    }
+
+    store.save();
+    recordAudit({
+      request,
+      user,
+      action:
+        nextStatus === "published"
+          ? "knowledge.published"
+          : nextStatus === "rejected"
+            ? "knowledge.rejected"
+            : "knowledge.archived",
+      objectType: "knowledge_item",
+      objectId: item.id,
+      organizationId: item.organizationId,
+      beforeSnapshotRef: `${version?.id ?? item.id}:${previousStatus}`,
+      afterSnapshotRef: `${version?.id ?? item.id}:${nextStatus}`,
+      reason: request.body?.reason?.trim() || `knowledge_${nextStatus}`,
+      result: "success"
+    });
+
+    return {
+      item,
+      version
+    };
+  }
+
+  server.post<{ Body: KnowledgeActionBody; Params: { id: string } }>("/knowledge/items/:id/publish", async (request, reply) =>
+    handleKnowledgeReviewAction(request, reply, "published")
+  );
+
+  server.post<{ Body: KnowledgeActionBody; Params: { id: string } }>("/knowledge/items/:id/reject", async (request, reply) =>
+    handleKnowledgeReviewAction(request, reply, "rejected")
+  );
+
+  server.post<{ Body: KnowledgeActionBody; Params: { id: string } }>("/knowledge/items/:id/archive", async (request, reply) =>
+    handleKnowledgeReviewAction(request, reply, "archived")
+  );
+
+  server.post<{ Body: CreateKnowledgeVersionBody; Params: { id: string } }>("/knowledge/items/:id/versions", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "knowledge");
+
+    if (!user) {
+      return;
+    }
+
+    const item = knowledgeItems.find((candidate) => candidate.id === request.params.id);
+
+    if (!item || !canReadKnowledgeItem(user, item)) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "knowledge_item",
+        reason: "knowledge_version_create",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    if (item.status === "archived") {
+      return reply.code(409).send({ error: "invalid_knowledge_status" });
+    }
+
+    const timestamp = nowIso();
+    const nextVersionNumber = Math.max(
+      0,
+      ...knowledgeVersions
+        .filter((version) => version.knowledgeItemId === item.id)
+        .map((version) => version.version)
+    ) + 1;
+    const title = textOrDefault(request.body?.title, item.title);
+    const content = textOrDefault(request.body?.content, item.content);
+    const status = request.body?.submitForReview ? "submitted_for_review" : "draft";
+    const sourceEvidence: KnowledgeSourceEvidence[] = [
+      ...item.sourceEvidence,
+      {
+        sourceType: "manual",
+        sourceId: user.id,
+        sourceMessageIds: [],
+        sourceParticipantUserIds: [user.id],
+        title,
+        excerpt: content.slice(0, 240)
+      }
+    ];
+    const version: KnowledgeVersionRecord = {
+      id: `knowledge-version-${randomUUID()}`,
+      knowledgeItemId: item.id,
+      version: nextVersionNumber,
+      title,
+      content,
+      authorUserId: user.id,
+      reviewerUserId: null,
+      status,
+      sourceEvidence,
+      createdAt: timestamp,
+      submittedAt: status === "submitted_for_review" ? timestamp : null,
+      reviewedAt: null,
+      publishedAt: null,
+      rejectedAt: null,
+      archivedAt: null
+    };
+
+    item.title = title;
+    item.content = content;
+    item.currentVersion = nextVersionNumber;
+    item.creatorUserId = user.id;
+    item.reviewerUserId = null;
+    item.status = status;
+    item.sourceEvidence = sourceEvidence;
+    item.sourceMessageIds = sourceEvidence.flatMap((evidence) => evidence.sourceMessageIds);
+    item.sourceParticipantUserIds = Array.from(
+      new Set(sourceEvidence.flatMap((evidence) => evidence.sourceParticipantUserIds))
+    );
+    item.updatedAt = timestamp;
+    item.submittedAt = status === "submitted_for_review" ? timestamp : null;
+    item.reviewedAt = null;
+    item.publishedAt = null;
+    item.rejectedAt = null;
+    item.archivedAt = null;
+
+    knowledgeVersions.push(version);
+    store.save();
+    recordAudit({
+      request,
+      user,
+      action: "knowledge.version_created",
+      objectType: "knowledge_item",
+      objectId: item.id,
+      organizationId: item.organizationId,
+      afterSnapshotRef: version.id,
+      reason: status === "submitted_for_review" ? "knowledge_version_submitted_for_review" : "knowledge_version_created",
+      result: "success"
+    });
+
+    return reply.code(201).send({
+      item,
+      version
+    });
   });
 
   server.get("/memory/items", async (request, reply) => {

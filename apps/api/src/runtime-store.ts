@@ -10,6 +10,7 @@ import type {
   FileObjectBindingRecord,
   FileVersionRecord,
   KnowledgeItemRecord,
+  KnowledgeVersionRecord,
   ProjectMemoryRecord,
   ProjectRecord,
   TaskRecord
@@ -35,6 +36,7 @@ export interface RuntimeData {
   chatMessages: ChatMessageRecord[];
   aiDrafts: AiDraftRecord[];
   knowledgeItems: KnowledgeItemRecord[];
+  knowledgeVersions: KnowledgeVersionRecord[];
   projectMemories: ProjectMemoryRecord[];
   files: FileAssetRecord[];
   fileVersions: FileVersionRecord[];
@@ -62,6 +64,7 @@ function emptyRuntimeData(): RuntimeData {
     chatMessages: [],
     aiDrafts: [],
     knowledgeItems: [],
+    knowledgeVersions: [],
     projectMemories: [],
     files: [],
     fileVersions: [],
@@ -71,6 +74,39 @@ function emptyRuntimeData(): RuntimeData {
 
 function arrayOrEmpty<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function normalizeKnowledgeItems(value: unknown): KnowledgeItemRecord[] {
+  return arrayOrEmpty<Partial<KnowledgeItemRecord>>(value).map((item) => ({
+    id: item.id ?? "knowledge-unknown",
+    title: item.title ?? "Untitled knowledge",
+    content: item.content ?? "",
+    organizationId: item.organizationId ?? "",
+    creatorUserId: item.creatorUserId ?? "",
+    reviewerUserId: item.reviewerUserId ?? null,
+    currentVersion: item.currentVersion ?? 1,
+    sourceDraftId: item.sourceDraftId ?? "",
+    sourceMessageIds: item.sourceMessageIds ?? [],
+    sourceParticipantUserIds: item.sourceParticipantUserIds ?? [],
+    sourceEvidence: item.sourceEvidence ?? [
+      {
+        sourceType: "ai_draft",
+        sourceId: item.sourceDraftId ?? "",
+        sourceMessageIds: item.sourceMessageIds ?? [],
+        sourceParticipantUserIds: item.sourceParticipantUserIds ?? [],
+        title: item.title ?? "Legacy source",
+        excerpt: item.content?.slice(0, 240) ?? ""
+      }
+    ],
+    status: item.status ?? "draft",
+    createdAt: item.createdAt ?? new Date(0).toISOString(),
+    updatedAt: item.updatedAt ?? item.createdAt ?? new Date(0).toISOString(),
+    submittedAt: item.submittedAt ?? null,
+    reviewedAt: item.reviewedAt ?? null,
+    publishedAt: item.publishedAt ?? (item.status === "published" ? item.updatedAt ?? item.createdAt ?? null : null),
+    rejectedAt: item.rejectedAt ?? null,
+    archivedAt: item.archivedAt ?? (item.status === "archived" ? item.updatedAt ?? item.createdAt ?? null : null)
+  }));
 }
 
 function normalizeRuntimeData(value: unknown): RuntimeData {
@@ -84,7 +120,8 @@ function normalizeRuntimeData(value: unknown): RuntimeData {
     chatThreads: arrayOrEmpty<ChatThreadRecord>(source.chatThreads),
     chatMessages: arrayOrEmpty<ChatMessageRecord>(source.chatMessages),
     aiDrafts: arrayOrEmpty<AiDraftRecord>(source.aiDrafts),
-    knowledgeItems: arrayOrEmpty<KnowledgeItemRecord>(source.knowledgeItems),
+    knowledgeItems: normalizeKnowledgeItems(source.knowledgeItems),
+    knowledgeVersions: arrayOrEmpty<KnowledgeVersionRecord>(source.knowledgeVersions),
     projectMemories: arrayOrEmpty<ProjectMemoryRecord>(source.projectMemories),
     files: arrayOrEmpty<FileAssetRecord>(source.files),
     fileVersions: arrayOrEmpty<FileVersionRecord>(source.fileVersions),
