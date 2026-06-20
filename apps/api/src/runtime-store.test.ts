@@ -223,6 +223,31 @@ describe("runtime persistence store", () => {
     expect(postgres.queries.some((query) => query.sql.includes("UPDATE \"runtime\".\"runtime_documents\""))).toBe(true);
   });
 
+  it("serializes concurrent PostgreSQL saves before computing checksums", async () => {
+    const postgres = createMockPostgresClient();
+    const store = await createPostgresRuntimeStoreForTest({
+      client: postgres.client,
+      schema: "runtime",
+      table: "runtime_documents",
+      documentId: "runtime-data-test"
+    });
+
+    store.state.projects.push({
+      id: "project-concurrent-save",
+      title: "Concurrent save project",
+      summary: "should not conflict with queued saves",
+      status: "active",
+      organizationId: "org-product",
+      ownerUserId: "user-owner",
+      memberUserIds: ["user-owner"],
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString()
+    });
+
+    await expect(Promise.all([store.save(), store.save()])).resolves.toEqual([undefined, undefined]);
+    expect(postgres.queries.filter((query) => query.sql.includes("UPDATE \"runtime\".\"runtime_documents\""))).toHaveLength(2);
+  });
+
   it("loads existing PostgreSQL runtime data into the same state array references", async () => {
     const postgres = createMockPostgresClient();
     const firstStore = await createPostgresRuntimeStoreForTest({

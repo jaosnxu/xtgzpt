@@ -41,7 +41,7 @@
     "jsonl_parse": "passed",
     "lint": "passed",
     "typecheck": "passed",
-    "test": "passed: 14 test files, 63 tests",
+    "test": "passed: 14 test files, 64 tests",
     "build": "passed",
     "smoke_api": "passed",
     "audit": "passed: 0 vulnerabilities"

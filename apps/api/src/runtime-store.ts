@@ -425,6 +425,7 @@ export function createPostgresRuntimeStore(config: PostgresRuntimeStoreConfig): 
   const emptyChecksum = runtimeDataChecksum(emptyState);
   let persistedChecksum: string | null = null;
   let clientInstance: PostgresRuntimeClient | null = config.client ?? null;
+  let saveQueue: Promise<void> = Promise.resolve();
 
   async function getClient() {
     if (!clientInstance) {
@@ -469,45 +470,51 @@ export function createPostgresRuntimeStore(config: PostgresRuntimeStoreConfig): 
   return {
     state,
     ready,
-    async save() {
-      await ready;
-      const nextChecksum = runtimeDataChecksum(state);
-      const client = await getClient();
-
-      try {
-        await withPostgresClient(client, async (connection) => {
-          const result = await connection.query(
-            `UPDATE ${tableReference}
-             SET runtime_data = $2::jsonb,
-                 runtime_schema_version = runtime_schema_version + 1,
-                 checksum = $3,
-                 updated_at = now()
-             WHERE document_id = $1
-               AND checksum IS NOT DISTINCT FROM $4
-             RETURNING checksum`,
-            [config.documentId, JSON.stringify(state), nextChecksum, persistedChecksum]
-          );
-
-          if (result.rowCount !== 1) {
-            throw new Error(
-              `PostgreSQL runtime store concurrent update detected for document "${config.documentId}". Refusing to overwrite newer RuntimeData.`
-            );
-          }
-
-          persistedChecksum = nextChecksum;
-        });
-      } catch (error) {
-        if (error instanceof Error && error.message.includes("concurrent update detected")) {
-          throw error;
-        }
-
-        throw new Error(`PostgreSQL runtime store failed to persist RuntimeData: ${messageFromError(error)}`);
-      }
+    save() {
+      saveQueue = saveQueue.then(persistState, persistState);
+      return saveQueue;
     },
     async close() {
+      await saveQueue;
       await clientInstance?.end?.();
     }
   };
+
+  async function persistState() {
+    await ready;
+    const nextChecksum = runtimeDataChecksum(state);
+    const client = await getClient();
+
+    try {
+      await withPostgresClient(client, async (connection) => {
+        const result = await connection.query(
+          `UPDATE ${tableReference}
+           SET runtime_data = $2::jsonb,
+               runtime_schema_version = runtime_schema_version + 1,
+               checksum = $3,
+               updated_at = now()
+           WHERE document_id = $1
+             AND checksum IS NOT DISTINCT FROM $4
+           RETURNING checksum`,
+          [config.documentId, JSON.stringify(state), nextChecksum, persistedChecksum]
+        );
+
+        if (result.rowCount !== 1) {
+          throw new Error(
+            `PostgreSQL runtime store concurrent update detected for document "${config.documentId}". Refusing to overwrite newer RuntimeData.`
+          );
+        }
+
+        persistedChecksum = nextChecksum;
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("concurrent update detected")) {
+        throw error;
+      }
+
+      throw new Error(`PostgreSQL runtime store failed to persist RuntimeData: ${messageFromError(error)}`);
+    }
+  }
 }
 
 export async function createPostgresRuntimeStoreForTest(

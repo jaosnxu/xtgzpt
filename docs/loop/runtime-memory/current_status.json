@@ -39,7 +39,7 @@
     "test": {
       "status": "passed",
       "command": "npm run test",
-      "result": "14 test files, 63 tests"
+      "result": "14 test files, 64 tests"
     },
     "build": {
       "status": "passed",
