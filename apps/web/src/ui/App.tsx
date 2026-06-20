@@ -492,8 +492,8 @@ export function App() {
         ) : currentModule === "projects" || currentModule === "tasks" ? (
           <ProjectTaskView
             activeUser={activeUser}
-            canCreateProject={session.permissions.operations.includes("create_project")}
-            canCreateTask={session.permissions.operations.includes("create_task")}
+            canCreateProject={session.permissions.operation.includes("create_project")}
+            canCreateTask={session.permissions.operation.includes("create_task")}
             error={workError}
             onAddMember={() => {
               void addMemberToSelectedProject().catch((error) => {
@@ -533,8 +533,8 @@ export function App() {
           <ChatView
             activeUser={activeUser}
             aiDrafts={aiDrafts}
-            canConfirmKnowledge={session.permissions.operations.includes("publish_knowledge")}
-            canConfirmTask={session.permissions.operations.includes("create_task") && projects.length > 0}
+            canConfirmKnowledge={session.permissions.operation.includes("publish_knowledge")}
+            canConfirmTask={session.permissions.operation.includes("create_task") && projects.length > 0}
             chatMessage={chatMessage}
             chatTitle={chatTitle}
             error={chatError}
@@ -615,7 +615,7 @@ function DashboardView({
       <section className="metric-grid" aria-label="核心指标">
         <MetricCard title="当前阶段" value="DEV-008" helper="项目记忆检索与回用" />
         <MetricCard title="可见菜单" value={String(visibleModuleCount)} helper="按角色裁剪" />
-        <MetricCard title="可见组织" value={String(dataOrganizations.length)} helper={rolePolicies[activeUser.role].dataScope} />
+        <MetricCard title="可见组织" value={String(dataOrganizations.length)} helper={permissions.data.scope} />
         <MetricCard title="审计查询" value="已接入" helper="对象 / 用户 / 全局审计" />
       </section>
 
@@ -714,8 +714,9 @@ function PermissionPanel({ permissions }: { permissions: PermissionSummary }) {
         <ShieldCheck size={22} />
       </div>
       <div className="permission-stack">
-        <span>操作权限：{permissions.operations.length}</span>
-        <span>文件权限：{permissions.files.length}</span>
+        <span>操作权限：{permissions.operation.length}</span>
+        <span>审批权限：{permissions.approval.length}</span>
+        <span>文件权限：{permissions.file.length}</span>
         <span>AI 权限：{permissions.ai.length}</span>
       </div>
     </div>
@@ -762,10 +763,11 @@ function SettingsView({
         <SettingsItem title="组织管理" value={`${seedOrganizations.length} 个组织`} enabled={canManageOrganizations(activeUser.role)} />
         <SettingsItem title="角色管理" value={`${Object.keys(rolePolicies).length} 个角色`} enabled={canManageRoles(activeUser.role)} />
         <SettingsItem title="菜单权限" value={`${visibleModuleCount} 个可见菜单`} enabled />
-        <SettingsItem title="操作权限" value={`${permissions.operations.length} 项`} enabled />
-        <SettingsItem title="文件权限" value={`${permissions.files.length} 项`} enabled />
+        <SettingsItem title="操作权限" value={`${permissions.operation.length} 项`} enabled />
+        <SettingsItem title="审批权限" value={`${permissions.approval.length} 项`} enabled />
+        <SettingsItem title="文件权限" value={`${permissions.file.length} 项`} enabled />
         <SettingsItem title="AI 权限" value={`${permissions.ai.length} 项`} enabled />
-        <SettingsItem title="数据范围" value={permissions.dataScope} enabled />
+        <SettingsItem title="数据范围" value={permissions.data.scope} enabled />
         <SettingsItem title="策略版本" value={permissions.policyVersion} enabled />
       </div>
     </div>

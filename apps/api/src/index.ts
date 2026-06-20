@@ -13,6 +13,7 @@ import {
   canAccessFileAction,
   canAccessModule,
   canAccessResourceData,
+  canPerformApprovalAction,
   canQueryAuditLogs,
   canManageSettings,
   canManageOrganizations,
@@ -31,6 +32,7 @@ import {
   type AuditLogEntry,
   type AuditLogFilter,
   type AuditResult,
+  type ApprovalPermission,
   type AiCapability,
   type ChatMessageRecord,
   type ChatThreadRecord,
@@ -113,6 +115,13 @@ const sessionPrefix = "dev-session";
 const devCredentials: Record<string, string> = {
   super: "113113",
   admin: "113113",
+  knowledge: "113113",
+  approver: "113113",
+  finance: "113113",
+  legal: "113113",
+  contract: "113113",
+  exec: "113113",
+  dept: "113113",
   owner: "113113",
   member: "113113"
 };
@@ -687,6 +696,29 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     return user;
   }
 
+  async function requireApprovalAccess(request: FastifyRequest, reply: FastifyReply, approval: ApprovalPermission) {
+    const user = await requireUser(request, reply);
+
+    if (!user) {
+      return undefined;
+    }
+
+    if (!canPerformApprovalAction(user, approval)) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "approval",
+        action: approval,
+        resourceType: "approval_policy",
+        reason: "forbidden"
+      });
+      reply.code(403).send({ error: "forbidden" });
+      return undefined;
+    }
+
+    return user;
+  }
+
   async function requireFileAccess(
     request: FastifyRequest,
     reply: FastifyReply,
@@ -895,10 +927,30 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       policies: Object.values(rolePolicies).map((policy) => ({
         role: policy.role,
         menu: policy.menu,
-        dataScope: policy.dataScope,
-        operations: policy.operations,
-        files: policy.files,
+        data: {
+          scope: policy.dataScope
+        },
+        operation: policy.operations,
+        approval: policy.approval,
+        file: policy.files,
         ai: policy.ai
+      }))
+    };
+  });
+
+  server.get("/settings/approval-permission-policies", async (request, reply) => {
+    const user = await requireApprovalAccess(request, reply, "configure_approval_policy");
+
+    if (!user) {
+      return;
+    }
+
+    return {
+      policyVersion: getPermissionSummary(user).policyVersion,
+      dimension: "approval",
+      approval: Object.values(rolePolicies).map((policy) => ({
+        role: policy.role,
+        permissions: policy.approval
       }))
     };
   });

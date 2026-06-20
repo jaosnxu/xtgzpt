@@ -43,6 +43,8 @@
 | GET | `/auth/me` | 当前用户上下文 | 否 |
 | GET | `/auth/me/menus` | 当前用户菜单 | 否 |
 | GET | `/auth/me/permissions` | 当前用户权限摘要 | 否 |
+| GET | `/settings/permission-policies` | 角色六维权限策略 | 是 |
+| GET | `/settings/approval-permission-policies` | 审批权限策略 | 是 |
 
 ## 4. 系统设置
 
@@ -56,6 +58,7 @@
 | PATCH | `/settings/roles/{id}` | 修改角色 | 角色管理 |
 | GET | `/settings/permission-policies` | 权限策略 | 权限管理 |
 | PUT | `/settings/permission-policies/{id}` | 更新权限策略 | 权限管理 |
+| GET | `/settings/approval-permission-policies` | 审批权限策略 | 审批权限配置 |
 | GET | `/settings/workflows` | 流程配置 | 流程配置 |
 | PUT | `/settings/workflows/{id}` | 更新流程 | 流程配置 |
 | GET | `/settings/ai-frameworks` | AI 框架 | AI 配置 |

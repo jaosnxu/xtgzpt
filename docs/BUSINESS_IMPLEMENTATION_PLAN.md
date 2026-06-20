@@ -1,6 +1,6 @@
 # BUSINESS IMPLEMENTATION PLAN
 
-本文件定义 `xtgzpt` 从当前 DEV-008 状态走向生产级第一版的阶段计划。
+本文件定义 `xtgzpt` 从当前 DEV-010 状态走向生产级第一版的阶段计划。
 
 ## 1. 当前完成状态
 
@@ -18,6 +18,10 @@
 | DEV-007 | AI 草稿人工确认入库 | 已完成 |
 | DEV-008 | 项目记忆检索与回用 | 已完成 |
 | AUDIT-008 | DEV-008 审计 | 已完成 |
+| DEV-009 | 生产持久化底座 | 已完成，本地代码 gate 通过；在线 audit / Git metadata 需 PR 环境复核 |
+| AUDIT-009 | DEV-009 审计 | 已完成 |
+| DEV-010 | 角色和权限生产化 | 已完成，本地代码 gate 通过；在线 audit / Git metadata 需 PR 环境复核 |
+| AUDIT-010 | DEV-010 审计 | 已完成 |
 
 ## 2. 总体阶段顺序
 
