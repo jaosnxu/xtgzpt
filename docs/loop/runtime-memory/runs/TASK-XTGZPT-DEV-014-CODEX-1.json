@@ -1,0 +1,70 @@
+{
+  "schema_version": "loop.run_summary.v1",
+  "task_id": "TASK-XTGZPT-DEV-014-CODEX-1",
+  "goal": "Complete DEV-014 for xtgzpt: contract closure in the current working tree.",
+  "scope": {
+    "include": [
+      "contract upload and paste entry only",
+      "contract versions with original text and source evidence",
+      "AI structured contract review with risk list, original text highlights and A/B/C options",
+      "human risk confirmation boundary",
+      "revision and second-review gate before approval handoff",
+      "bounded approval handoff state and audit record",
+      "execution reminders, records, statuses and audit only",
+      "contract permission filtering for content, risk, source and AI context",
+      "frontend contract page within existing top-level contract menu",
+      "DEV-014 and AUDIT-014 logs"
+    ],
+    "exclude": [
+      "automatic signing",
+      "automatic payment",
+      "procurement workflow",
+      "inventory workflow",
+      "finance workflow",
+      "full approval engine",
+      "external OCR",
+      "external e-signature",
+      "external notifications",
+      "deployment",
+      "production writes",
+      "secrets",
+      "mobile app",
+      "new top-level menu",
+      "unrelated features"
+    ]
+  },
+  "status": "completed_with_environment_exception",
+  "current_stage": "completed",
+  "created_at": "2026-06-20T06:55:00+00:00",
+  "updated_at": "2026-06-20T06:55:00+00:00",
+  "verification": {
+    "passed": [
+      "npm ci",
+      "npm run typecheck",
+      "npm run test",
+      "npm run build",
+      "npm run smoke:api",
+      "npm run lint",
+      "npm run ci",
+      "npm audit --audit-level=low --offline",
+      "git diff --check"
+    ],
+    "blocked": [
+      {
+        "command": "npm audit --audit-level=low",
+        "reason": "getaddrinfo ENOTFOUND registry.npmjs.org"
+      },
+      {
+        "command": "npm run dev:web -- --host 127.0.0.1",
+        "reason": "listen EPERM: operation not permitted 127.0.0.1:3001"
+      }
+    ],
+    "test_summary": "12 test files / 51 tests passed"
+  },
+  "artifacts": [
+    "docs/dev-log/DEV-014.md",
+    "docs/dev-log/AUDIT-014.md",
+    "packages/database/migrations/0008_contract_closure.sql"
+  ],
+  "next_action": "Run online npm audit and browser validation in a network/browser-enabled PR environment, then proceed to DEV-015 approval closure."
+}

@@ -6,6 +6,12 @@ import type {
   AuditLogEntry,
   ChatMessageRecord,
   ChatThreadRecord,
+  ContractApprovalHandoffRecord,
+  ContractExecutionEventRecord,
+  ContractRecord,
+  ContractReviewRecord,
+  ContractRiskConfirmationRecord,
+  ContractVersionRecord,
   FileAssetRecord,
   FileObjectBindingRecord,
   FileVersionRecord,
@@ -38,6 +44,12 @@ export interface RuntimeData {
   knowledgeItems: KnowledgeItemRecord[];
   knowledgeVersions: KnowledgeVersionRecord[];
   projectMemories: ProjectMemoryRecord[];
+  contracts: ContractRecord[];
+  contractVersions: ContractVersionRecord[];
+  contractReviews: ContractReviewRecord[];
+  contractRiskConfirmations: ContractRiskConfirmationRecord[];
+  contractApprovalHandoffs: ContractApprovalHandoffRecord[];
+  contractExecutionEvents: ContractExecutionEventRecord[];
   files: FileAssetRecord[];
   fileVersions: FileVersionRecord[];
   fileObjectBindings: FileObjectBindingRecord[];
@@ -66,6 +78,12 @@ function emptyRuntimeData(): RuntimeData {
     knowledgeItems: [],
     knowledgeVersions: [],
     projectMemories: [],
+    contracts: [],
+    contractVersions: [],
+    contractReviews: [],
+    contractRiskConfirmations: [],
+    contractApprovalHandoffs: [],
+    contractExecutionEvents: [],
     files: [],
     fileVersions: [],
     fileObjectBindings: []
@@ -123,6 +141,12 @@ function normalizeRuntimeData(value: unknown): RuntimeData {
     knowledgeItems: normalizeKnowledgeItems(source.knowledgeItems),
     knowledgeVersions: arrayOrEmpty<KnowledgeVersionRecord>(source.knowledgeVersions),
     projectMemories: arrayOrEmpty<ProjectMemoryRecord>(source.projectMemories),
+    contracts: arrayOrEmpty<ContractRecord>(source.contracts),
+    contractVersions: arrayOrEmpty<ContractVersionRecord>(source.contractVersions),
+    contractReviews: arrayOrEmpty<ContractReviewRecord>(source.contractReviews),
+    contractRiskConfirmations: arrayOrEmpty<ContractRiskConfirmationRecord>(source.contractRiskConfirmations),
+    contractApprovalHandoffs: arrayOrEmpty<ContractApprovalHandoffRecord>(source.contractApprovalHandoffs),
+    contractExecutionEvents: arrayOrEmpty<ContractExecutionEventRecord>(source.contractExecutionEvents),
     files: arrayOrEmpty<FileAssetRecord>(source.files),
     fileVersions: arrayOrEmpty<FileVersionRecord>(source.fileVersions),
     fileObjectBindings: arrayOrEmpty<FileObjectBindingRecord>(source.fileObjectBindings)

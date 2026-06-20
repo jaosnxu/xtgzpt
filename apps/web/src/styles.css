@@ -461,6 +461,117 @@ h2 {
   gap: 18px;
 }
 
+.contract-workspace {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1.28fr);
+  gap: 18px;
+}
+
+.contract-detail-panel {
+  grid-column: 1 / -1;
+}
+
+.contract-entry {
+  display: grid;
+  gap: 10px;
+}
+
+.contract-entry input,
+.contract-entry textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  outline: 0;
+  resize: vertical;
+}
+
+.contract-entry input {
+  height: 44px;
+}
+
+.segmented-control {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(90px, 1fr));
+  width: min(260px, 100%);
+  padding: 4px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.segmented-control button {
+  height: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #344054;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.segmented-control button.active {
+  background: #ffffff;
+  color: #175b66;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.contract-review {
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.risk-row {
+  min-height: 108px;
+  padding: 12px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #ffffff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.risk-row strong,
+.risk-row small {
+  display: block;
+}
+
+.risk-row small {
+  margin-top: 5px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.risk-row mark {
+  display: block;
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #fff4cc;
+  color: #17202a;
+  overflow-wrap: anywhere;
+}
+
+.status-pill.high {
+  background: #fffbfa;
+  color: #b42318;
+}
+
+.status-pill.medium {
+  background: #fffcf5;
+  color: #b54708;
+}
+
+.status-pill.low {
+  background: #f0fdf4;
+  color: #067647;
+}
+
 .project-task-panel {
   grid-column: 1 / -1;
 }
@@ -1042,6 +1153,7 @@ div.record-row {
 
   .metric-grid,
   .content-grid,
+  .contract-workspace,
   .project-workspace,
   .workbench-layout,
   .settings-grid {
@@ -1071,6 +1183,7 @@ div.record-row {
   .nav-list,
   .metric-grid,
   .content-grid,
+  .contract-workspace,
   .project-workspace,
   .workbench-layout,
   .settings-grid,
@@ -1083,6 +1196,7 @@ div.record-row {
   .table-row,
   .task-row,
   .record-row,
+  .risk-row,
   .workbench-row,
   .notification-item,
   .inline-form,

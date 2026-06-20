@@ -127,6 +127,15 @@ DEV-013 要求：
 | 版本变化 | 是 |
 | 文件访问 | 是 |
 
+DEV-014 要求：
+
+- `contract.uploaded`、`contract.pasted`、`contract.version_created` 必须记录合同入口和版本来源。
+- `contract.ai_review_started` / `contract.ai_review_completed` / `contract.second_review_started` / `contract.second_review_completed` 必须记录 AI framework version。
+- `contract.risk_confirmed` 必须由人类账号写入，不能由 AI 写入。
+- `contract.approval_submitted` 只记录 bounded handoff，不代表审批通过。
+- `contract.execution_event_recorded` 只记录 reminder / record / status_update，不代表签署、付款或执行完成。
+- 合同无权限读取或 AI 审查必须写拒绝审计，且响应不得泄露合同内容、风险、来源证据或 AI 上下文。
+
 ## 9. 审批审计
 
 | 动作 | 必须审计 |

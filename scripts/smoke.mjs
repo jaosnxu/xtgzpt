@@ -47,6 +47,7 @@ try {
 
   const ownerToken = await login("owner");
   const memberToken = await login("member");
+  const contractToken = await login("contract");
   const superToken = await login("super");
 
   const createProject = await inject("POST", "/projects", ownerToken, {
@@ -224,6 +225,77 @@ try {
     "knowledge query result missing source evidence"
   );
 
+  const contractUpload = await inject("POST", "/contracts/upload", contractToken, {
+    title: "Smoke 合同",
+    organizationId: "org-product",
+    fileName: "smoke-contract.txt",
+    mimeType: "text/plain",
+    contentText: "付款在验收前完成。\n交付和验收标准不明确。\n违约赔偿没有责任上限。"
+  });
+  assert(contractUpload.statusCode === 201, `contract upload failed with ${contractUpload.statusCode}`);
+  const contractId = contractUpload.body.contract.id;
+
+  const contractReview = await inject("POST", `/contracts/${contractId}/ai-review`, contractToken);
+  assert(contractReview.statusCode === 200, `contract AI review failed with ${contractReview.statusCode}`);
+  assert(contractReview.body.review.risks.length > 0, "contract review returned no risks");
+  assert(
+    contractReview.body.review.risks.every((risk) => risk.humanConfirmed === false && risk.selectedOption === null),
+    "AI review confirmed risks or selected an option"
+  );
+  assert(contractReview.body.review.highlights.length > 0, "contract review returned no original text highlights");
+
+  const earlyApproval = await inject("POST", `/contracts/${contractId}/submit-approval`, contractToken, {
+    reason: "should be blocked"
+  });
+  assert(earlyApproval.statusCode === 409, "contract entered approval before human confirmation and second review");
+
+  const firstRiskConfirm = await inject("POST", `/contracts/${contractId}/risk-confirm`, contractToken, {
+    confirmations: contractReview.body.review.risks.map((risk) => ({
+      riskId: risk.id,
+      confirmed: true,
+      selectedOption: "B",
+      note: "smoke human confirmation"
+    }))
+  });
+  assert(firstRiskConfirm.statusCode === 200, `contract risk confirm failed with ${firstRiskConfirm.statusCode}`);
+
+  const contractRevision = await inject("POST", `/contracts/${contractId}/revision`, contractToken, {
+    originalText: "付款在验收后 10 日内完成。\n交付和验收标准见附件。\n违约赔偿以合同总额 10% 为上限。",
+    reason: "smoke revision"
+  });
+  assert(contractRevision.statusCode === 201, `contract revision failed with ${contractRevision.statusCode}`);
+
+  const secondReview = await inject("POST", `/contracts/${contractId}/second-review`, contractToken);
+  assert(secondReview.statusCode === 200, `contract second review failed with ${secondReview.statusCode}`);
+  assert(secondReview.body.review.reviewType === "second", "second review returned wrong type");
+
+  const secondRiskConfirm = await inject("POST", `/contracts/${contractId}/risk-confirm`, contractToken, {
+    confirmations: secondReview.body.review.risks.map((risk) => ({
+      riskId: risk.id,
+      confirmed: true,
+      selectedOption: "B",
+      note: "smoke second human confirmation"
+    }))
+  });
+  assert(secondRiskConfirm.statusCode === 200, `contract second risk confirm failed with ${secondRiskConfirm.statusCode}`);
+
+  const approvalHandoff = await inject("POST", `/contracts/${contractId}/submit-approval`, contractToken, {
+    reason: "smoke bounded handoff"
+  });
+  assert(approvalHandoff.statusCode === 200, `contract approval handoff failed with ${approvalHandoff.statusCode}`);
+  assert(approvalHandoff.body.handoff.approvalEngineImplemented === false, "smoke implemented a full approval engine");
+
+  const executionEvent = await inject("POST", `/contracts/${contractId}/execution-events`, contractToken, {
+    eventType: "reminder",
+    title: "Smoke 执行提醒",
+    notes: "系统内记录，不发外部通知。",
+    status: "pending"
+  });
+  assert(executionEvent.statusCode === 201, `contract execution event failed with ${executionEvent.statusCode}`);
+
+  const memberContractRead = await inject("GET", `/contracts/${contractId}`, memberToken);
+  assert(memberContractRead.statusCode === 404, "unauthorized member read contract content");
+
   const reuseDraft = await inject("POST", `/chat/threads/${threadId}/ai/summarize`, memberToken);
   assert(reuseDraft.statusCode === 200, `memory reuse draft failed with ${reuseDraft.statusCode}`);
   assert(reuseDraft.body.draft.contextSourceIds.length > 0, "AI draft did not reuse memory context");
@@ -248,8 +320,10 @@ try {
 
   const chatModule = await inject("GET", "/modules/chat", memberToken);
   const knowledgeModule = await inject("GET", "/modules/knowledge", superToken);
+  const contractsModule = await inject("GET", "/modules/contracts", contractToken);
   assert(chatModule.body.status === "available", "chat module is not available");
   assert(knowledgeModule.body.status === "available", "knowledge module is not available");
+  assert(contractsModule.body.status === "available", "contracts module is not available");
 
   console.log(
     JSON.stringify(
@@ -271,6 +345,13 @@ try {
           "knowledge_review_publish",
           "project_memory",
           "knowledge_query",
+          "contract_upload",
+          "contract_ai_review",
+          "contract_risk_confirmation",
+          "contract_revision_second_review",
+          "contract_approval_handoff_boundary",
+          "contract_execution_tracking",
+          "contract_permission_filter",
           "memory_context_reuse",
           "file_upload",
           "file_preview_download",

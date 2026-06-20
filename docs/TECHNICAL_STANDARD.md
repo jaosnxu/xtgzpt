@@ -80,6 +80,16 @@ API 必须遵守：
 - `/files/:id/preview`
 - `/files/:id/download`
 - `/files/:id/archive`
+- `/contracts`
+- `/contracts/upload`
+- `/contracts/paste`
+- `/contracts/:id`
+- `/contracts/:id/ai-review`
+- `/contracts/:id/risk-confirm`
+- `/contracts/:id/revision`
+- `/contracts/:id/second-review`
+- `/contracts/:id/submit-approval`
+- `/contracts/:id/execution-events`
 
 ## 4. 前端标准
 
@@ -104,7 +114,7 @@ API 必须遵守：
 
 - 已有迁移目录。
 - 已有运行时持久化边界覆盖项目、任务、聊天、AI 草稿、知识、项目记忆、审计和文件元数据。
-- PostgreSQL 兼容 migration 资产已覆盖当前运行时对象、文件元数据/版本/对象绑定/归档事件，以及知识审核状态、版本历史和来源证据。
+- PostgreSQL 兼容 migration 资产已覆盖当前运行时对象、文件元数据/版本/对象绑定/归档事件、知识审核状态/版本历史/来源证据，以及合同、合同版本、AI 审查、风险确认、审批边界交接和执行跟踪事件。
 - 仍未接入真实 PostgreSQL adapter、连接池、事务和备份恢复。
 
 生产目标：

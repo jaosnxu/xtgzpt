@@ -36,6 +36,20 @@ import {
   type AiCapability,
   type ChatMessageRecord,
   type ChatThreadRecord,
+  type ContractApprovalHandoffRecord,
+  type ContractEntryMethod,
+  type ContractExecutionEventRecord,
+  type ContractExecutionEventType,
+  type ContractOptionKey,
+  type ContractRecord,
+  type ContractReviewRecord,
+  type ContractReviewRisk,
+  type ContractReviewType,
+  type ContractRiskConfirmationRecord,
+  type ContractRiskSeverity,
+  type ContractSourceEvidence,
+  type ContractTextHighlight,
+  type ContractVersionRecord,
   type FileAssetRecord,
   type FilePermission,
   type FilePreviewResponse,
@@ -156,6 +170,48 @@ interface AiFileReferenceBody {
   fileIds?: string[];
 }
 
+interface ContractUploadBody {
+  title?: string;
+  organizationId?: string;
+  fileName?: string;
+  mimeType?: string;
+  contentText?: string;
+}
+
+interface ContractPasteBody {
+  title?: string;
+  organizationId?: string;
+  originalText?: string;
+}
+
+interface ContractRevisionBody {
+  title?: string;
+  originalText?: string;
+  reason?: string;
+}
+
+interface ContractRiskConfirmationBody {
+  confirmations?: Array<{
+    riskId?: string;
+    confirmed?: boolean;
+    selectedOption?: ContractOptionKey;
+    note?: string;
+  }>;
+  reason?: string;
+}
+
+interface ContractActionBody {
+  reason?: string;
+}
+
+interface ContractExecutionEventBody {
+  eventType?: ContractExecutionEventType;
+  title?: string;
+  notes?: string;
+  status?: string;
+  dueAt?: string | null;
+}
+
 const sessionPrefix = "dev-session";
 const devCredentials: Record<string, string> = {
   super: "113113",
@@ -198,6 +254,11 @@ const supportedFileSourceObjectTypes: FileSourceObjectType[] = [
   "project_memory"
 ];
 
+const contractFrameworkVersion = "contract-review-local-v1.0.0";
+
+const supportedContractExecutionEventTypes: ContractExecutionEventType[] = ["reminder", "record", "status_update"];
+const contractNoBodyActionRoutePattern = /^\/contracts\/[^/?]+\/(?:ai-review|second-review)(?:\?|$)/;
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -209,6 +270,16 @@ function textOrDefault(value: string | undefined, fallback: string) {
 
 function isFileSourceObjectType(value: unknown): value is FileSourceObjectType {
   return typeof value === "string" && supportedFileSourceObjectTypes.includes(value as FileSourceObjectType);
+}
+
+function isJsonContentType(value: string | string[] | undefined) {
+  const contentType = Array.isArray(value) ? value[0] : value;
+  return typeof contentType === "string" && contentType.toLowerCase().includes("application/json");
+}
+
+function headerHasBody(value: string | string[] | undefined) {
+  const contentLength = Array.isArray(value) ? value[0] : value;
+  return typeof contentLength === "string" && contentLength.trim() !== "" && contentLength.trim() !== "0";
 }
 
 interface AuditRecordInput {
@@ -244,12 +315,30 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     knowledgeItems,
     knowledgeVersions,
     projectMemories,
+    contracts,
+    contractVersions,
+    contractReviews,
+    contractRiskConfirmations,
+    contractApprovalHandoffs,
+    contractExecutionEvents,
     files,
     fileVersions,
     fileObjectBindings
   } = store.state;
   const server = Fastify({
     logger: true
+  });
+
+  server.addHook("onRequest", async (request) => {
+    if (
+      request.method === "POST" &&
+      contractNoBodyActionRoutePattern.test(request.url) &&
+      isJsonContentType(request.headers["content-type"]) &&
+      !headerHasBody(request.headers["content-length"]) &&
+      request.headers["transfer-encoding"] === undefined
+    ) {
+      delete request.raw.headers["content-type"];
+    }
   });
 
   function requestId(request: FastifyRequest) {
@@ -483,6 +572,277 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
 
   function visibleProjectMemoriesForUser(user: UserAccount) {
     return projectMemories.filter((item) => canReadProjectMemory(user, item));
+  }
+
+  function canReadContract(user: UserAccount, contract: ContractRecord) {
+    return canAccessResourceData(user, {
+      organizationId: contract.organizationId,
+      ownerUserId: contract.creatorUserId,
+      participantUserIds: contract.participantUserIds
+    });
+  }
+
+  function contractResource(contract: ContractRecord): ResourceAccessContext {
+    return {
+      organizationId: contract.organizationId,
+      ownerUserId: contract.creatorUserId,
+      participantUserIds: contract.participantUserIds
+    };
+  }
+
+  function visibleContractsForUser(user: UserAccount) {
+    return contracts.filter((contract) => contract.status !== "archived" && canReadContract(user, contract));
+  }
+
+  function findVisibleContract(user: UserAccount, contractId: string) {
+    const contract = contracts.find((candidate) => candidate.id === contractId);
+
+    if (!contract || !canReadContract(user, contract)) {
+      return undefined;
+    }
+
+    return contract;
+  }
+
+  function versionsForContract(contractId: string) {
+    return contractVersions
+      .filter((version) => version.contractId === contractId)
+      .sort((left, right) => right.version - left.version);
+  }
+
+  function reviewsForContract(contractId: string) {
+    return contractReviews
+      .filter((review) => review.contractId === contractId)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  }
+
+  function currentContractVersion(contract: ContractRecord) {
+    return contractVersions.find(
+      (version) => version.contractId === contract.id && version.version === contract.currentVersion
+    );
+  }
+
+  function latestContractReview(contract: ContractRecord) {
+    return reviewsForContract(contract.id)[0];
+  }
+
+  function contractWithDetails(contract: ContractRecord) {
+    return {
+      ...contract,
+      versions: versionsForContract(contract.id),
+      reviews: reviewsForContract(contract.id),
+      riskConfirmations: contractRiskConfirmations.filter((confirmation) => confirmation.contractId === contract.id),
+      approvalHandoffs: contractApprovalHandoffs.filter((handoff) => handoff.contractId === contract.id),
+      executionEvents: contractExecutionEvents
+        .filter((event) => event.contractId === contract.id)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    };
+  }
+
+  function contractSourceEvidence({
+    sourceType,
+    sourceId,
+    title,
+    fileName,
+    mimeType,
+    user,
+    timestamp,
+    originalText
+  }: {
+    sourceType: ContractEntryMethod | "revision";
+    sourceId: string;
+    title: string;
+    fileName?: string | null;
+    mimeType?: string | null;
+    user: UserAccount;
+    timestamp: string;
+    originalText: string;
+  }): ContractSourceEvidence[] {
+    return [
+      {
+        sourceType,
+        sourceId,
+        title,
+        fileName: fileName ?? null,
+        mimeType: mimeType ?? null,
+        capturedByUserId: user.id,
+        capturedAt: timestamp,
+        excerpt: originalText.slice(0, 320)
+      }
+    ];
+  }
+
+  function clauseForText(text: string, matcher: RegExp, fallback: string) {
+    const lines = text
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const matchedLine = lines.find((line) => matcher.test(line)) ?? lines[0] ?? fallback;
+    const startOffset = Math.max(0, text.indexOf(matchedLine));
+
+    return {
+      quote: matchedLine.slice(0, 220),
+      startOffset,
+      endOffset: startOffset + matchedLine.length
+    };
+  }
+
+  function buildContractRisk(
+    index: number,
+    reviewType: ContractReviewType,
+    title: string,
+    severity: ContractRiskSeverity,
+    clause: ReturnType<typeof clauseForText>,
+    explanation: string,
+    options: Record<ContractOptionKey, string>
+  ): { risk: ContractReviewRisk; highlight: ContractTextHighlight } {
+    const riskId = `risk-${reviewType}-${index}`;
+    const sourceRef = `clause_${index}`;
+    const risk: ContractReviewRisk = {
+      id: riskId,
+      title,
+      severity,
+      sourceRef,
+      sourceQuote: clause.quote,
+      explanation,
+      options,
+      requiresHumanConfirmation: true,
+      humanConfirmed: false,
+      selectedOption: null,
+      confirmationNote: null,
+      confirmedByUserId: null,
+      confirmedAt: null
+    };
+    const highlight: ContractTextHighlight = {
+      id: `highlight-${reviewType}-${index}`,
+      riskId,
+      sourceRef,
+      quote: clause.quote,
+      startOffset: clause.startOffset,
+      endOffset: clause.endOffset,
+      severity,
+      reason: explanation
+    };
+
+    return {
+      risk,
+      highlight
+    };
+  }
+
+  function buildStructuredContractReview({
+    contract,
+    version,
+    reviewType,
+    user,
+    timestamp
+  }: {
+    contract: ContractRecord;
+    version: ContractVersionRecord;
+    reviewType: ContractReviewType;
+    user: UserAccount;
+    timestamp: string;
+  }): ContractReviewRecord {
+    const text = version.originalText;
+    const candidates: Array<Omit<ReturnType<typeof buildContractRisk>, "risk" | "highlight"> & {
+      enabled: boolean;
+      title: string;
+      severity: ContractRiskSeverity;
+      clause: ReturnType<typeof clauseForText>;
+      explanation: string;
+      options: Record<ContractOptionKey, string>;
+    }> = [
+      {
+        enabled: /付款|支付|payment|pay/i.test(text),
+        title: "付款条款风险",
+        severity: "high",
+        clause: clauseForText(text, /付款|支付|payment|pay/i, text),
+        explanation: "付款节点、条件或凭证不清晰时，后续执行和审批容易产生争议。",
+        options: {
+          A: "补充明确付款触发条件、付款资料清单和最晚付款日。",
+          B: "保留现有金额安排，增加对账确认和延期处理条款。",
+          C: "要求对方接受先验收后付款，并增加付款争议暂停机制。"
+        }
+      },
+      {
+        enabled: /违约|赔偿|penalty|liquidated/i.test(text),
+        title: "违约责任风险",
+        severity: "medium",
+        clause: clauseForText(text, /违约|赔偿|penalty|liquidated/i, text),
+        explanation: "违约责任缺少上限或触发条件时，合同责任边界不稳定。",
+        options: {
+          A: "设置违约金上限并限定适用场景。",
+          B: "保留违约责任，但增加整改期和举证要求。",
+          C: "将高额违约责任改为实际损失赔偿并排除间接损失。"
+        }
+      },
+      {
+        enabled: /验收|交付|delivery|acceptance/i.test(text),
+        title: "交付验收风险",
+        severity: "medium",
+        clause: clauseForText(text, /验收|交付|delivery|acceptance/i, text),
+        explanation: "交付物、验收标准或拒收流程不清晰会影响合同执行跟踪。",
+        options: {
+          A: "补充交付清单、验收标准和书面确认流程。",
+          B: "增加默认验收期限和异议处理窗口。",
+          C: "要求按里程碑分批交付并逐项验收。"
+        }
+      },
+      {
+        enabled: /解除|终止|termination|cancel/i.test(text),
+        title: "解除终止风险",
+        severity: "low",
+        clause: clauseForText(text, /解除|终止|termination|cancel/i, text),
+        explanation: "终止条件和后续结算责任需要可执行的书面边界。",
+        options: {
+          A: "列明可解除事项、通知期限和结算规则。",
+          B: "保留终止条款并增加善后交接义务。",
+          C: "要求重大违约达到书面催告后仍未整改才可解除。"
+        }
+      }
+    ];
+    const selected = candidates.filter((candidate) => candidate.enabled);
+    const activeCandidates = selected.length > 0 ? selected : [
+      {
+        enabled: true,
+        title: "条款完整性风险",
+        severity: "medium" as const,
+        clause: clauseForText(text, /./, text || contract.title),
+        explanation: "当前文本未命中明确风险关键词，仍需人工确认关键条款是否完整。",
+        options: {
+          A: "由合同发起人补充付款、交付、违约和终止条款。",
+          B: "提交法务进行逐条人工核对后再进入审批。",
+          C: "退回业务方补充来源证据和合同背景。"
+        }
+      }
+    ];
+    const built = activeCandidates.map((candidate, index) =>
+      buildContractRisk(index + 1, reviewType, candidate.title, candidate.severity, candidate.clause, candidate.explanation, candidate.options)
+    );
+    const riskLevel: ContractRiskSeverity = built.some((item) => item.risk.severity === "high")
+      ? "high"
+      : built.some((item) => item.risk.severity === "medium")
+        ? "medium"
+        : "low";
+
+    return {
+      id: `contract-review-${randomUUID()}`,
+      contractId: contract.id,
+      versionId: version.id,
+      version: version.version,
+      reviewType,
+      status: "succeeded",
+      frameworkId: "contract_review_v1",
+      frameworkVersion: contractFrameworkVersion,
+      summary: `${contract.title} v${version.version} ${reviewType === "second" ? "二次" : "初次"}结构化审查完成，风险需人工确认。`,
+      riskLevel,
+      risks: built.map((item) => item.risk),
+      highlights: built.map((item) => item.highlight),
+      nextRequiredAction: "human_confirm_risks",
+      createdByUserId: user.id,
+      createdAt: timestamp,
+      completedAt: timestamp
+    };
   }
 
   function normalizeSearchText(value: string) {
@@ -1008,6 +1368,25 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
           (task.confirmerUserId === user.id && task.status === "submitted")) &&
         task.status !== "archived"
     );
+    const contractConfirmations = visibleContractsForUser(user)
+      .filter((contract) => ["risk_pending_confirm", "revision_required", "approval_pending"].includes(contract.status))
+      .map((contract) =>
+        workbenchItem({
+          id: `contract-confirmation:${contract.id}`,
+          kind: "contract_confirmation",
+          title: contract.title,
+          description:
+            contract.status === "approval_pending"
+              ? "合同已完成 DEV-014 审批边界提交，等待后续人工审批引擎处理。"
+              : "合同风险、修改或二次审查需要人类处理，AI 不能确认风险或选择方案。",
+          module: "contracts",
+          status: contract.status,
+          objectType: "contract",
+          objectId: contract.id,
+          organizationId: contract.organizationId,
+          updatedAt: contract.updatedAt
+        })
+      );
     const aiConfirmations = aiDrafts
       .filter((draft) => visibleThreadIds.has(draft.threadId) && draft.status === "draft")
       .flatMap((draft) => {
@@ -1132,9 +1511,15 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         user,
         type: "contract_confirmation",
         severity: canReviewContracts ? "info" : "warning",
-        title: canReviewContracts ? "暂无待确认合同" : "无合同确认权限",
-        body: "合同风险确认保留到 DEV-014；当前不创建合同正式流程。",
-        module: "contracts"
+        title: contractConfirmations[0]
+          ? `${contractConfirmations.length} 个合同事项待处理`
+          : canReviewContracts
+            ? "暂无待确认合同"
+            : "无合同确认权限",
+        body: contractConfirmations[0]?.description ?? "合同入口仅支持上传或粘贴；AI 审查后必须由人确认风险。",
+        module: "contracts",
+        relatedObjectType: contractConfirmations[0]?.objectType ?? null,
+        relatedObjectId: contractConfirmations[0]?.objectId ?? null
       })
     );
 
@@ -1179,7 +1564,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     );
 
     const visibleWorkCount =
-      pendingTaskItems.length + responsibleTaskItems.length + projectItems.length + aiConfirmations.length;
+      pendingTaskItems.length + responsibleTaskItems.length + projectItems.length + contractConfirmations.length + aiConfirmations.length;
 
     return {
       summary: {
@@ -1187,7 +1572,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         responsibleTaskCount: responsibleTaskItems.length,
         participatingProjectCount: projectItems.length,
         pendingApprovalCount: 0,
-        contractConfirmationCount: 0,
+        contractConfirmationCount: contractConfirmations.length,
         aiResultConfirmationCount: aiConfirmations.length,
         notificationCount: notifications.length,
         archivedProjectCount,
@@ -1198,7 +1583,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         responsibleTasks: responsibleTaskItems,
         participatingProjects: projectItems,
         pendingApprovals: [],
-        contractConfirmations: [],
+        contractConfirmations,
         aiConfirmations
       },
       notifications,
@@ -3095,6 +3480,670 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     });
   });
 
+  function assertContractText(reply: FastifyReply, text: string | undefined) {
+    if (!text?.trim()) {
+      reply.code(400).send({ error: "contract_text_required" });
+      return undefined;
+    }
+
+    return text.trim();
+  }
+
+  async function createContractFromEntry({
+    request,
+    reply,
+    entryMethod
+  }: {
+    request: FastifyRequest<{ Body: ContractUploadBody & ContractPasteBody }>;
+    reply: FastifyReply;
+    entryMethod: ContractEntryMethod;
+  }) {
+    const user = await requireMenuAccess(request, reply, "contracts");
+
+    if (!user) {
+      return undefined;
+    }
+
+    const organizationId = request.body?.organizationId ?? user.defaultOrganizationId;
+    const originalText = assertContractText(
+      reply,
+      entryMethod === "upload" ? request.body?.contentText : request.body?.originalText
+    );
+
+    if (!originalText) {
+      return undefined;
+    }
+
+    if (!canPerformOperation(user, "create_contract", { organizationId, ownerUserId: user.id })) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "operation",
+        action: "create_contract",
+        resourceType: "contract",
+        reason: "forbidden"
+      });
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    const title = textOrDefault(request.body?.title, entryMethod === "upload" ? request.body?.fileName ?? "上传合同" : "粘贴合同");
+    const timestamp = nowIso();
+    const contractId = `contract-${randomUUID()}`;
+    const versionId = `contract-version-${randomUUID()}`;
+    const contract: ContractRecord = {
+      id: contractId,
+      title,
+      organizationId,
+      creatorUserId: user.id,
+      participantUserIds: [user.id],
+      status: "draft",
+      currentVersion: 1,
+      approvalHandoffId: null,
+      executionStatus: "not_started",
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    const version: ContractVersionRecord = {
+      id: versionId,
+      contractId,
+      version: 1,
+      title,
+      originalText,
+      entryMethod,
+      sourceEvidence: contractSourceEvidence({
+        sourceType: entryMethod,
+        sourceId: versionId,
+        title,
+        fileName: entryMethod === "upload" ? textOrDefault(request.body?.fileName, "contract.txt") : null,
+        mimeType: entryMethod === "upload" ? textOrDefault(request.body?.mimeType, "text/plain") : null,
+        user,
+        timestamp,
+        originalText
+      }),
+      createdByUserId: user.id,
+      createdAt: timestamp
+    };
+
+    contracts.push(contract);
+    contractVersions.push(version);
+    store.save();
+    recordAudit({
+      request,
+      user,
+      action: entryMethod === "upload" ? "contract.uploaded" : "contract.pasted",
+      objectType: "contract",
+      objectId: contract.id,
+      organizationId,
+      afterSnapshotRef: version.id,
+      reason: `contract_entry:${entryMethod}`,
+      result: "success"
+    });
+    recordAudit({
+      request,
+      user,
+      action: "contract.version_created",
+      objectType: "contract",
+      objectId: contract.id,
+      organizationId,
+      afterSnapshotRef: version.id,
+      reason: `contract_initial_version:${entryMethod}`,
+      result: "success"
+    });
+
+    return reply.code(201).send({
+      contract: contractWithDetails(contract)
+    });
+  }
+
+  server.get("/contracts", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "contracts");
+
+    if (!user) {
+      return;
+    }
+
+    return {
+      contracts: visibleContractsForUser(user).map(contractWithDetails)
+    };
+  });
+
+  server.post<{ Body: ContractUploadBody }>("/contracts/upload", async (request, reply) =>
+    createContractFromEntry({ request, reply, entryMethod: "upload" })
+  );
+
+  server.post<{ Body: ContractPasteBody }>("/contracts/paste", async (request, reply) =>
+    createContractFromEntry({ request, reply, entryMethod: "paste" })
+  );
+
+  server.get<{ Params: { id: string } }>("/contracts/:id", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "contracts");
+
+    if (!user) {
+      return;
+    }
+
+    const contract = findVisibleContract(user, request.params.id);
+
+    if (!contract) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "contract",
+        reason: "contract:read",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    return {
+      contract: contractWithDetails(contract)
+    };
+  });
+
+  async function runContractReview(
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+    reviewType: ContractReviewType
+  ) {
+    const user = await requireMenuAccess(request, reply, "contracts");
+
+    if (!user) {
+      return undefined;
+    }
+
+    const contract = findVisibleContract(user, request.params.id);
+
+    if (!contract) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "contract",
+        reason: `contract:${reviewType}_review`,
+        result: "denied",
+        aiInvolved: true,
+        aiFrameworkVersion: contractFrameworkVersion
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    if (!canUseAiCapability(user, "contract_review", contractResource(contract))) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "ai",
+        action: "contract_review",
+        resourceType: "contract",
+        reason: "forbidden"
+      });
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    if (reviewType === "initial" && !["draft", "revision_required"].includes(contract.status)) {
+      recordAudit({
+        request,
+        user,
+        action: "contract.ai_review_failed",
+        objectType: "contract",
+        objectId: contract.id,
+        organizationId: contract.organizationId,
+        reason: "invalid_contract_status",
+        result: "failure",
+        aiInvolved: true,
+        aiFrameworkVersion: contractFrameworkVersion
+      });
+      return reply.code(409).send({ error: "invalid_contract_status" });
+    }
+
+    if (reviewType === "second" && (contract.currentVersion < 2 || contract.status !== "revision_required")) {
+      recordAudit({
+        request,
+        user,
+        action: "contract.second_review_failed",
+        objectType: "contract",
+        objectId: contract.id,
+        organizationId: contract.organizationId,
+        reason: "revision_required_before_second_review",
+        result: "failure",
+        aiInvolved: true,
+        aiFrameworkVersion: contractFrameworkVersion
+      });
+      return reply.code(409).send({ error: "revision_required_before_second_review" });
+    }
+
+    const version = currentContractVersion(contract);
+
+    if (!version) {
+      return reply.code(409).send({ error: "missing_contract_version" });
+    }
+
+    const timestamp = nowIso();
+    const previousStatus = contract.status;
+    contract.status = reviewType === "second" ? "second_reviewing" : "ai_reviewing";
+    contract.updatedAt = timestamp;
+    recordAudit({
+      request,
+      user,
+      action: reviewType === "second" ? "contract.second_review_started" : "contract.ai_review_started",
+      objectType: "contract",
+      objectId: contract.id,
+      organizationId: contract.organizationId,
+      beforeSnapshotRef: `${contract.id}:${previousStatus}`,
+      afterSnapshotRef: `${contract.id}:${contract.status}`,
+      reason: `contract_review_started:${reviewType}`,
+      result: "success",
+      aiInvolved: true,
+      aiFrameworkVersion: contractFrameworkVersion
+    });
+
+    const review = buildStructuredContractReview({
+      contract,
+      version,
+      reviewType,
+      user,
+      timestamp
+    });
+
+    contractReviews.push(review);
+    contract.status = "risk_pending_confirm";
+    contract.updatedAt = timestamp;
+    store.save();
+    recordAudit({
+      request,
+      user,
+      action: reviewType === "second" ? "contract.second_review_completed" : "contract.ai_review_completed",
+      objectType: "contract",
+      objectId: contract.id,
+      organizationId: contract.organizationId,
+      beforeSnapshotRef: version.id,
+      afterSnapshotRef: review.id,
+      reason: `contract_review_completed:${review.risks.length}_risks`,
+      result: "success",
+      aiInvolved: true,
+      aiFrameworkVersion: review.frameworkVersion
+    });
+
+    return {
+      contract: contractWithDetails(contract),
+      review
+    };
+  }
+
+  server.post<{ Params: { id: string } }>("/contracts/:id/ai-review", async (request, reply) =>
+    runContractReview(request, reply, "initial")
+  );
+
+  server.post<{ Params: { id: string } }>("/contracts/:id/second-review", async (request, reply) =>
+    runContractReview(request, reply, "second")
+  );
+
+  server.post<{ Body: ContractRiskConfirmationBody; Params: { id: string } }>("/contracts/:id/risk-confirm", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "contracts");
+
+    if (!user) {
+      return;
+    }
+
+    const contract = findVisibleContract(user, request.params.id);
+
+    if (!contract) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "contract",
+        reason: "contract:risk_confirm",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    if (!canPerformOperation(user, "confirm_contract_risk", contractResource(contract))) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "operation",
+        action: "confirm_contract_risk",
+        resourceType: "contract",
+        reason: "forbidden"
+      });
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    if (contract.status !== "risk_pending_confirm") {
+      return reply.code(409).send({ error: "risk_confirmation_not_pending" });
+    }
+
+    const review = latestContractReview(contract);
+
+    if (!review || review.version !== contract.currentVersion) {
+      return reply.code(409).send({ error: "review_required" });
+    }
+
+    const confirmations = request.body?.confirmations ?? [];
+    const confirmationByRiskId = new Map(confirmations.map((confirmation) => [confirmation.riskId, confirmation]));
+
+    for (const risk of review.risks) {
+      const confirmation = confirmationByRiskId.get(risk.id);
+
+      if (confirmation?.confirmed !== true || !confirmation.selectedOption) {
+        return reply.code(400).send({ error: "all_risks_require_human_confirmation" });
+      }
+    }
+
+    const timestamp = nowIso();
+    const createdConfirmations: ContractRiskConfirmationRecord[] = review.risks.map((risk) => {
+      const confirmation = confirmationByRiskId.get(risk.id)!;
+      risk.humanConfirmed = true;
+      risk.selectedOption = confirmation.selectedOption!;
+      risk.confirmationNote = confirmation.note?.trim() ?? "";
+      risk.confirmedByUserId = user.id;
+      risk.confirmedAt = timestamp;
+
+      return {
+        id: `contract-risk-confirmation-${randomUUID()}`,
+        contractId: contract.id,
+        reviewId: review.id,
+        riskId: risk.id,
+        confirmed: true,
+        selectedOption: confirmation.selectedOption!,
+        note: confirmation.note?.trim() ?? "",
+        confirmedByUserId: user.id,
+        confirmedAt: timestamp
+      };
+    });
+
+    contractRiskConfirmations.push(...createdConfirmations);
+    contract.status = review.reviewType === "second" ? "risk_pending_confirm" : "revision_required";
+    contract.updatedAt = timestamp;
+    store.save();
+    recordAudit({
+      request,
+      user,
+      action: "contract.risk_confirmed",
+      objectType: "contract",
+      objectId: contract.id,
+      organizationId: contract.organizationId,
+      beforeSnapshotRef: review.id,
+      afterSnapshotRef: createdConfirmations.map((confirmation) => confirmation.id).join(","),
+      reason: request.body?.reason?.trim() || "human_confirmed_contract_risks",
+      result: "success",
+      aiInvolved: true,
+      aiFrameworkVersion: review.frameworkVersion
+    });
+
+    return {
+      contract: contractWithDetails(contract),
+      confirmations: createdConfirmations
+    };
+  });
+
+  server.post<{ Body: ContractRevisionBody; Params: { id: string } }>("/contracts/:id/revision", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "contracts");
+
+    if (!user) {
+      return;
+    }
+
+    const contract = findVisibleContract(user, request.params.id);
+
+    if (!contract) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "contract",
+        reason: "contract:revision",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    if (!canPerformOperation(user, "revise_contract", contractResource(contract))) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "operation",
+        action: "revise_contract",
+        resourceType: "contract",
+        reason: "forbidden"
+      });
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    if (contract.status !== "revision_required") {
+      return reply.code(409).send({ error: "risk_confirmation_required_before_revision" });
+    }
+
+    const originalText = assertContractText(reply, request.body?.originalText);
+
+    if (!originalText) {
+      return;
+    }
+
+    const timestamp = nowIso();
+    const versionNumber = Math.max(0, ...versionsForContract(contract.id).map((version) => version.version)) + 1;
+    const title = textOrDefault(request.body?.title, contract.title);
+    const version: ContractVersionRecord = {
+      id: `contract-version-${randomUUID()}`,
+      contractId: contract.id,
+      version: versionNumber,
+      title,
+      originalText,
+      entryMethod: "revision",
+      sourceEvidence: contractSourceEvidence({
+        sourceType: "revision",
+        sourceId: contract.id,
+        title,
+        user,
+        timestamp,
+        originalText
+      }),
+      createdByUserId: user.id,
+      createdAt: timestamp
+    };
+
+    contract.title = title;
+    contract.currentVersion = versionNumber;
+    contract.status = "revision_required";
+    contract.updatedAt = timestamp;
+    contractVersions.push(version);
+    store.save();
+    recordAudit({
+      request,
+      user,
+      action: "contract.revised",
+      objectType: "contract",
+      objectId: contract.id,
+      organizationId: contract.organizationId,
+      afterSnapshotRef: version.id,
+      reason: request.body?.reason?.trim() || "contract_revision_submitted",
+      result: "success"
+    });
+    recordAudit({
+      request,
+      user,
+      action: "contract.version_created",
+      objectType: "contract",
+      objectId: contract.id,
+      organizationId: contract.organizationId,
+      afterSnapshotRef: version.id,
+      reason: "contract_modified_version_requires_second_review",
+      result: "success"
+    });
+
+    return reply.code(201).send({
+      contract: contractWithDetails(contract),
+      version
+    });
+  });
+
+  server.post<{ Body: ContractActionBody; Params: { id: string } }>("/contracts/:id/submit-approval", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "contracts");
+
+    if (!user) {
+      return;
+    }
+
+    const contract = findVisibleContract(user, request.params.id);
+
+    if (!contract) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "contract",
+        reason: "contract:submit_approval",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    if (!canPerformApprovalAction(user, "initiate_approval", contractResource(contract))) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "approval",
+        action: "initiate_approval",
+        resourceType: "contract",
+        reason: "forbidden"
+      });
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    const version = currentContractVersion(contract);
+    const review = latestContractReview(contract);
+    const allRisksConfirmed = Boolean(review && review.risks.every((risk) => risk.humanConfirmed && risk.selectedOption));
+
+    if (!version || contract.currentVersion < 2 || review?.reviewType !== "second" || review.version !== contract.currentVersion || !allRisksConfirmed) {
+      recordAudit({
+        request,
+        user,
+        action: "contract.approval_submission_blocked",
+        objectType: "contract",
+        objectId: contract.id,
+        organizationId: contract.organizationId,
+        reason: "second_review_and_human_risk_confirmation_required",
+        result: "failure"
+      });
+      return reply.code(409).send({ error: "second_review_and_human_confirmation_required" });
+    }
+
+    const timestamp = nowIso();
+    const handoff: ContractApprovalHandoffRecord = {
+      id: `contract-approval-handoff-${randomUUID()}`,
+      contractId: contract.id,
+      versionId: version.id,
+      submittedByUserId: user.id,
+      status: "submitted_boundary",
+      approvalEngineImplemented: false,
+      reason: request.body?.reason?.trim() || "contract_ready_for_human_approval_engine",
+      createdAt: timestamp
+    };
+
+    contractApprovalHandoffs.push(handoff);
+    contract.approvalHandoffId = handoff.id;
+    contract.status = "approval_pending";
+    contract.updatedAt = timestamp;
+    store.save();
+    recordAudit({
+      request,
+      user,
+      action: "contract.approval_submitted",
+      objectType: "contract",
+      objectId: contract.id,
+      organizationId: contract.organizationId,
+      beforeSnapshotRef: review.id,
+      afterSnapshotRef: handoff.id,
+      reason: "bounded_approval_handoff_only:no_approval_engine",
+      result: "success"
+    });
+
+    return {
+      contract: contractWithDetails(contract),
+      handoff
+    };
+  });
+
+  server.post<{ Body: ContractExecutionEventBody; Params: { id: string } }>("/contracts/:id/execution-events", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "contracts");
+
+    if (!user) {
+      return;
+    }
+
+    const contract = findVisibleContract(user, request.params.id);
+
+    if (!contract) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "contract",
+        reason: "contract:execution_event",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    if (!canPerformOperation(user, "track_contract_execution", contractResource(contract))) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "operation",
+        action: "track_contract_execution",
+        resourceType: "contract",
+        reason: "forbidden"
+      });
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    if (contract.status !== "approval_pending" && contract.status !== "execution_tracking") {
+      return reply.code(409).send({ error: "approval_handoff_required_before_execution_tracking" });
+    }
+
+    const eventType = request.body?.eventType;
+
+    if (!eventType || !supportedContractExecutionEventTypes.includes(eventType)) {
+      return reply.code(400).send({ error: "invalid_execution_event_type" });
+    }
+
+    const timestamp = nowIso();
+    const event: ContractExecutionEventRecord = {
+      id: `contract-execution-event-${randomUUID()}`,
+      contractId: contract.id,
+      eventType,
+      title: textOrDefault(request.body?.title, eventType === "reminder" ? "执行提醒" : "执行记录"),
+      notes: textOrDefault(request.body?.notes, "人工记录的合同执行跟踪事项。"),
+      status: textOrDefault(request.body?.status, eventType),
+      dueAt: request.body?.dueAt ?? null,
+      createdByUserId: user.id,
+      createdAt: timestamp
+    };
+
+    contractExecutionEvents.push(event);
+    contract.executionStatus = "tracking";
+    contract.updatedAt = timestamp;
+    store.save();
+    recordAudit({
+      request,
+      user,
+      action: "contract.execution_event_recorded",
+      objectType: "contract",
+      objectId: contract.id,
+      organizationId: contract.organizationId,
+      afterSnapshotRef: event.id,
+      reason: `execution_tracking:${eventType}:reminder_record_status_only`,
+      result: "success"
+    });
+
+    return reply.code(201).send({
+      contract: contractWithDetails(contract),
+      event
+    });
+  });
+
   server.get("/memory/items", async (request, reply) => {
     const user = await requireUser(request, reply);
 
@@ -3442,7 +4491,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
 
   server.get<{ Params: { module: string } }>("/modules/:module", async (request, reply) => {
     const moduleKey = request.params.module;
-    const availableModules: ModuleKey[] = ["dashboard", "settings", "projects", "tasks", "chat", "knowledge"];
+    const availableModules: ModuleKey[] = ["dashboard", "settings", "projects", "tasks", "chat", "knowledge", "contracts"];
 
     if (!platformModules.some((module) => module.key === moduleKey)) {
       return reply.code(404).send({ error: "not_found" });
