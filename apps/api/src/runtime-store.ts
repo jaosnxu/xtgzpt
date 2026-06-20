@@ -78,11 +78,26 @@ export interface RuntimeStore {
   save: () => void;
 }
 
+export type RuntimeStoreMode = "memory" | "file" | "postgres";
+
+export interface PostgresRuntimeStoreConfig {
+  databaseUrl: string;
+  schema: string;
+  table: string;
+  documentId: string;
+}
+
 export interface RuntimeStoreOptions {
+  mode?: RuntimeStoreMode;
   dataFilePath?: string;
+  postgres?: PostgresRuntimeStoreConfig;
 }
 
 const defaultRuntimeDataFileName = "runtime-data.json";
+const defaultPostgresRuntimeSchema = "public";
+const defaultPostgresRuntimeTable = "runtime_data_documents";
+const defaultPostgresRuntimeDocumentId = "runtime-data-v1";
+const validPostgresIdentifierPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 function emptyRuntimeData(): RuntimeData {
   return {
@@ -198,17 +213,168 @@ function loadRuntimeData(dataFilePath?: string) {
   return normalizeRuntimeData(JSON.parse(raw));
 }
 
+function normalizeRuntimeStoreMode(value: string | undefined): RuntimeStoreMode | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "memory" || normalized === "in-memory" || normalized === "in_memory") {
+    return "memory";
+  }
+  if (normalized === "file" || normalized === "runtime-file") {
+    return "file";
+  }
+  if (normalized === "postgres" || normalized === "postgresql" || normalized === "pg") {
+    return "postgres";
+  }
+
+  throw new Error(
+    `Unsupported XTGZPT_RUNTIME_STORE_MODE "${value}". Expected one of: memory, file, postgres.`
+  );
+}
+
+function assertPostgresIdentifier(value: string, envName: string) {
+  if (!validPostgresIdentifierPattern.test(value)) {
+    throw new Error(`${envName} must be a safe PostgreSQL identifier.`);
+  }
+}
+
+function resolvePostgresDatabaseUrl(env: Record<string, string | undefined>) {
+  const databaseUrl = env.XTGZPT_RUNTIME_DATABASE_URL ?? env.DATABASE_URL;
+  if (!databaseUrl?.trim()) {
+    throw new Error(
+      "XTGZPT_RUNTIME_STORE_MODE=postgres requires XTGZPT_RUNTIME_DATABASE_URL or DATABASE_URL."
+    );
+  }
+
+  const trimmed = databaseUrl.trim();
+  if (trimmed.startsWith("<") || trimmed.endsWith(">")) {
+    throw new Error("PostgreSQL runtime database URL must be a real secret value, not a placeholder.");
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("PostgreSQL runtime database URL must be a valid URL.");
+  }
+
+  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") {
+    throw new Error("PostgreSQL runtime database URL must use postgres:// or postgresql://.");
+  }
+
+  if (!parsed.hostname || !parsed.pathname || parsed.pathname === "/") {
+    throw new Error("PostgreSQL runtime database URL must include host and database name.");
+  }
+
+  return trimmed;
+}
+
+export function resolvePostgresRuntimeStoreConfig(
+  env: Record<string, string | undefined> = process.env
+): PostgresRuntimeStoreConfig {
+  const schema = env.XTGZPT_RUNTIME_POSTGRES_SCHEMA?.trim() || defaultPostgresRuntimeSchema;
+  const table = env.XTGZPT_RUNTIME_POSTGRES_TABLE?.trim() || defaultPostgresRuntimeTable;
+  const documentId = env.XTGZPT_RUNTIME_POSTGRES_DOCUMENT_ID?.trim() || defaultPostgresRuntimeDocumentId;
+
+  assertPostgresIdentifier(schema, "XTGZPT_RUNTIME_POSTGRES_SCHEMA");
+  assertPostgresIdentifier(table, "XTGZPT_RUNTIME_POSTGRES_TABLE");
+
+  if (!documentId) {
+    throw new Error("XTGZPT_RUNTIME_POSTGRES_DOCUMENT_ID must not be empty.");
+  }
+
+  return {
+    databaseUrl: resolvePostgresDatabaseUrl(env),
+    schema,
+    table,
+    documentId
+  };
+}
+
+function createMemoryRuntimeStore(): RuntimeStore {
+  return {
+    state: emptyRuntimeData(),
+    save() {
+      return;
+    }
+  };
+}
+
+function createFileRuntimeStore(dataFilePath?: string): RuntimeStore {
+  const state = loadRuntimeData(dataFilePath);
+
+  return {
+    state,
+    save() {
+      if (!dataFilePath) {
+        return;
+      }
+
+      mkdirSync(dirname(dataFilePath), { recursive: true });
+      const tempPath = `${dataFilePath}.tmp`;
+      writeFileSync(tempPath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+      renameSync(tempPath, dataFilePath);
+    }
+  };
+}
+
+export function createPostgresRuntimeStore(config: PostgresRuntimeStoreConfig): RuntimeStore {
+  const state = emptyRuntimeData();
+
+  return {
+    state,
+    save() {
+      throw new Error(
+        `PostgreSQL runtime adapter boundary is selected for ${config.schema}.${config.table}, but DEV-020 does not execute live database writes without a driver-backed cutover.`
+      );
+    }
+  };
+}
+
 export function resolveRuntimeStoreOptions(
   options: RuntimeStoreOptions = {},
   env: Record<string, string | undefined> = process.env,
   moduleDir = dirname(fileURLToPath(import.meta.url))
 ): RuntimeStoreOptions {
-  if (options.dataFilePath || env.NODE_ENV === "test") {
+  if (options.postgres) {
+    return {
+      ...options,
+      mode: "postgres"
+    };
+  }
+
+  if (options.mode === "postgres" || options.mode === "memory") {
     return options;
+  }
+
+  if (options.dataFilePath) {
+    return {
+      ...options,
+      mode: "file"
+    };
+  }
+
+  const mode = options.mode ?? normalizeRuntimeStoreMode(env.XTGZPT_RUNTIME_STORE_MODE);
+  if (mode === "postgres") {
+    return {
+      ...options,
+      mode,
+      postgres: resolvePostgresRuntimeStoreConfig(env)
+    };
+  }
+
+  if (mode === "memory" || env.NODE_ENV === "test") {
+    return {
+      ...options,
+      mode: "memory"
+    };
   }
 
   return {
     ...options,
+    mode: "file",
     dataFilePath:
       env.XTGZPT_RUNTIME_DATA_FILE ??
       resolve(moduleDir, "..", "data", defaultRuntimeDataFileName)
@@ -216,19 +382,17 @@ export function resolveRuntimeStoreOptions(
 }
 
 export function createRuntimeStore(options: RuntimeStoreOptions = {}): RuntimeStore {
-  const state = loadRuntimeData(options.dataFilePath);
-
-  return {
-    state,
-    save() {
-      if (!options.dataFilePath) {
-        return;
-      }
-
-      mkdirSync(dirname(options.dataFilePath), { recursive: true });
-      const tempPath = `${options.dataFilePath}.tmp`;
-      writeFileSync(tempPath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
-      renameSync(tempPath, options.dataFilePath);
+  if (options.mode === "postgres") {
+    if (!options.postgres) {
+      throw new Error("PostgreSQL runtime store requires validated postgres configuration.");
     }
-  };
+
+    return createPostgresRuntimeStore(options.postgres);
+  }
+
+  if (options.mode === "memory" || !options.dataFilePath) {
+    return createMemoryRuntimeStore();
+  }
+
+  return createFileRuntimeStore(options.dataFilePath);
 }

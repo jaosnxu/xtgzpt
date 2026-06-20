@@ -46,9 +46,10 @@
 
 - Phase 1 原型已冻结。
 - 已允许进入代码开发。
-- 已完成 `DEV-001` 到 `DEV-018`，并完成 `AUDIT-018`。
+- 已完成 `DEV-001` 到 `DEV-020`，并完成 `AUDIT-020`。
 - `DEV-018` 已补齐生产上线准备 runbook 和安全占位符模板，但仍未执行真实生产上线。
-- 当前 `DEV-019` 仅做 DEV-018 后的项目记忆和状态文档对齐。
+- `DEV-019` 已完成 DEV-018 后的项目记忆和状态文档对齐。
+- `DEV-020` 已新增 API runtime store mode selection、PostgreSQL adapter/cutover boundary、配置校验和 migration 边界，但未执行真实 PostgreSQL 生产写入或切流。
 - 仍未达到“已经生产上线”状态。
 
 当前允许：
@@ -176,7 +177,7 @@ AI 严禁：
 
 ## 8. 数据与生产持久化标准
 
-当前 API runtime 已具备本地运行时持久化边界和 `XTGZPT_RUNTIME_DATA_FILE` 配置；PostgreSQL 兼容 migration 资产已覆盖当前核心对象。当前事实仍不是最终生产数据库标准：API 尚未接入真实 PostgreSQL adapter、连接池、事务、线上备份恢复和生产数据切流。
+当前 API runtime 已具备显式 store mode selection：测试默认 `memory`，本地和非测试默认 `file`，并继续支持 `XTGZPT_RUNTIME_DATA_FILE`；生产可通过 `XTGZPT_RUNTIME_STORE_MODE=postgres` 选择 PostgreSQL boundary，并要求 `XTGZPT_RUNTIME_DATABASE_URL` 或 `DATABASE_URL` 等配置通过校验。PostgreSQL 兼容 migration 资产已覆盖当前核心对象，并新增 `runtime_data_documents` cutover boundary。当前事实仍不是最终生产数据库标准：DEV-020 只建立 adapter/cutover 边界和安全失败策略，尚未执行 driver-backed PostgreSQL live writes、连接池、事务、线上备份恢复和生产数据切流。
 
 生产标准必须满足：
 
@@ -269,4 +270,4 @@ AI 严禁：
 - 真实 production smoke test
 - 真实备份和隔离恢复演练
 - release signoff
-- API runtime 接入真实 PostgreSQL adapter、连接池、事务和生产数据库切流
+- API runtime 完成 driver-backed PostgreSQL live writes、连接池、事务和生产数据库切流

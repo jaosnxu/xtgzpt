@@ -38,6 +38,10 @@
 | AUDIT-017 | DEV-017 审计 | 已完成 |
 | DEV-018 | 生产上线准备 | 已完成生产 readiness 文档和安全占位符；真实生产部署、production smoke、备份恢复演练和 release signoff 仍需 release window 执行 |
 | AUDIT-018 | DEV-018 审计 | 已完成，本地完整 gate 通过；待 PR required checks / release operator 执行外部门槛 |
+| DEV-019 | DEV-018 后项目记忆和状态对齐 | 已完成，仅文档和 runtime memory 对齐 |
+| AUDIT-019 | DEV-019 审计 | 已完成 |
+| DEV-020 | API runtime PostgreSQL adapter/cutover boundary | 已完成 runtime store mode selection、PostgreSQL config validation、adapter boundary 和 migration boundary；真实 driver-backed writes / cutover 仍未执行 |
+| AUDIT-020 | DEV-020 审计 | 已完成，本地 gate 全部通过 |
 
 ## 2. 总体阶段顺序
 
@@ -54,6 +58,8 @@
 9. DEV-016 AI 框架中心和 AI Run 生产化
 10. DEV-017 全链路响应式和页面状态验收
 11. DEV-018 生产上线准备
+12. DEV-019 DEV-018 后项目记忆和状态对齐
+13. DEV-020 API runtime PostgreSQL adapter/cutover boundary
 
 ## 3. GOV-001 项目宪法和标准收口
 
@@ -449,3 +455,44 @@
 - `.env.example` 仅保留 placeholder，未提交真实 secret、真实生产 URL、生产数据库连接串、JWT secret、私钥或 token。
 - DEV-018 本地 gate 已通过：`git diff --check`、secret 占位符检查、`npm run lint`、`npm run typecheck`、`npm run test`、`npm run build`、`npm run smoke:api`、`npm audit --audit-level=low`。
 - 真实生产部署、真实 production smoke、真实备份和隔离恢复演练、真实生产 secrets 注入、release signoff 和 PR required checks 仍是外部门槛。
+
+## 14. DEV-019 DEV-018 后项目记忆和状态对齐
+
+目标：
+
+- 修复 DEV-018 后项目状态和 runtime memory 的 stale 记录。
+
+当前状态：
+
+- 已完成。
+- 仅修改 docs 和 runtime memory。
+- 未修改业务源代码、API、UI、数据库 schema、权限、AI 执行边界、secrets、部署、生产写入或菜单。
+
+## 15. DEV-020 API runtime PostgreSQL adapter/cutover boundary
+
+目标：
+
+- 在不执行真实生产写入的前提下，建立 API runtime store mode selection 和 PostgreSQL cutover boundary。
+
+范围：
+
+- 测试默认 in-memory runtime store。
+- 本地和非测试默认 file runtime store，并继续支持 `XTGZPT_RUNTIME_DATA_FILE`。
+- 生产可通过 `XTGZPT_RUNTIME_STORE_MODE=postgres` 选择 PostgreSQL runtime boundary。
+- PostgreSQL runtime config validation：`XTGZPT_RUNTIME_DATABASE_URL` 或 `DATABASE_URL`、schema、table、document id。
+- 新增 `0011_runtime_store_cutover_boundary.sql`，建立当前 `RuntimeData` JSON shape 的 cutover document 表边界。
+- 聚焦测试覆盖 mode resolution、file fallback、PostgreSQL config validation 和 missing-env failure。
+
+不做：
+
+- 不连接真实生产数据库。
+- 不写入真实生产数据。
+- 不提交真实数据库 credentials。
+- 不重写 API endpoint、权限、AI 边界或 UI。
+- 不执行生产 cutover、备份恢复演练或 release signoff。
+
+当前状态：
+
+- 已完成 code/docs boundary。
+- PostgreSQL adapter 当前以安全失败方式阻止 live write，避免误把 boundary 当成真实生产切流。
+- 后续仍需 driver-backed PostgreSQL adapter、连接池、事务、数据迁移/回填、备份恢复演练和生产 cutover signoff。

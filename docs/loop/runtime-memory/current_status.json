@@ -1,94 +1,28 @@
 {
-  "updated_at": "2026-06-20T12:11:36.000000+00:00",
-  "active_task_id": "TASK-XTGZPT-DEV-019-CODEX-1",
-  "active_goal": "Reconcile stale project memory and status after DEV-018 without changing product source, API, UI, database schema, permissions, AI boundaries, secrets, deployments, production writes, or menus.",
+  "updated_at": "2026-06-20T12:50:43.000000+00:00",
+  "active_task_id": "TASK-XTGZPT-DEV-020-CODEX-1",
+  "active_goal": "Implement DEV-020 API runtime PostgreSQL adapter/cutover boundary in the current working tree without production writes, hardcoded credentials, UI/menu changes, or permission/AI boundary changes.",
   "status": "completed",
   "current_stage": "completed",
-  "last_summary": "DEV-019 documentation/runtime-memory reconciliation completed. Project constitution, backlog current-stage lines, project_status, current_status, DEV-019/AUDIT-019, and action log now reflect DEV-018 completion while preserving external release limits: real deployment, production smoke, backup/restore drill, release signoff, and real env secrets.",
+  "last_summary": "DEV-020 runtime store mode selection, PostgreSQL config validation, no-live-write adapter boundary, migration boundary, docs, runbook, DEV-020/AUDIT-020, and runtime memory were updated. Verifier reran git diff --check, lint, typecheck, test, build, smoke:api, and npm audit successfully.",
   "gate_status": {
-    "preflight_gate": {
+    "git_diff_check": {
       "status": "passed",
-      "reason": "preflight checks passed",
-      "contracts": [
-        {
-          "name": "git",
-          "standard_name": "vcs_adapter",
-          "target": "git",
-          "mode": "read_write",
-          "risk_level": "medium",
-          "auth_requirements": [],
-          "capabilities": [
-            "status",
-            "diff",
-            "branch",
-            "commit_context"
-          ]
-        },
-        {
-          "name": "codex_executor",
-          "standard_name": "codex_writer_executor",
-          "target": "codex",
-          "mode": "read_write",
-          "risk_level": "high",
-          "auth_requirements": [
-            "codex_login"
-          ],
-          "capabilities": [
-            "non_interactive_code_writer",
-            "local_diff_generation",
-            "self_contained_task_execution"
-          ]
-        }
-      ],
-      "auth_resolution": {
-        "git": [],
-        "codex_executor": [
-          {
-            "requirement": "codex_login",
-            "source": "missing",
-            "env": null,
-            "available": false
-          }
-        ]
-      },
-      "missing_auth": [
-        {
-          "connector": "codex_executor",
-          "requirement": "codex_login",
-          "source": "missing",
-          "env": null,
-          "available": false
-        }
-      ],
-      "tool_policy": {
-        "status": "passed",
-        "reason": "tool policy passed",
-        "decisions": [
-          {
-            "connector": "git",
-            "target": "git",
-            "mode": "read_write",
-            "risk_level": "medium",
-            "decision": "allowed",
-            "reason": "connector is allowed by policy",
-            "failure_type": null
-          },
-          {
-            "connector": "codex_executor",
-            "target": "codex",
-            "mode": "read_write",
-            "risk_level": "high",
-            "decision": "allowed",
-            "reason": "connector is explicitly approved",
-            "failure_type": null
-          }
-        ],
-        "failure_type": null
-      },
-      "failure_type": null
+      "command": "git diff --check"
+    },
+    "npm_gates": {
+      "status": "passed",
+      "commands": [
+        "npm run lint",
+        "npm run typecheck",
+        "npm run test",
+        "npm run build",
+        "npm run smoke:api",
+        "npm audit --audit-level=low"
+      ]
     }
   },
   "issue_count": 5,
-  "failure_count": 1,
+  "failure_count": 0,
   "intent_debt": null
 }

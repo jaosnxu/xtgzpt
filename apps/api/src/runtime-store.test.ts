@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildServer } from "./index";
-import { resolveRuntimeStoreOptions } from "./runtime-store";
+import {
+  createRuntimeStore,
+  resolvePostgresRuntimeStoreConfig,
+  resolveRuntimeStoreOptions
+} from "./runtime-store";
 
 type TestServer = ReturnType<typeof buildServer>;
 
@@ -36,18 +40,120 @@ afterEach(() => {
 });
 
 describe("runtime persistence store", () => {
-  it("resolves a stable runtime data path for non-test startup and stays inert in tests", () => {
+  it("resolves mode selection for test memory, local file fallback and explicit PostgreSQL", () => {
     expect(
       resolveRuntimeStoreOptions({}, { NODE_ENV: "development" }, "/tmp/xtgzpt/apps/api/dist")
     ).toEqual({
+      mode: "file",
       dataFilePath: "/tmp/xtgzpt/apps/api/data/runtime-data.json"
     });
     expect(
       resolveRuntimeStoreOptions({}, { NODE_ENV: "development", XTGZPT_RUNTIME_DATA_FILE: "/tmp/custom.json" }, "/tmp/xtgzpt/apps/api/dist")
     ).toEqual({
+      mode: "file",
       dataFilePath: "/tmp/custom.json"
     });
-    expect(resolveRuntimeStoreOptions({}, { NODE_ENV: "test" }, "/tmp/xtgzpt/apps/api/dist")).toEqual({});
+    expect(
+      resolveRuntimeStoreOptions({ mode: "file" }, { NODE_ENV: "development" }, "/tmp/xtgzpt/apps/api/dist")
+    ).toEqual({
+      mode: "file",
+      dataFilePath: "/tmp/xtgzpt/apps/api/data/runtime-data.json"
+    });
+    expect(resolveRuntimeStoreOptions({}, { NODE_ENV: "test" }, "/tmp/xtgzpt/apps/api/dist")).toEqual({
+      mode: "memory"
+    });
+    expect(
+      resolveRuntimeStoreOptions(
+        {},
+        {
+          NODE_ENV: "production",
+          XTGZPT_RUNTIME_STORE_MODE: "postgres",
+          XTGZPT_RUNTIME_DATABASE_URL: "postgresql://localhost:5432/xtgzpt"
+        },
+        "/tmp/xtgzpt/apps/api/dist"
+      )
+    ).toEqual({
+      mode: "postgres",
+      postgres: {
+        databaseUrl: "postgresql://localhost:5432/xtgzpt",
+        schema: "public",
+        table: "runtime_data_documents",
+        documentId: "runtime-data-v1"
+      }
+    });
+  });
+
+  it("validates PostgreSQL runtime configuration without opening a database connection", () => {
+    expect(
+      resolvePostgresRuntimeStoreConfig({
+        DATABASE_URL: "postgres://localhost:5432/xtgzpt",
+        XTGZPT_RUNTIME_POSTGRES_SCHEMA: "runtime",
+        XTGZPT_RUNTIME_POSTGRES_TABLE: "runtime_documents",
+        XTGZPT_RUNTIME_POSTGRES_DOCUMENT_ID: "runtime-data-prod"
+      })
+    ).toEqual({
+      databaseUrl: "postgres://localhost:5432/xtgzpt",
+      schema: "runtime",
+      table: "runtime_documents",
+      documentId: "runtime-data-prod"
+    });
+  });
+
+  it("fails safely when PostgreSQL mode is selected without required env", () => {
+    expect(() =>
+      resolveRuntimeStoreOptions(
+        {},
+        {
+          NODE_ENV: "production",
+          XTGZPT_RUNTIME_STORE_MODE: "postgres"
+        },
+        "/tmp/xtgzpt/apps/api/dist"
+      )
+    ).toThrow("requires XTGZPT_RUNTIME_DATABASE_URL or DATABASE_URL");
+  });
+
+  it("rejects placeholder and invalid PostgreSQL runtime config", () => {
+    expect(() =>
+      resolvePostgresRuntimeStoreConfig({
+        DATABASE_URL: "<POSTGRESQL_DATABASE_URL>"
+      })
+    ).toThrow("not a placeholder");
+    expect(() =>
+      resolvePostgresRuntimeStoreConfig({
+        DATABASE_URL: "mysql://localhost:3306/xtgzpt"
+      })
+    ).toThrow("postgres:// or postgresql://");
+    expect(() =>
+      resolvePostgresRuntimeStoreConfig({
+        DATABASE_URL: "postgres://localhost:5432/xtgzpt",
+        XTGZPT_RUNTIME_POSTGRES_TABLE: "runtime-documents"
+      })
+    ).toThrow("safe PostgreSQL identifier");
+  });
+
+  it("exposes a no-live-write PostgreSQL adapter boundary for the current RuntimeData shape", () => {
+    const store = createRuntimeStore({
+      mode: "postgres",
+      postgres: {
+        databaseUrl: "postgres://localhost:5432/xtgzpt",
+        schema: "runtime",
+        table: "runtime_documents",
+        documentId: "runtime-data-prod"
+      }
+    });
+
+    expect(store.state).toEqual(
+      expect.objectContaining({
+        projects: [],
+        tasks: [],
+        chatThreads: [],
+        aiRuns: [],
+        approvals: [],
+        contracts: [],
+        files: []
+      })
+    );
+    expect(() => store.save()).toThrow("does not execute live database writes");
   });
 
   it("keeps runtime data after restart through the default server startup path", async () => {
