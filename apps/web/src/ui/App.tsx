@@ -2925,6 +2925,7 @@ function ApprovalView({
   const selectedApproval = approvals.find((approval) => approval.id === selectedApprovalId) ?? approvals[0] ?? null;
   const currentNode = selectedApproval?.nodes.find((node) => node.id === selectedApproval.currentNodeId) ?? null;
   const isCurrentHandler = selectedApproval?.currentApproverUserId === activeUser.id;
+  const isActionableApproval = selectedApproval?.status === "processing";
   const humanApprovers = seedUsers.filter((user) =>
     rolePolicies[user.role].approval.some((permission) =>
       ["approve_current_node", "reject_current_node", "return_for_revision"].includes(permission)
@@ -3006,36 +3007,40 @@ function ApprovalView({
               <span className="status-pill">{currentNode?.status ?? selectedApproval.status}</span>
             </div>
 
-            <div className="inline-form">
-              <select value={approvalTargetUserId} onChange={(event) => setApprovalTargetUserId(event.target.value)}>
-                {humanApprovers.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.displayName}
-                  </option>
-                ))}
-              </select>
-              <button className="secondary-button" disabled={!isCurrentHandler || !canTransfer} onClick={() => onAction(selectedApproval, "transfer")}>
-                转交
-              </button>
-              <button className="secondary-button" disabled={!isCurrentHandler || !canAddSign} onClick={() => onAction(selectedApproval, "add-sign")}>
-                加签
-              </button>
-            </div>
+            {isActionableApproval ? (
+              <>
+                <div className="inline-form">
+                  <select value={approvalTargetUserId} onChange={(event) => setApprovalTargetUserId(event.target.value)}>
+                    {humanApprovers.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.displayName}
+                      </option>
+                    ))}
+                  </select>
+                  <button className="secondary-button" disabled={!isCurrentHandler || !canTransfer} onClick={() => onAction(selectedApproval, "transfer")}>
+                    转交
+                  </button>
+                  <button className="secondary-button" disabled={!isCurrentHandler || !canAddSign} onClick={() => onAction(selectedApproval, "add-sign")}>
+                    加签
+                  </button>
+                </div>
 
-            <div className="action-row">
-              <button className="primary-button" disabled={!isCurrentHandler || !canApprove} onClick={() => onAction(selectedApproval, "approve")}>
-                <CheckSquare size={16} />
-                同意
-              </button>
-              <button className="secondary-button" disabled={!isCurrentHandler || !canReject} onClick={() => onAction(selectedApproval, "reject")}>
-                <XCircle size={16} />
-                驳回
-              </button>
-              <button className="secondary-button" disabled={!isCurrentHandler || !canReturn} onClick={() => onAction(selectedApproval, "return")}>
-                <Clock size={16} />
-                退回
-              </button>
-            </div>
+                <div className="action-row">
+                  <button className="primary-button" disabled={!isCurrentHandler || !canApprove} onClick={() => onAction(selectedApproval, "approve")}>
+                    <CheckSquare size={16} />
+                    同意
+                  </button>
+                  <button className="secondary-button" disabled={!isCurrentHandler || !canReject} onClick={() => onAction(selectedApproval, "reject")}>
+                    <XCircle size={16} />
+                    驳回
+                  </button>
+                  <button className="secondary-button" disabled={!isCurrentHandler || !canReturn} onClick={() => onAction(selectedApproval, "return")}>
+                    <Clock size={16} />
+                    退回
+                  </button>
+                </div>
+              </>
+            ) : null}
           </>
         ) : null}
       </div>
