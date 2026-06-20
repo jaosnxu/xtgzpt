@@ -947,7 +947,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">DEV-016：AI 框架与 AI Run</p>
+            <p className="eyebrow">DEV-017：页面状态与响应式</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
@@ -1345,6 +1345,8 @@ function WorkbenchView({
   workbench: WorkbenchResponse | null;
 }) {
   const summary = workbench?.summary;
+  const hasArchivedProjects = (summary?.archivedProjectCount ?? 0) > 0;
+  const hasExpiredItems = (summary?.expiredItemCount ?? 0) > 0;
 
   return (
     <>
@@ -1362,6 +1364,18 @@ function WorkbenchView({
         title="当前没有待处理事项"
         body="工作台不会编造审批、合同或任务数据；有权限数据产生后会显示在这里。"
         active={!isLoading && !error && Boolean(workbench) && (summary?.pendingWorkCount ?? 0) === 0 && (summary?.aiResultConfirmationCount ?? 0) === 0}
+      />
+      <PageStateNotice
+        state="archived"
+        title="存在已归档项目"
+        body="归档项目保留审计和详情状态，但默认不进入主要工作列表。"
+        active={!isLoading && hasArchivedProjects}
+      />
+      <PageStateNotice
+        state="expired"
+        title="存在已过期事项"
+        body="过期审批或任务会保留状态提示，不允许 AI 代替处理。"
+        active={!isLoading && hasExpiredItems}
       />
 
       <section className="workbench-layout">
@@ -2194,6 +2208,7 @@ function ChatView({
 }) {
   const selectedThread = threads.find((thread) => thread.id === selectedThreadId) ?? threads[0] ?? null;
   const selectedDrafts = selectedThread ? aiDrafts.filter((draft) => draft.threadId === selectedThread.id) : [];
+  const isSelectedThreadArchived = selectedThread?.status === "archived";
   const canConfirmDraft = (draft: AiDraftRecord) =>
     draft.status === "draft" &&
     (draft.kind === "chat_summary" || (draft.kind === "task_draft" && canConfirmTask) || (draft.kind === "knowledge_draft" && canConfirmKnowledge));
@@ -2250,10 +2265,16 @@ function ChatView({
           <>
             <div className="inline-form">
               <input value={chatMessage} onChange={(event) => setChatMessage(event.target.value)} placeholder="输入工作消息" />
-              <button className="primary-button" onClick={onSendMessage}>
+              <button className="primary-button" disabled={isSelectedThreadArchived} onClick={onSendMessage}>
                 发送
               </button>
             </div>
+            <PageStateNotice
+              active={isSelectedThreadArchived}
+              state="archived"
+              title="会话已归档"
+              body="归档会话只保留消息和 AI 来源证据，不再发送新消息或生成新草稿。"
+            />
             <div className="task-table">
               <div className="task-row task-head">
                 <span>发送人</span>
@@ -2291,13 +2312,13 @@ function ChatView({
           </div>
         </div>
         <div className="action-row">
-          <button className="secondary-button" disabled={!selectedThread || messages.length === 0} onClick={() => onCreateDraft("chat_summary")}>
+          <button className="secondary-button" disabled={!selectedThread || isSelectedThreadArchived || messages.length === 0} onClick={() => onCreateDraft("chat_summary")}>
             整理摘要
           </button>
-          <button className="secondary-button" disabled={!selectedThread || messages.length === 0} onClick={() => onCreateDraft("task_draft")}>
+          <button className="secondary-button" disabled={!selectedThread || isSelectedThreadArchived || messages.length === 0} onClick={() => onCreateDraft("task_draft")}>
             任务草稿
           </button>
-          <button className="secondary-button" disabled={!selectedThread || messages.length === 0} onClick={() => onCreateDraft("knowledge_draft")}>
+          <button className="secondary-button" disabled={!selectedThread || isSelectedThreadArchived || messages.length === 0} onClick={() => onCreateDraft("knowledge_draft")}>
             知识草稿
           </button>
         </div>
@@ -2316,7 +2337,7 @@ function ChatView({
         <div className="record-list">
           {selectedDrafts.length > 0 ? (
             selectedDrafts.map((draft) => (
-              <div className="record-row" key={draft.id}>
+              <div className="record-row ai-draft-row" key={draft.id}>
                 <span>
                   <strong>{draft.title}</strong>
                   <small>{draft.content}</small>
@@ -2395,6 +2416,12 @@ function KnowledgeView({
           <span>当前检索范围</span>
           <strong>{queryProject ? queryProject.title : "全部可见范围"}</strong>
         </div>
+        <PageStateNotice
+          active={!canReviewKnowledge}
+          state="no-permission"
+          title="当前账号不能发布知识"
+          body="待审核知识必须由具备发布权限的人类处理，AI 不能自动发布、驳回或归档。"
+        />
         <div className="record-list">
           {queryResults.length > 0 ? (
             queryResults.map((item) => (
@@ -2498,6 +2525,12 @@ function KnowledgeView({
                     归档
                   </button>
                 </div>
+                <PageStateNotice
+                  active={item.status === "archived"}
+                  state="archived"
+                  title="知识已归档"
+                  body="归档知识不会进入检索结果、AI 输入上下文或发布证据。"
+                />
               </div>
             ))
           ) : (
@@ -2703,6 +2736,18 @@ function ContractView({
         </div>
         {selectedContract ? (
           <>
+            <PageStateNotice
+              active={selectedContract.status === "archived"}
+              state="archived"
+              title="合同已归档"
+              body="归档合同保留版本、审查、审批和执行证据，不再允许新增 AI 审查或提交动作。"
+            />
+            <PageStateNotice
+              active={selectedContract.status === "completed"}
+              state="normal"
+              title="合同已完成"
+              body="完成状态只展示证据链和执行记录，后续动作必须继续由人类发起。"
+            />
             <div className="detail-grid">
               <SettingsItem title="当前版本" value={`v${selectedContract.currentVersion}`} enabled />
               <SettingsItem title="入口来源" value={latestVersion?.entryMethod ?? "-"} enabled />
@@ -2880,6 +2925,7 @@ function ApprovalView({
   const selectedApproval = approvals.find((approval) => approval.id === selectedApprovalId) ?? approvals[0] ?? null;
   const currentNode = selectedApproval?.nodes.find((node) => node.id === selectedApproval.currentNodeId) ?? null;
   const isCurrentHandler = selectedApproval?.currentApproverUserId === activeUser.id;
+  const isActionableApproval = selectedApproval?.status === "processing";
   const humanApprovers = seedUsers.filter((user) =>
     rolePolicies[user.role].approval.some((permission) =>
       ["approve_current_node", "reject_current_node", "return_for_revision"].includes(permission)
@@ -2933,6 +2979,12 @@ function ApprovalView({
 
         {selectedApproval ? (
           <>
+            <PageStateNotice
+              active={selectedApproval.status === "expired"}
+              state="expired"
+              title="审批已过期"
+              body="过期审批不会显示可执行节点动作；重新发起必须由有权限的人类完成。"
+            />
             <div className="detail-grid">
               <SettingsItem title="来源对象" value={selectedApproval.sourceSummary.title} enabled />
               <SettingsItem title="来源状态" value={selectedApproval.sourceSummary.status} enabled />
@@ -2955,36 +3007,40 @@ function ApprovalView({
               <span className="status-pill">{currentNode?.status ?? selectedApproval.status}</span>
             </div>
 
-            <div className="inline-form">
-              <select value={approvalTargetUserId} onChange={(event) => setApprovalTargetUserId(event.target.value)}>
-                {humanApprovers.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.displayName}
-                  </option>
-                ))}
-              </select>
-              <button className="secondary-button" disabled={!isCurrentHandler || !canTransfer} onClick={() => onAction(selectedApproval, "transfer")}>
-                转交
-              </button>
-              <button className="secondary-button" disabled={!isCurrentHandler || !canAddSign} onClick={() => onAction(selectedApproval, "add-sign")}>
-                加签
-              </button>
-            </div>
+            {isActionableApproval ? (
+              <>
+                <div className="inline-form">
+                  <select value={approvalTargetUserId} onChange={(event) => setApprovalTargetUserId(event.target.value)}>
+                    {humanApprovers.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.displayName}
+                      </option>
+                    ))}
+                  </select>
+                  <button className="secondary-button" disabled={!isCurrentHandler || !canTransfer} onClick={() => onAction(selectedApproval, "transfer")}>
+                    转交
+                  </button>
+                  <button className="secondary-button" disabled={!isCurrentHandler || !canAddSign} onClick={() => onAction(selectedApproval, "add-sign")}>
+                    加签
+                  </button>
+                </div>
 
-            <div className="action-row">
-              <button className="primary-button" disabled={!isCurrentHandler || !canApprove} onClick={() => onAction(selectedApproval, "approve")}>
-                <CheckSquare size={16} />
-                同意
-              </button>
-              <button className="secondary-button" disabled={!isCurrentHandler || !canReject} onClick={() => onAction(selectedApproval, "reject")}>
-                <XCircle size={16} />
-                驳回
-              </button>
-              <button className="secondary-button" disabled={!isCurrentHandler || !canReturn} onClick={() => onAction(selectedApproval, "return")}>
-                <Clock size={16} />
-                退回
-              </button>
-            </div>
+                <div className="action-row">
+                  <button className="primary-button" disabled={!isCurrentHandler || !canApprove} onClick={() => onAction(selectedApproval, "approve")}>
+                    <CheckSquare size={16} />
+                    同意
+                  </button>
+                  <button className="secondary-button" disabled={!isCurrentHandler || !canReject} onClick={() => onAction(selectedApproval, "reject")}>
+                    <XCircle size={16} />
+                    驳回
+                  </button>
+                  <button className="secondary-button" disabled={!isCurrentHandler || !canReturn} onClick={() => onAction(selectedApproval, "return")}>
+                    <Clock size={16} />
+                    退回
+                  </button>
+                </div>
+              </>
+            ) : null}
           </>
         ) : null}
       </div>
@@ -3086,14 +3142,18 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function submit() {
     setError(null);
+    setIsSubmitting(true);
 
     try {
       await onLogin(username, password);
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : "登录失败");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -3110,6 +3170,8 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
           <p className="eyebrow">协同工作平台</p>
           <h1>账号登录</h1>
           <p className="login-copy">输入用户名和密码进入系统。登录必须由 API 签发会话。</p>
+          <PageStateNotice active={isSubmitting} state="loading" title="正在登录" body="正在请求 API 签发会话。" />
+          <PageStateNotice active={Boolean(error)} state="error" title="登录失败" body={error ?? ""} />
           <label className="password-field">
             <span>用户名</span>
             <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
@@ -3123,8 +3185,7 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
               autoComplete="current-password"
             />
           </label>
-          {error ? <p className="login-error">{error}</p> : null}
-          <button className="primary-button login-submit" type="submit">
+          <button className="primary-button login-submit" disabled={isSubmitting} type="submit">
             登录
           </button>
         </form>
