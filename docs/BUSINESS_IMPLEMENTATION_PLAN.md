@@ -30,10 +30,10 @@
 | AUDIT-013 | DEV-013 审计 | 已完成，本地代码审计通过；在线 audit 需网络环境复核 |
 | DEV-014 | 合同闭环 | 已完成，本地代码 gate 通过；在线 audit / 浏览器验证需可用环境复核 |
 | AUDIT-014 | DEV-014 审计 | 已完成，本地代码审计通过；在线 audit / 浏览器验证需可用环境复核 |
-| DEV-015 | 审批闭环 | 已完成，当前沙箱无 Node/npm，需可用环境复核本地 gate |
-| AUDIT-015 | DEV-015 审计 | 已完成，当前沙箱无 Node/npm，需可用环境复核本地 gate |
-| DEV-016 | AI 框架中心和 AI Run 生产化 | 已完成，当前沙箱无 Node/npm，需可用环境复核本地 gate |
-| AUDIT-016 | DEV-016 审计 | 已完成，当前沙箱无 Node/npm，需可用环境复核本地 gate |
+| DEV-015 | 审批闭环 | 已完成，后续 PR/main required checks 已通过；历史执行中的沙箱限制不再代表当前项目状态 |
+| AUDIT-015 | DEV-015 审计 | 已完成，后续 PR/main required checks 已通过；历史执行中的沙箱限制不再代表当前项目状态 |
+| DEV-016 | AI 框架中心和 AI Run 生产化 | 已完成，后续 PR/main required checks 已通过；历史执行中的沙箱限制不再代表当前项目状态 |
+| AUDIT-016 | DEV-016 审计 | 已完成，后续 PR/main required checks 已通过；历史执行中的沙箱限制不再代表当前项目状态 |
 | DEV-017 | 全链路响应式和页面状态验收 | 已完成，外部 verifier 已复核本地 gate 和浏览器 DOM 验证；1440 截图受当前 in-app browser 约束 |
 | AUDIT-017 | DEV-017 审计 | 已完成 |
 | DEV-018 | 生产上线准备 | 已完成生产 readiness 文档和安全占位符；真实生产部署、production smoke、备份恢复演练和 release signoff 仍需 release window 执行 |
@@ -42,6 +42,7 @@
 | AUDIT-019 | DEV-019 审计 | 已完成 |
 | DEV-020 | API runtime PostgreSQL adapter/cutover boundary | 已完成 runtime store mode selection、PostgreSQL config validation、adapter boundary 和 migration boundary；真实 driver-backed writes / cutover 仍未执行 |
 | AUDIT-020 | DEV-020 审计 | 已完成，本地 gate 全部通过 |
+| AUDIT-021 | 项目状态和生产准备审计 | 已完成，确认下一阶段应进入 DEV-021 真实 PostgreSQL runtime adapter |
 
 ## 2. 总体阶段顺序
 
@@ -60,6 +61,8 @@
 11. DEV-018 生产上线准备
 12. DEV-019 DEV-018 后项目记忆和状态对齐
 13. DEV-020 API runtime PostgreSQL adapter/cutover boundary
+14. AUDIT-021 项目状态和生产准备审计
+15. DEV-021 真实 PostgreSQL runtime adapter
 
 ## 3. GOV-001 项目宪法和标准收口
 
@@ -345,7 +348,7 @@
 - 审批详情 API 对无权限账号返回非泄露 404。
 - 前端审批工作区只放在既有“审批”一级菜单内。
 - PostgreSQL 兼容迁移资产新增 `0009_approval_closure.sql`。
-- 当前沙箱无 `node`/`npm`，本地 `npm run ci`、offline audit 和 smoke 需在 Node/npm 可用环境复核。
+- 后续 PR/main required checks 已通过；历史执行中的沙箱限制不再代表当前项目状态。
 
 ## 11. DEV-016 AI 框架中心和 AI Run 生产化
 
@@ -386,7 +389,7 @@
 - AI Framework 配置只在既有“系统设置”内展示；AI Run 证据只在系统设置和既有业务页面中展示，未新增 AI 一级菜单。
 - 新增 PostgreSQL 兼容迁移资产 `0010_ai_framework_run_productionization.sql`。
 - 新增 `apps/api/src/ai-run-production.test.ts`。
-- 当前沙箱无 `node`/`npm`，本地 `npm run ci`、offline audit 和 smoke 需在 Node/npm 可用环境复核。
+- 后续 PR/main required checks 已通过；历史执行中的沙箱限制不再代表当前项目状态。
 
 ## 12. DEV-017 全链路响应式和页面状态验收
 
@@ -496,3 +499,58 @@
 - 已完成 code/docs boundary。
 - PostgreSQL adapter 当前以安全失败方式阻止 live write，避免误把 boundary 当成真实生产切流。
 - 后续仍需 driver-backed PostgreSQL adapter、连接池、事务、数据迁移/回填、备份恢复演练和生产 cutover signoff。
+
+## 16. AUDIT-021 项目状态和生产准备审计
+
+目标：
+
+- 在进入 DEV-021 前确认项目目标、边界、技术标准、runtime memory、dev/audit 记录和生产风险一致。
+
+范围：
+
+- 项目宪法、技术标准、业务实施计划、测试标准。
+- DEV-001 到 DEV-020 的 dev-log 和 audit-log。
+- runtime memory 当前状态、项目状态、run history 和 action log。
+- 生产上线 runbook 和剩余 release gate。
+
+不做：
+
+- 不新增业务功能。
+- 不修改应用源代码、API、数据库 schema、UI、菜单、权限、AI 行为、依赖、secrets 或部署。
+
+当前状态：
+
+- 已完成。
+- 未发现阻止下一阶段开发的 P0/P1 问题。
+- 已修正总览和 runtime memory 中的陈旧状态口径。
+- 确认下一阶段应进入 DEV-021 真实 PostgreSQL runtime adapter。
+
+## 17. DEV-021 真实 PostgreSQL runtime adapter
+
+目标：
+
+- 将 DEV-020 的 PostgreSQL boundary 升级为真实 driver-backed runtime persistence，但仍不执行真实生产切流。
+
+范围：
+
+- PostgreSQL driver 和连接池。
+- `RuntimeData` 从 PostgreSQL 读取和写入。
+- 事务、checksum 或版本条件更新，避免并发覆盖。
+- file runtime 到 PostgreSQL runtime 的迁移/回填和回滚策略。
+- 单元测试、API smoke、migration/restore runbook 更新。
+
+不做：
+
+- 不新增业务模块。
+- 不扩展财务、ERP、采购、库存、销售或经营报表系统。
+- 不新增一级菜单。
+- 不提交真实生产 secrets。
+- 不在未签字 release window 内执行真实生产写入或生产切流。
+
+验收：
+
+- `XTGZPT_RUNTIME_STORE_MODE=postgres` 可在测试数据库或本地 PostgreSQL 替身环境完成真实读写。
+- file mode 仍可用，且测试默认仍为 memory。
+- PostgreSQL 写入失败必须安全失败，不得静默回退导致数据分叉。
+- 迁移/回填/回滚文档明确。
+- `npm run lint`、`npm run typecheck`、`npm run test`、`npm run build`、`npm run smoke:api`、`npm audit --audit-level=low` 和 `git diff --check` 全部通过。
