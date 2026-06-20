@@ -119,10 +119,13 @@ AI 结果不得自动发布或自动创建正式对象。
 | GET | `/knowledge/items` | 知识条目列表 |
 | POST | `/knowledge/items` | 创建知识草稿 |
 | POST | `/knowledge/items/{id}/submit-review` | 提交审核 |
+| GET | `/knowledge/items/{id}/versions` | 查看版本历史 |
+| POST | `/knowledge/items/{id}/versions` | 创建新版本 |
 | POST | `/knowledge/items/{id}/publish` | 发布 |
+| POST | `/knowledge/items/{id}/reject` | 驳回 |
 | POST | `/knowledge/items/{id}/archive` | 归档 |
 
-知识问答接口必须先做来源权限过滤，再调用 AI。
+知识问答接口必须先做来源权限过滤，只允许 `published` 知识和授权项目记忆进入检索、证据和 AI 输入上下文。每条问答结果必须返回 source evidence。当前 DEV-013 保持本地全文检索实现，后续向量检索只能接入本地可测试 adapter，不接外部搜索服务。
 
 ## 9. 合同
 

@@ -41,6 +41,7 @@ import {
   type FilePreviewResponse,
   type KnowledgeItemRecord,
   type KnowledgeSearchResult,
+  type KnowledgeVersionRecord,
   type ModuleKey,
   type Organization,
   type PageStateDescriptor,
@@ -78,6 +79,10 @@ interface FilePreviewState {
   versionNumber: number;
 }
 
+interface KnowledgeItemWithVersions extends KnowledgeItemRecord {
+  versions?: KnowledgeVersionRecord[];
+}
+
 const menuIcon = {
   dashboard: Home,
   workbench: LayoutDashboard,
@@ -92,8 +97,8 @@ const menuIcon = {
 
 const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
   dashboard: {
-    stage: "DEV-012 已接入",
-    summary: "首页按角色汇总待处理工作、AI 待确认结果、通知、权限状态和文件权限边界。"
+    stage: "DEV-013 已接入",
+    summary: "首页按角色汇总待处理工作、AI 待确认结果、通知、权限状态、文件和知识审核边界。"
   },
   workbench: {
     stage: "DEV-012 已接入",
@@ -112,8 +117,8 @@ const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
     summary: "聊天、AI 草稿、人工确认入库、记忆上下文回用和 AI 文件引用权限检查已进入真实接口。"
   },
   knowledge: {
-    stage: "DEV-012 状态已接入",
-    summary: "正式知识和项目记忆支持权限过滤检索，并可作为 AI 草稿上下文。"
+    stage: "DEV-013 审核已接入",
+    summary: "知识草稿、提交审核、发布、驳回、归档、版本历史和来源证据进入真实接口；AI 不能自动发布。"
   },
   contracts: {
     stage: "DEV-014 待开发",
@@ -145,7 +150,7 @@ export function App() {
   const [chatMessages, setChatMessages] = useState<ChatMessageRecord[]>([]);
   const [aiDrafts, setAiDrafts] = useState<AiDraftRecord[]>([]);
   const [workbench, setWorkbench] = useState<WorkbenchResponse | null>(null);
-  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItemRecord[]>([]);
+  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItemWithVersions[]>([]);
   const [projectMemories, setProjectMemories] = useState<ProjectMemoryRecord[]>([]);
   const [projectFiles, setProjectFiles] = useState<FileAssetRecord[]>([]);
   const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
@@ -248,7 +253,7 @@ export function App() {
     }
 
     const [knowledgeResult, memoryResult] = await Promise.all([
-      authorizedRequest<{ items: KnowledgeItemRecord[] }>("/knowledge/items"),
+      authorizedRequest<{ items: KnowledgeItemWithVersions[] }>("/knowledge/items"),
       authorizedRequest<{ items: ProjectMemoryRecord[] }>("/memory/items")
     ]);
     setKnowledgeItems(knowledgeResult.items);
@@ -574,6 +579,39 @@ export function App() {
     await Promise.all([refreshWorkData(), refreshChatData(selectedThreadId), refreshKnowledgeData(), refreshWorkbenchData()]);
   }
 
+  async function publishKnowledgeItem(item: KnowledgeItemWithVersions) {
+    setKnowledgeError(null);
+    await authorizedRequest(`/knowledge/items/${item.id}/publish`, {
+      method: "POST",
+      body: JSON.stringify({
+        reason: "knowledge_page_review_publish"
+      })
+    });
+    await refreshKnowledgeData();
+  }
+
+  async function rejectKnowledgeItem(item: KnowledgeItemWithVersions) {
+    setKnowledgeError(null);
+    await authorizedRequest(`/knowledge/items/${item.id}/reject`, {
+      method: "POST",
+      body: JSON.stringify({
+        reason: "knowledge_page_review_reject"
+      })
+    });
+    await refreshKnowledgeData();
+  }
+
+  async function archiveKnowledgeItem(item: KnowledgeItemWithVersions) {
+    setKnowledgeError(null);
+    await authorizedRequest(`/knowledge/items/${item.id}/archive`, {
+      method: "POST",
+      body: JSON.stringify({
+        reason: "knowledge_page_archive"
+      })
+    });
+    await refreshKnowledgeData();
+  }
+
   async function queryKnowledge() {
     setKnowledgeError(null);
     const result = await authorizedRequest<{ results: KnowledgeSearchResult[] }>("/knowledge/query", {
@@ -630,7 +668,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">DEV-012：文件生产存储</p>
+            <p className="eyebrow">DEV-013：知识库生产化</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
@@ -751,7 +789,7 @@ export function App() {
             activeUser={activeUser}
             aiDrafts={aiDrafts}
             aiFailure={aiFailure}
-            canConfirmKnowledge={session.permissions.operation.includes("publish_knowledge")}
+            canConfirmKnowledge={session.permissions.ai.includes("knowledge_query")}
             canConfirmTask={session.permissions.operation.includes("create_task") && projects.length > 0}
             chatMessage={chatMessage}
             chatTitle={chatTitle}
@@ -792,6 +830,7 @@ export function App() {
           />
         ) : currentModule === "knowledge" ? (
           <KnowledgeView
+            canReviewKnowledge={session.permissions.operation.includes("publish_knowledge")}
             error={knowledgeError}
             isLoading={isKnowledgeLoading}
             knowledgeItems={knowledgeItems}
@@ -804,6 +843,21 @@ export function App() {
             projectMemories={projectMemories}
             queryProject={projects.find((project) => project.id === selectedProjectId) ?? null}
             queryResults={knowledgeResults}
+            onArchiveKnowledge={(item) => {
+              void archiveKnowledgeItem(item).catch((error) => {
+                setKnowledgeError(error instanceof Error ? error.message : "知识归档失败");
+              });
+            }}
+            onPublishKnowledge={(item) => {
+              void publishKnowledgeItem(item).catch((error) => {
+                setKnowledgeError(error instanceof Error ? error.message : "知识发布失败");
+              });
+            }}
+            onRejectKnowledge={(item) => {
+              void rejectKnowledgeItem(item).catch((error) => {
+                setKnowledgeError(error instanceof Error ? error.message : "知识驳回失败");
+              });
+            }}
             setKnowledgeQuery={setKnowledgeQuery}
           />
         ) : currentModule === "settings" && canOpenSettings ? (
@@ -1816,34 +1870,45 @@ function ChatView({
 }
 
 function KnowledgeView({
+  canReviewKnowledge,
   error,
   isLoading,
   knowledgeItems,
   knowledgeQuery,
+  onArchiveKnowledge,
+  onPublishKnowledge,
   onQuery,
+  onRejectKnowledge,
   projectMemories,
   queryProject,
   queryResults,
   setKnowledgeQuery
 }: {
+  canReviewKnowledge: boolean;
   error: string | null;
   isLoading: boolean;
-  knowledgeItems: KnowledgeItemRecord[];
+  knowledgeItems: KnowledgeItemWithVersions[];
   knowledgeQuery: string;
+  onArchiveKnowledge: (item: KnowledgeItemWithVersions) => void;
+  onPublishKnowledge: (item: KnowledgeItemWithVersions) => void;
   onQuery: () => void;
+  onRejectKnowledge: (item: KnowledgeItemWithVersions) => void;
   projectMemories: ProjectMemoryRecord[];
   queryProject: ProjectSummary | null;
   queryResults: KnowledgeSearchResult[];
   setKnowledgeQuery: (value: string) => void;
 }) {
+  const reviewQueue = knowledgeItems.filter((item) => item.status === "submitted_for_review");
+  const publishedItems = knowledgeItems.filter((item) => item.status === "published");
+
   return (
     <section className="content-grid">
       <div className="panel work-panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">DEV-008 检索</p>
+            <p className="eyebrow">DEV-013 本地检索</p>
             <h2>知识与记忆检索</h2>
-            <p>检索只返回当前账号有权限读取的正式知识和项目记忆。</p>
+            <p>检索只返回当前账号有权限读取的已发布知识和项目记忆，每条结果都带来源证据。</p>
           </div>
         </div>
         <PageStateNotice state="loading" title="正在加载知识库" body="正在读取当前账号有权限访问的知识和项目记忆。" active={isLoading} />
@@ -1865,6 +1930,9 @@ function KnowledgeView({
                 <span>
                   <strong>{item.title}</strong>
                   <small>{item.content}</small>
+                  <small>
+                    证据：{item.sourceEvidence.map((evidence) => `${evidence.sourceType}:${evidence.sourceId}`).join(" / ")}
+                  </small>
                 </span>
                 <span className="status-pill">{item.type}</span>
                 <span className="count-pill">{item.relevanceScore} 分</span>
@@ -1879,27 +1947,97 @@ function KnowledgeView({
       <div className="panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">正式知识</p>
+            <p className="eyebrow">审核队列</p>
+            <h2>待审核知识</h2>
+            <p>知识管理员人工审核后才能发布；AI 只能把知识草稿提交到这里。</p>
+          </div>
+        </div>
+        <div className="record-list">
+          {reviewQueue.length > 0 ? (
+            reviewQueue.map((item) => (
+              <div className="record-row knowledge-row" key={item.id}>
+                <span>
+                  <strong>{item.title}</strong>
+                  <small>{item.content}</small>
+                  <small>版本 v{item.currentVersion} · 作者 {userName(item.creatorUserId)} · 提交 {item.submittedAt ? new Date(item.submittedAt).toLocaleString() : "未提交"}</small>
+                </span>
+                <span className="status-pill">{item.status}</span>
+                <span className="count-pill">{item.sourceEvidence.length} 证据</span>
+                <div className="file-actions">
+                  <button className="secondary-button compact-button" disabled={!canReviewKnowledge} onClick={() => onPublishKnowledge(item)}>
+                    发布
+                  </button>
+                  <button className="secondary-button compact-button" disabled={!canReviewKnowledge} onClick={() => onRejectKnowledge(item)}>
+                    驳回
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <PageStateNotice active={!isLoading} state="empty" title="暂无待审核知识" body="AI 知识草稿确认后会进入 submitted_for_review，不会自动发布。" />
+          )}
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">版本与证据</p>
             <h2>知识条目</h2>
-            <p>人工确认后的知识可被检索，也可作为后续 AI 草稿上下文。</p>
+            <p>显示 draft / submitted_for_review / published / rejected / archived 状态、版本历史和来源证据。</p>
           </div>
         </div>
         <div className="record-list">
           {knowledgeItems.length > 0 ? (
             knowledgeItems.map((item) => (
-              <div className="record-row" key={item.id}>
+              <div className="record-row knowledge-row" key={item.id}>
                 <span>
                   <strong>{item.title}</strong>
                   <small>{item.content}</small>
+                  <small>
+                    证据：{item.sourceEvidence.map((evidence) => `${evidence.sourceType}:${evidence.sourceId}`).join(" / ")}
+                  </small>
+                  <small>
+                    版本：{(item.versions ?? []).map((version) => `v${version.version} ${version.status}`).join(" · ") || `v${item.currentVersion}`}
+                  </small>
                 </span>
                 <span className="status-pill">{item.status}</span>
                 <span className="count-pill">{item.sourceMessageIds.length} 来源</span>
+                <div className="file-actions">
+                  <button
+                    className="secondary-button compact-button"
+                    disabled={!canReviewKnowledge || item.status !== "submitted_for_review"}
+                    onClick={() => onPublishKnowledge(item)}
+                  >
+                    发布
+                  </button>
+                  <button
+                    className="secondary-button compact-button"
+                    disabled={!canReviewKnowledge || item.status !== "submitted_for_review"}
+                    onClick={() => onRejectKnowledge(item)}
+                  >
+                    驳回
+                  </button>
+                  <button
+                    className="secondary-button compact-button"
+                    disabled={!canReviewKnowledge || item.status === "archived"}
+                    onClick={() => onArchiveKnowledge(item)}
+                  >
+                    归档
+                  </button>
+                </div>
               </div>
             ))
           ) : (
-            <PageStateNotice active={!isLoading} state="empty" title="还没有正式知识" body="请先在聊天中生成知识草稿并由人工确认入库。" />
+            <PageStateNotice active={!isLoading} state="empty" title="还没有知识条目" body="请先在聊天中生成知识草稿并人工确认提交审核。" />
           )}
         </div>
+        <PageStateNotice
+          active={publishedItems.length === 0 && knowledgeItems.length > 0}
+          state="no-permission"
+          title="没有可检索的已发布知识"
+          body="未发布、被驳回或已归档知识不会进入检索、证据或 AI 输入上下文。"
+        />
       </div>
 
       <div className="panel">

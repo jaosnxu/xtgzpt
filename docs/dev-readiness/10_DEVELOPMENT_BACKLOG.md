@@ -105,8 +105,8 @@
 
 下一阶段：
 
-- 已完成 `DEV-001` 到 `DEV-012`
-- 当前进入 `DEV-013` 知识库生产化准备
+- 已完成 `DEV-001` 到 `DEV-013`
+- 当前进入 `DEV-014` 合同闭环准备
 
 ## 5. 第一阶段代码开发顺序和当前状态
 
@@ -347,6 +347,45 @@
 - 归档后文件不可继续预览或下载，审计保留
 - AI 使用文件前必须通过当前用户文件权限检查
 - 页面状态覆盖 normal / empty / loading / no-permission / error / archived / version history
+- `npm run ci`、`npm audit --audit-level=low --offline`、`git diff --check` 通过
+- 在线 `npm audit --audit-level=low` 需网络环境补跑
+
+### DEV-013 知识库生产化
+
+状态：已完成。本阶段把知识库从基础检索升级为审核、版本、证据和本地权限过滤检索；完整合同闭环、完整审批闭环、外部向量数据库、外部搜索服务和部署继续禁止。
+
+范围：
+
+- 知识状态支持 `draft`、`submitted_for_review`、`published`、`rejected`、`archived`
+- AI 知识草稿人工确认后只进入 `submitted_for_review`，不得自动发布
+- 知识管理员或具备发布权限的人类管理员执行发布、驳回和归档
+- 知识版本记录 author、reviewer、version、status、timestamps 和 source evidence
+- `/knowledge/items`、`submit-review`、`versions`、`publish`、`reject`、`archive` 和 `/knowledge/query` 接入真实 API
+- 知识问答结果每条返回 source evidence
+- 未发布、被驳回、已归档或无权限来源不进入检索、证据或 AI 输入上下文
+- 搜索保持本地可测试全文检索，并文档化后续本地 vector adapter 策略
+- PostgreSQL 兼容迁移资产新增 `0007_knowledge_productionization.sql`
+- 前端知识库页面展示审核队列、版本历史、来源证据和发布/驳回/归档控件
+
+不做：
+
+- 不实现完整合同流程
+- 不实现完整审批流程
+- 不接外部向量数据库
+- 不接外部搜索服务
+- 不做部署或生产写入
+- 不处理 secrets
+- 不做财务模块、ERP 扩张、外部通知或移动 App
+- 不允许 AI 自动发布知识、自动审批、自动创建正式任务或自动确认执行完成
+
+验收：
+
+- AI 知识草稿确认后状态为 `submitted_for_review`
+- 发布前知识不进入 `/knowledge/query` 或 AI 草稿上下文
+- 知识管理员发布后状态为 `published`，结果带 source evidence
+- 驳回、创建新版本、发布、归档均写审计
+- 归档知识不再进入检索或 AI 输入
+- 无权限已发布知识不进入检索结果、source evidence 或 AI contextSourceIds
 - `npm run ci`、`npm audit --audit-level=low --offline`、`git diff --check` 通过
 - 在线 `npm audit --audit-level=low` 需网络环境补跑
 

@@ -1,14 +1,14 @@
 {
-  "updated_at": "2026-06-20T05:02:00+00:00",
-  "active_task_id": "TASK-XTGZPT-DEV-012-CODEX-1",
-  "active_goal": "Complete DEV-012 for xtgzpt: production file storage in the current working tree.",
+  "updated_at": "2026-06-20T05:50:00+00:00",
+  "active_task_id": "TASK-XTGZPT-DEV-013-CODEX-1",
+  "active_goal": "Complete DEV-013 for xtgzpt: knowledge base productionization in the current working tree.",
   "status": "completed",
   "current_stage": "completed",
-  "last_summary": "DEV-012 file metadata, versions, object bindings, permissions, audit and AI file-reference checks implemented; local code gates passed, online audit requires network environment.",
+  "last_summary": "DEV-013 knowledge review states, version history, source evidence, human publish/reject/archive actions, local permission-filtered search and frontend review controls implemented; local gates passed, online audit requires network environment.",
   "gate_status": {
     "npm_ci": {
       "status": "passed",
-      "summary": "lint, typecheck, test, build and smoke:api passed; Vitest reported 10 files / 46 tests."
+      "summary": "lint, typecheck, test, build and smoke:api passed; Vitest reported 11 files / 49 tests."
     },
     "npm_audit_offline": {
       "status": "passed",
@@ -19,18 +19,23 @@
       "failure_type": "network",
       "summary": "Restricted environment cannot resolve registry.npmjs.org."
     },
+    "browser_dev_server": {
+      "status": "blocked",
+      "failure_type": "sandbox",
+      "summary": "Sandbox cannot bind 127.0.0.1:3001; npm run dev:web failed with listen EPERM."
+    },
     "git_diff_check": {
       "status": "passed",
       "summary": "No whitespace errors."
     }
   },
   "issue_count": 0,
-  "failure_count": 1,
+  "failure_count": 2,
   "intent_debt": {
-    "goal": "Complete DEV-012 online audit.",
+    "goal": "Complete DEV-013 online audit and browser validation.",
     "failure_type": "external_environment",
-    "reason": "Online npm audit requires DNS/network access; current sandbox cannot resolve registry.npmjs.org.",
-    "next_step": "Run online npm audit in a network-capable PR environment.",
-    "created_at": "2026-06-20T05:02:00+00:00"
+    "reason": "Online npm audit requires DNS/network access; current sandbox cannot resolve registry.npmjs.org and cannot bind localhost for browser validation.",
+    "next_step": "Run online npm audit and browser validation in a network/browser-capable PR environment.",
+    "created_at": "2026-06-20T05:50:00+00:00"
   }
 }

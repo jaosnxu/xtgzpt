@@ -26,6 +26,8 @@
 | AUDIT-011 | DEV-011 审计 | 已完成，本地代码审计通过；在线 audit / 浏览器插件需 PR 或可用环境复核 |
 | DEV-012 | 文件生产存储 | 已完成，本地代码 gate 通过；在线 audit 需网络环境复核 |
 | AUDIT-012 | DEV-012 审计 | 已完成，本地代码审计通过；在线 audit 需网络环境复核 |
+| DEV-013 | 知识库生产化 | 已完成，本地代码 gate 通过；在线 audit 需网络环境复核 |
+| AUDIT-013 | DEV-013 审计 | 已完成，本地代码审计通过；在线 audit 需网络环境复核 |
 
 ## 2. 总体阶段顺序
 
@@ -221,6 +223,18 @@
 - 知识管理员审核后才发布。
 - 问答结果必须显示来源。
 - 无权限来源不进入 AI 输入。
+
+当前状态：
+
+- 已完成。
+- 知识状态支持 `draft`、`submitted_for_review`、`published`、`rejected`、`archived`。
+- AI 知识草稿确认只进入 `submitted_for_review`，必须由知识管理员或具备发布权限的人类管理员发布。
+- 知识版本记录 author、reviewer、version、status、timestamps 和 source evidence。
+- 发布、驳回、归档、创建版本和知识问答均写审计。
+- 知识问答每条结果返回 source evidence，且未发布、被驳回、已归档或无权限来源不进入检索、证据或 AI 输入上下文。
+- 搜索保持本地可测试全文检索；外部向量数据库和外部搜索服务不在 DEV-013 范围。
+- 本地 `npm run lint`、`npm run typecheck`、`npm run test`、`npm run build`、`npm run smoke:api`、`npm run ci`、`npm audit --audit-level=low --offline`、`git diff --check` 通过。
+- 在线 `npm audit --audit-level=low` 因当前环境无法解析 `registry.npmjs.org` 阻塞，需 PR / 网络环境补跑。
 
 ## 9. DEV-014 合同闭环
 

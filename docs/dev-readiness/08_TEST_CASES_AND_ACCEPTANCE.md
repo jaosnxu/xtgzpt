@@ -91,7 +91,11 @@
 | 无权限来源存在 | 不进入 AI 输入 |
 | AI 回答 | 显示证据 |
 | AI 生成知识草稿 | 不能自动发布 |
-| 知识管理员发布 | 进入 published |
+| AI 草稿人工确认 | 只能进入 submitted_for_review |
+| 知识管理员发布 | 进入 published 并记录 reviewer/version/source evidence |
+| 知识管理员驳回 | 进入 rejected 并写审计 |
+| 创建新版本 | 记录 author/reviewer/version/status/timestamps/source evidence |
+| 知识管理员归档 | 进入 archived，不再进入检索或 AI 输入 |
 
 ## 8. 合同测试
 

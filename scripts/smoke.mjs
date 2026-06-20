@@ -187,7 +187,16 @@ try {
   assert(taskConfirm.statusCode === 201, `task confirm failed with ${taskConfirm.statusCode}`);
   assert(taskConfirm.body.task.projectId === projectId, "task draft promoted to wrong project");
   assert(knowledgeConfirm.statusCode === 201, `knowledge confirm failed with ${knowledgeConfirm.statusCode}`);
-  assert(knowledgeConfirm.body.knowledgeItem.status === "published", "knowledge draft was not published");
+  assert(
+    knowledgeConfirm.body.knowledgeItem.status === "submitted_for_review",
+    "knowledge draft bypassed review submission"
+  );
+
+  const knowledgePublish = await inject("POST", `/knowledge/items/${knowledgeConfirm.body.knowledgeItem.id}/publish`, superToken, {
+    reason: "smoke knowledge administrator review"
+  });
+  assert(knowledgePublish.statusCode === 200, `knowledge publish failed with ${knowledgePublish.statusCode}`);
+  assert(knowledgePublish.body.item.status === "published", "knowledge administrator did not publish item");
 
   const memoryItems = await inject("GET", "/memory/items", memberToken);
   const knowledgeItems = await inject("GET", "/knowledge/items", superToken);
@@ -209,6 +218,10 @@ try {
   assert(
     knowledgeQuery.body.results.some((item) => item.type === "knowledge_item"),
     "knowledge query did not return knowledge item"
+  );
+  assert(
+    knowledgeQuery.body.results.every((item) => Array.isArray(item.sourceEvidence) && item.sourceEvidence.length > 0),
+    "knowledge query result missing source evidence"
   );
 
   const reuseDraft = await inject("POST", `/chat/threads/${threadId}/ai/summarize`, memberToken);
@@ -255,6 +268,7 @@ try {
           "chat_ai_drafts",
           "ai_draft_confirmation",
           "knowledge_items",
+          "knowledge_review_publish",
           "project_memory",
           "knowledge_query",
           "memory_context_reuse",

@@ -293,6 +293,16 @@ describe("runtime persistence store", () => {
     });
     const memoryId = confirmSummary.json().memory.id as string;
     const knowledgeItemId = confirmKnowledge.json().knowledgeItem.id as string;
+    const publishKnowledge = await firstServer.inject({
+      method: "POST",
+      url: `/knowledge/items/${knowledgeItemId}/publish`,
+      headers: {
+        authorization: `Bearer ${superToken}`
+      },
+      payload: {
+        reason: "restart_persistence_publish"
+      }
+    });
 
     expect(createProject.statusCode).toBe(201);
     expect(createThread.statusCode).toBe(201);
@@ -302,6 +312,7 @@ describe("runtime persistence store", () => {
     expect(knowledgeDraft.statusCode).toBe(200);
     expect(confirmSummary.statusCode).toBe(201);
     expect(confirmKnowledge.statusCode).toBe(201);
+    expect(publishKnowledge.statusCode).toBe(200);
     await firstServer.close();
 
     const secondServer = buildServer({ dataFilePath });
@@ -398,7 +409,15 @@ describe("runtime persistence store", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: knowledgeItemId,
-          title: "DEV-009 知识持久化会话 知识草稿"
+          title: "DEV-009 知识持久化会话 知识草稿",
+          status: "published",
+          currentVersion: 1,
+          reviewerUserId: "user-super",
+          sourceEvidence: expect.arrayContaining([
+            expect.objectContaining({
+              sourceType: "ai_draft"
+            })
+          ])
         })
       ])
     );
@@ -414,7 +433,8 @@ describe("runtime persistence store", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: knowledgeItemId,
-          type: "knowledge_item"
+          type: "knowledge_item",
+          sourceEvidence: expect.any(Array)
         }),
         expect.objectContaining({
           id: memoryId,

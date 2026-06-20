@@ -419,11 +419,61 @@ describe("chat and AI draft loop", () => {
     expect(confirmKnowledge.json().knowledgeItem).toEqual(
       expect.objectContaining({
         organizationId: "org-product",
-        status: "published"
+        status: "submitted_for_review",
+        currentVersion: 1,
+        reviewerUserId: null,
+        sourceEvidence: expect.arrayContaining([
+          expect.objectContaining({
+            sourceType: "ai_draft",
+            sourceId: knowledgeDraftId
+          })
+        ])
       })
     );
     expect(duplicateConfirm.statusCode).toBe(409);
     expect(duplicateConfirm.json()).toEqual({ error: "draft_already_confirmed" });
+    const knowledgeItemId = confirmKnowledge.json().knowledgeItem.id as string;
+
+    const queryBeforePublish = await server.inject({
+      method: "POST",
+      url: "/knowledge/query",
+      headers: {
+        authorization: `Bearer ${superToken}`
+      },
+      payload: {
+        query: "DEV-007",
+        projectId
+      }
+    });
+    expect(queryBeforePublish.statusCode).toBe(200);
+    expect(queryBeforePublish.json().results).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: knowledgeItemId,
+          type: "knowledge_item"
+        })
+      ])
+    );
+
+    const publishKnowledge = await server.inject({
+      method: "POST",
+      url: `/knowledge/items/${knowledgeItemId}/publish`,
+      headers: {
+        authorization: `Bearer ${superToken}`
+      },
+      payload: {
+        reason: "knowledge_admin_review_passed"
+      }
+    });
+    expect(publishKnowledge.statusCode).toBe(200);
+    expect(publishKnowledge.json().item).toEqual(
+      expect.objectContaining({
+        id: knowledgeItemId,
+        status: "published",
+        reviewerUserId: "user-super",
+        publishedAt: expect.any(String)
+      })
+    );
 
     const tasks = await server.inject({
       method: "GET",
@@ -467,11 +517,22 @@ describe("chat and AI draft loop", () => {
       expect.arrayContaining([
         expect.objectContaining({
           type: "project_memory",
-          relevanceScore: expect.any(Number)
+          relevanceScore: expect.any(Number),
+          sourceEvidence: expect.arrayContaining([
+            expect.objectContaining({
+              sourceType: "project_memory"
+            })
+          ])
         }),
         expect.objectContaining({
           type: "knowledge_item",
-          relevanceScore: expect.any(Number)
+          relevanceScore: expect.any(Number),
+          sourceEvidence: expect.arrayContaining([
+            expect.objectContaining({
+              sourceType: "ai_draft",
+              sourceId: knowledgeDraftId
+            })
+          ])
         })
       ])
     );
@@ -521,7 +582,8 @@ describe("chat and AI draft loop", () => {
     expect(audit.json().auditLogs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ action: "task.created_from_ai_draft" }),
-        expect.objectContaining({ action: "knowledge.published_from_ai_draft" }),
+        expect.objectContaining({ action: "knowledge.submitted_for_review_from_ai_draft" }),
+        expect.objectContaining({ action: "knowledge.published" }),
         expect.objectContaining({ action: "memory.created_from_ai_summary" }),
         expect.objectContaining({
           action: "ai.knowledge_query_requested",

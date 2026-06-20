@@ -76,7 +76,7 @@ export type AiCapability =
 
 export type PermissionDimension = "menu" | "data" | "operation" | "approval" | "file" | "ai";
 
-export const permissionPolicyVersion = "seed-dev-012";
+export const permissionPolicyVersion = "seed-dev-013";
 
 export type AuditResult = "success" | "failure" | "denied";
 
@@ -92,7 +92,18 @@ export type AiDraftKind = "chat_summary" | "task_draft" | "knowledge_draft";
 
 export type AiDraftStatus = "draft" | "confirmed";
 
-export type KnowledgeItemStatus = "published" | "archived";
+export type KnowledgeItemStatus = "draft" | "submitted_for_review" | "published" | "rejected" | "archived";
+
+export type KnowledgeEvidenceSourceType = "ai_draft" | "chat_message" | "project_memory" | "manual";
+
+export interface KnowledgeSourceEvidence {
+  sourceType: KnowledgeEvidenceSourceType;
+  sourceId: string;
+  sourceMessageIds: string[];
+  sourceParticipantUserIds: string[];
+  title: string;
+  excerpt: string;
+}
 
 export interface ProjectRecord {
   id: string;
@@ -168,12 +179,38 @@ export interface KnowledgeItemRecord {
   content: string;
   organizationId: string;
   creatorUserId: string;
+  reviewerUserId: string | null;
+  currentVersion: number;
   sourceDraftId: string;
   sourceMessageIds: string[];
   sourceParticipantUserIds: string[];
+  sourceEvidence: KnowledgeSourceEvidence[];
   status: KnowledgeItemStatus;
   createdAt: string;
   updatedAt: string;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  publishedAt: string | null;
+  rejectedAt: string | null;
+  archivedAt: string | null;
+}
+
+export interface KnowledgeVersionRecord {
+  id: string;
+  knowledgeItemId: string;
+  version: number;
+  title: string;
+  content: string;
+  authorUserId: string;
+  reviewerUserId: string | null;
+  status: KnowledgeItemStatus;
+  sourceEvidence: KnowledgeSourceEvidence[];
+  createdAt: string;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  publishedAt: string | null;
+  rejectedAt: string | null;
+  archivedAt: string | null;
 }
 
 export interface ProjectMemoryRecord {
@@ -261,6 +298,7 @@ export interface KnowledgeSearchResult {
   projectId: string | null;
   sourceId: string;
   sourceMessageIds: string[];
+  sourceEvidence: KnowledgeSourceEvidence[];
   relevanceScore: number;
   matchedFields: string[];
   createdAt: string;
