@@ -1,33 +1,15 @@
 {
-  "updated_at": "2026-06-20T18:00:30.000000+00:00",
-  "active_task_id": "TASK-XTGZPT-DEV-023-CODEX-1",
-  "active_goal": "Productize the existing Phase 1 frontend interaction layer without product-scope expansion, new top-level menus, production deployment, or production cutover.",
+  "updated_at": "2026-06-20T18:51:16.000000+00:00",
+  "active_task_id": "TASK-XTGZPT-DEV-024-CODEX-1",
+  "active_goal": "Productize the remaining frontend module scope as one large DEV-024 task and keep it within one final PR.",
   "status": "completed",
-  "current_stage": "completed",
-  "last_summary": "DEV-023 productized the existing Phase 1 frontend interaction layer: dashboard/workbench rows and notifications can jump to related project/task/contract/approval/AI draft objects; project, task, chat, knowledge, contract, approval and settings detail views expose relationship jumps and selection-first context; LAN local delivery scripts and README instructions were added. The writer executor produced the diff but did not return a terminal report, so the verifier reran the full local gate. npm ci, lint, typecheck, test, build, smoke:api and audit passed. Web/API LAN services were started on 0.0.0.0; local HTTP checks passed. Browser opened the web app successfully; text input automation was limited by the Browser plugin virtual clipboard, while API smoke covered login and object-flow behavior.",
+  "current_stage": "commit_push_pr",
+  "last_summary": "DEV-024 converted the current frontend from development-verification copy into a production-facing collaboration platform shell. Dashboard now shows business workbench panels, project health, contract/approval status, organization scope and system notifications. Settings now presents organization/account, role/data, approval/file, audit/runtime and AI governance modules. User-facing DEV/seed-dev/debug copy was removed, app-copy regression test was added, and Browser verified login plus dashboard/workbench/projects/tasks/chat/knowledge/contracts/approvals/settings with forbiddenCopyPresent=false. Browser screenshot capture timed out, so DOM evidence was saved at docs/dev-log/DEV-024-browser-evidence.json.",
   "gate_status": {
     "npm_ci": {
       "status": "passed",
       "command": "npm ci",
       "result": "276 packages installed, 0 vulnerabilities"
-    },
-    "git_diff_check": {
-      "status": "passed",
-      "command": "git diff --check"
-    },
-    "json_parse": {
-      "status": "passed",
-      "commands": [
-        "python3 -m json.tool docs/loop/runtime-memory/current_status.json",
-        "python3 -m json.tool docs/loop/runtime-memory/runs/TASK-XTGZPT-DEV-023-CODEX-1.json"
-      ]
-    },
-    "jsonl_parse": {
-      "status": "passed",
-      "commands": [
-        "action_log.jsonl parse",
-        "run_history.jsonl parse"
-      ]
     },
     "lint": {
       "status": "passed",
@@ -40,7 +22,7 @@
     "test": {
       "status": "passed",
       "command": "npm run test",
-      "result": "14 test files, 64 tests"
+      "result": "15 test files, 66 tests"
     },
     "build": {
       "status": "passed",
@@ -49,7 +31,7 @@
     "smoke_api": {
       "status": "passed",
       "command": "npm run smoke:api",
-      "result": "ok true, 29 smoke checks"
+      "result": "ok true and 29 smoke checks"
     },
     "audit": {
       "status": "passed",
@@ -58,12 +40,12 @@
     },
     "browser_verification": {
       "status": "passed_with_tool_limitation",
-      "command": "browser verification against the web app",
-      "result": "Web opened at http://127.0.0.1:3011 and LAN service advertised http://192.168.2.90:3011; API health passed at http://127.0.0.1:3002. Browser plugin text input failed because virtual clipboard is unavailable; login/object flows are covered by API smoke."
+      "command": "Browser verification against http://127.0.0.1:3031",
+      "result": "login and 9 modules opened; forbiddenCopyPresent=false for every module; screenshot capture timed out and JSON evidence was saved"
     }
   },
-  "issue_count": 0,
-  "failure_count": 1,
+  "issue_count": 1,
+  "failure_count": 2,
   "intent_debt": null,
-  "next_recommended_task": "Open PR for DEV-023, pass GitHub required checks and review gate, then keep LAN test server available for user acceptance; do not cut over production until signed release window."
+  "next_recommended_task": "Push DEV-024 branch, open one PR against issue #51, and keep DEV-024 test service available for user acceptance."
 }
