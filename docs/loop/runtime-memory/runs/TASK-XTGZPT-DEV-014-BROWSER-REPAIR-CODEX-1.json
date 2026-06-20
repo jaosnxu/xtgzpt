@@ -1,0 +1,758 @@
+{
+  "schema_version": "loop.run_summary.v1",
+  "task_id": "TASK-XTGZPT-DEV-014-BROWSER-REPAIR-CODEX-1",
+  "goal": "Use Loop to repair the DEV-014 browser regression in xtgzpt contract closure: after creating a contract from the web UI, clicking AI review sends a POST request without a JSON body and receives Bad Request, while service-level smoke passes. Produce the smallest Loop-controlled fix and regression coverage, then rerun gates.",
+  "scope": {
+    "include": [
+      "/tmp/xtgzpt-bootstrap/xtgzpt"
+    ],
+    "exclude": [
+      "Loop platform source changes",
+      "production writes",
+      "deployment",
+      "secrets",
+      "new DEV phase scope",
+      "finance system behavior",
+      "automatic contract signing",
+      "automatic payment",
+      "procurement system",
+      "inventory system",
+      "full approval engine implementation",
+      "external e-signature services",
+      "external OCR services",
+      "external notifications",
+      "mobile app",
+      "manual project edits outside Loop"
+    ]
+  },
+  "acceptance": [
+    "Implementation is executed through the codex_executor connector in the isolated Loop worktree, not by manual chat edits.",
+    "Loop reads the current DEV-014 branch state from /tmp/xtgzpt-bootstrap/xtgzpt and the project memory index before editing.",
+    "Loop classifies the failure as a browser/UI regression, not a backend contract workflow failure.",
+    "The web UI can create a contract and then run initial AI review without Bad Request.",
+    "The same fix applies to other no-body POST actions used by the web UI, including second review and AI draft generation paths, without weakening API permissions.",
+    "The backend contract boundaries remain unchanged: AI cannot confirm risk, choose an option, submit approval, sign, pay, or execute a contract.",
+    "Regression coverage is added or updated so a browser-style POST without an explicit body no longer silently escapes tests.",
+    "DEV-014 / AUDIT-014 or runtime memory records are updated with the browser regression and repair result.",
+    "No new top-level menu, no procurement, no inventory, no finance workflow, no full approval engine, no external integration, and no unrelated refactor is introduced.",
+    "Loop runs xtgzpt npm gates: lint, typecheck, test, build, smoke:api.",
+    "Any failure is classified, retried or repaired according to Loop policy, and written to intent debt or repair queue if not resolved."
+  ],
+  "status": "completed",
+  "current_stage": "completed",
+  "created_at": "2026-06-20T04:03:23.036292+00:00",
+  "updated_at": "2026-06-20T04:12:09.973935+00:00",
+  "heartbeat_at": "2026-06-20T04:12:09.973935+00:00",
+  "attempt_count": 8,
+  "retry_count": 0,
+  "repair_count": 0,
+  "workflow": {
+    "architecture": "graph_runtime",
+    "type": "durable_workflow",
+    "writer": "writer",
+    "reviewer": "reviewer",
+    "verifier": "verifier"
+  },
+  "project_memory_index": {
+    "root": "/private/tmp/xtgzpt-bootstrap/xtgzpt",
+    "index_path": "/private/tmp/xtgzpt-bootstrap/xtgzpt/docs/loop/00_MEMORY_INDEX.md",
+    "status": "available",
+    "loaded_files": [
+      "PROJECT_INTAKE.md",
+      "README.md",
+      "docs/BUSINESS_IMPLEMENTATION_PLAN.md",
+      "docs/PROJECT_CONSTITUTION.md",
+      "docs/TECHNICAL_STANDARD.md",
+      "docs/TEST_ACCEPTANCE_STANDARD.md",
+      "docs/dev-log/AUDIT-008.md",
+      "docs/dev-log/AUDIT-009.md",
+      "docs/dev-log/AUDIT-010.md",
+      "docs/dev-log/AUDIT-011.md",
+      "docs/dev-log/AUDIT-012.md",
+      "docs/dev-log/AUDIT-013.md",
+      "docs/dev-log/AUDIT-014.md",
+      "docs/dev-log/AUDIT-LOOP-001.md",
+      "docs/dev-log/DEV-007.md",
+      "docs/dev-log/DEV-008.md",
+      "docs/dev-log/DEV-009.md",
+      "docs/dev-log/DEV-010.md",
+      "docs/dev-log/DEV-011.md",
+      "docs/dev-log/DEV-012.md",
+      "docs/dev-log/DEV-013.md",
+      "docs/dev-log/DEV-014.md",
+      "docs/dev-readiness/00_DEV_READINESS_OVERVIEW.md",
+      "docs/dev-readiness/01_DEVELOPMENT_PRD.md",
+      "docs/dev-readiness/02_PERMISSION_MATRIX.md",
+      "docs/dev-readiness/03_OBJECTS_AND_STATE_MACHINES.md",
+      "docs/dev-readiness/04_API_DRAFT.md",
+      "docs/dev-readiness/06_AUDIT_LOG_MATRIX.md",
+      "docs/dev-readiness/08_TEST_CASES_AND_ACCEPTANCE.md",
+      "docs/dev-readiness/10_DEVELOPMENT_BACKLOG.md",
+      "docs/loop/00_MEMORY_INDEX.md",
+      "docs/loop/01_OPERATING_RULES.md",
+      "docs/loop/02_INTENT_DEBT.md",
+      "docs/loop/04_GITHUB_BRANCH_PROTECTION.md",
+      "docs/loop/05_EXTERNAL_LOOP_SYSTEM.md"
+    ],
+    "missing_files": [],
+    "rejected_files": []
+  },
+  "stages": [
+    {
+      "stage": "intake",
+      "status": "done",
+      "summary": "Accepted goal and initialized task context.",
+      "failure_type": null,
+      "next_state": "understanding",
+      "timestamp": "2026-06-20T04:03:23.078198+00:00"
+    },
+    {
+      "stage": "understanding",
+      "status": "done",
+      "summary": "Parsed task scope, acceptance, available resources, and repository memory.",
+      "failure_type": null,
+      "next_state": "planning",
+      "timestamp": "2026-06-20T04:03:23.082194+00:00"
+    },
+    {
+      "stage": "planning",
+      "status": "done",
+      "summary": "Built minimal execution plan from current goal.",
+      "failure_type": null,
+      "next_state": "routing",
+      "timestamp": "2026-06-20T04:03:23.084027+00:00"
+    },
+    {
+      "stage": "routing",
+      "status": "done",
+      "summary": "Selected candidate skills and connectors for the task.",
+      "failure_type": null,
+      "next_state": "preflight",
+      "timestamp": "2026-06-20T04:03:23.086741+00:00"
+    },
+    {
+      "stage": "preflight",
+      "status": "done",
+      "summary": "Preflight gate passed.",
+      "failure_type": null,
+      "next_state": "executing",
+      "timestamp": "2026-06-20T04:03:23.088751+00:00"
+    },
+    {
+      "stage": "executing",
+      "status": "done",
+      "summary": "Execution ran in the primary worktree and executed selected skills, connectors, and sub-agents.",
+      "failure_type": null,
+      "next_state": "reviewing",
+      "timestamp": "2026-06-20T04:12:09.959575+00:00"
+    },
+    {
+      "stage": "reviewing",
+      "status": "done",
+      "summary": "Review gate passed.",
+      "failure_type": null,
+      "next_state": "verifying",
+      "timestamp": "2026-06-20T04:12:09.967996+00:00"
+    },
+    {
+      "stage": "verifying",
+      "status": "done",
+      "summary": "Review and verification gates passed.",
+      "failure_type": null,
+      "next_state": "completed",
+      "timestamp": "2026-06-20T04:12:09.973935+00:00"
+    }
+  ],
+  "gates": {
+    "preflight_gate": {
+      "status": "passed",
+      "reason": "preflight checks passed",
+      "contracts": [
+        {
+          "name": "test",
+          "standard_name": "ci_test_runner",
+          "target": "test",
+          "mode": "read_only",
+          "risk_level": "low",
+          "auth_requirements": [],
+          "capabilities": [
+            "unit",
+            "integration",
+            "verification"
+          ]
+        },
+        {
+          "name": "codex_executor",
+          "standard_name": "codex_writer_executor",
+          "target": "codex",
+          "mode": "read_write",
+          "risk_level": "high",
+          "auth_requirements": [
+            "codex_login"
+          ],
+          "capabilities": [
+            "non_interactive_code_writer",
+            "local_diff_generation",
+            "self_contained_task_execution"
+          ]
+        }
+      ],
+      "auth_resolution": {
+        "test": [],
+        "codex_executor": [
+          {
+            "requirement": "codex_login",
+            "source": "missing",
+            "env": null,
+            "available": false
+          }
+        ]
+      },
+      "missing_auth": [
+        {
+          "connector": "codex_executor",
+          "requirement": "codex_login",
+          "source": "missing",
+          "env": null,
+          "available": false
+        }
+      ],
+      "tool_policy": {
+        "status": "passed",
+        "reason": "tool policy passed",
+        "decisions": [
+          {
+            "connector": "test",
+            "target": "test",
+            "mode": "read_only",
+            "risk_level": "low",
+            "decision": "allowed",
+            "reason": "connector is allowed by policy",
+            "failure_type": null
+          },
+          {
+            "connector": "codex_executor",
+            "target": "codex",
+            "mode": "read_write",
+            "risk_level": "high",
+            "decision": "allowed",
+            "reason": "connector is explicitly approved",
+            "failure_type": null
+          }
+        ],
+        "failure_type": null
+      },
+      "failure_type": null
+    },
+    "review_gate": {
+      "status": "approved",
+      "reason": "review checks passed"
+    },
+    "verification_gate": {
+      "status": "verified",
+      "reason": "verification checks passed"
+    },
+    "merge_gate": {
+      "status": "passed",
+      "reason": "merge gate not required"
+    }
+  },
+  "issues": {
+    "count": 11,
+    "items": [
+      {
+        "id": "ISSUE-001",
+        "title": "Implementation is executed through the codex_executor connector in the isola...",
+        "status": "ready",
+        "priority": 1,
+        "goal": "Use Loop to repair the DEV-014 browser regression in xtgzpt contract closure: after creating a contract from the web UI, clicking AI review sends a POST request without a JSON body and receives Bad Request, while service-level smoke passes. Produce the smallest Loop-controlled fix and regression coverage, then rerun gates.",
+        "acceptance": [
+          "Implementation is executed through the codex_executor connector in the isolated Loop worktree, not by manual chat edits."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "new DEV phase scope",
+            "finance system behavior",
+            "automatic contract signing",
+            "automatic payment",
+            "procurement system",
+            "inventory system",
+            "full approval engine implementation",
+            "external e-signature services",
+            "external OCR services",
+            "external notifications",
+            "mobile app",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-002",
+        "title": "Loop reads the current DEV-014 branch state from /tmp/xtgzpt-bootstrap/xtgzp...",
+        "status": "ready",
+        "priority": 2,
+        "goal": "Use Loop to repair the DEV-014 browser regression in xtgzpt contract closure: after creating a contract from the web UI, clicking AI review sends a POST request without a JSON body and receives Bad Request, while service-level smoke passes. Produce the smallest Loop-controlled fix and regression coverage, then rerun gates.",
+        "acceptance": [
+          "Loop reads the current DEV-014 branch state from /tmp/xtgzpt-bootstrap/xtgzpt and the project memory index before editing."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "new DEV phase scope",
+            "finance system behavior",
+            "automatic contract signing",
+            "automatic payment",
+            "procurement system",
+            "inventory system",
+            "full approval engine implementation",
+            "external e-signature services",
+            "external OCR services",
+            "external notifications",
+            "mobile app",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-003",
+        "title": "Loop classifies the failure as a browser/UI regression, not a backend contra...",
+        "status": "ready",
+        "priority": 3,
+        "goal": "Use Loop to repair the DEV-014 browser regression in xtgzpt contract closure: after creating a contract from the web UI, clicking AI review sends a POST request without a JSON body and receives Bad Request, while service-level smoke passes. Produce the smallest Loop-controlled fix and regression coverage, then rerun gates.",
+        "acceptance": [
+          "Loop classifies the failure as a browser/UI regression, not a backend contract workflow failure."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "new DEV phase scope",
+            "finance system behavior",
+            "automatic contract signing",
+            "automatic payment",
+            "procurement system",
+            "inventory system",
+            "full approval engine implementation",
+            "external e-signature services",
+            "external OCR services",
+            "external notifications",
+            "mobile app",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-004",
+        "title": "The web UI can create a contract and then run initial AI review without Bad ...",
+        "status": "ready",
+        "priority": 4,
+        "goal": "Use Loop to repair the DEV-014 browser regression in xtgzpt contract closure: after creating a contract from the web UI, clicking AI review sends a POST request without a JSON body and receives Bad Request, while service-level smoke passes. Produce the smallest Loop-controlled fix and regression coverage, then rerun gates.",
+        "acceptance": [
+          "The web UI can create a contract and then run initial AI review without Bad Request."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "new DEV phase scope",
+            "finance system behavior",
+            "automatic contract signing",
+            "automatic payment",
+            "procurement system",
+            "inventory system",
+            "full approval engine implementation",
+            "external e-signature services",
+            "external OCR services",
+            "external notifications",
+            "mobile app",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-005",
+        "title": "The same fix applies to other no-body POST actions used by the web UI, inclu...",
+        "status": "ready",
+        "priority": 5,
+        "goal": "Use Loop to repair the DEV-014 browser regression in xtgzpt contract closure: after creating a contract from the web UI, clicking AI review sends a POST request without a JSON body and receives Bad Request, while service-level smoke passes. Produce the smallest Loop-controlled fix and regression coverage, then rerun gates.",
+        "acceptance": [
+          "The same fix applies to other no-body POST actions used by the web UI, including second review and AI draft generation paths, without weakening API permissions."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "new DEV phase scope",
+            "finance system behavior",
+            "automatic contract signing",
+            "automatic payment",
+            "procurement system",
+            "inventory system",
+            "full approval engine implementation",
+            "external e-signature services",
+            "external OCR services",
+            "external notifications",
+            "mobile app",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-006",
+        "title": "The backend contract boundaries remain unchanged: AI cannot confirm risk, ch...",
+        "status": "ready",
+        "priority": 6,
+        "goal": "Use Loop to repair the DEV-014 browser regression in xtgzpt contract closure: after creating a contract from the web UI, clicking AI review sends a POST request without a JSON body and receives Bad Request, while service-level smoke passes. Produce the smallest Loop-controlled fix and regression coverage, then rerun gates.",
+        "acceptance": [
+          "The backend contract boundaries remain unchanged: AI cannot confirm risk, choose an option, submit approval, sign, pay, or execute a contract."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "new DEV phase scope",
+            "finance system behavior",
+            "automatic contract signing",
+            "automatic payment",
+            "procurement system",
+            "inventory system",
+            "full approval engine implementation",
+            "external e-signature services",
+            "external OCR services",
+            "external notifications",
+            "mobile app",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-007",
+        "title": "Regression coverage is added or updated so a browser-style POST without an e...",
+        "status": "ready",
+        "priority": 7,
+        "goal": "Use Loop to repair the DEV-014 browser regression in xtgzpt contract closure: after creating a contract from the web UI, clicking AI review sends a POST request without a JSON body and receives Bad Request, while service-level smoke passes. Produce the smallest Loop-controlled fix and regression coverage, then rerun gates.",
+        "acceptance": [
+          "Regression coverage is added or updated so a browser-style POST without an explicit body no longer silently escapes tests."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "new DEV phase scope",
+            "finance system behavior",
+            "automatic contract signing",
+            "automatic payment",
+            "procurement system",
+            "inventory system",
+            "full approval engine implementation",
+            "external e-signature services",
+            "external OCR services",
+            "external notifications",
+            "mobile app",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-008",
+        "title": "DEV-014 / AUDIT-014 or runtime memory records are updated with the browser r...",
+        "status": "ready",
+        "priority": 8,
+        "goal": "Use Loop to repair the DEV-014 browser regression in xtgzpt contract closure: after creating a contract from the web UI, clicking AI review sends a POST request without a JSON body and receives Bad Request, while service-level smoke passes. Produce the smallest Loop-controlled fix and regression coverage, then rerun gates.",
+        "acceptance": [
+          "DEV-014 / AUDIT-014 or runtime memory records are updated with the browser regression and repair result."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "new DEV phase scope",
+            "finance system behavior",
+            "automatic contract signing",
+            "automatic payment",
+            "procurement system",
+            "inventory system",
+            "full approval engine implementation",
+            "external e-signature services",
+            "external OCR services",
+            "external notifications",
+            "mobile app",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-009",
+        "title": "No new top-level menu, no procurement, no inventory, no finance workflow, no...",
+        "status": "ready",
+        "priority": 9,
+        "goal": "Use Loop to repair the DEV-014 browser regression in xtgzpt contract closure: after creating a contract from the web UI, clicking AI review sends a POST request without a JSON body and receives Bad Request, while service-level smoke passes. Produce the smallest Loop-controlled fix and regression coverage, then rerun gates.",
+        "acceptance": [
+          "No new top-level menu, no procurement, no inventory, no finance workflow, no full approval engine, no external integration, and no unrelated refactor is introduced."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "new DEV phase scope",
+            "finance system behavior",
+            "automatic contract signing",
+            "automatic payment",
+            "procurement system",
+            "inventory system",
+            "full approval engine implementation",
+            "external e-signature services",
+            "external OCR services",
+            "external notifications",
+            "mobile app",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-010",
+        "title": "Loop runs xtgzpt npm gates: lint, typecheck, test, build, smoke:api.",
+        "status": "ready",
+        "priority": 10,
+        "goal": "Use Loop to repair the DEV-014 browser regression in xtgzpt contract closure: after creating a contract from the web UI, clicking AI review sends a POST request without a JSON body and receives Bad Request, while service-level smoke passes. Produce the smallest Loop-controlled fix and regression coverage, then rerun gates.",
+        "acceptance": [
+          "Loop runs xtgzpt npm gates: lint, typecheck, test, build, smoke:api."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "new DEV phase scope",
+            "finance system behavior",
+            "automatic contract signing",
+            "automatic payment",
+            "procurement system",
+            "inventory system",
+            "full approval engine implementation",
+            "external e-signature services",
+            "external OCR services",
+            "external notifications",
+            "mobile app",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-011",
+        "title": "Any failure is classified, retried or repaired according to Loop policy, and...",
+        "status": "ready",
+        "priority": 11,
+        "goal": "Use Loop to repair the DEV-014 browser regression in xtgzpt contract closure: after creating a contract from the web UI, clicking AI review sends a POST request without a JSON body and receives Bad Request, while service-level smoke passes. Produce the smallest Loop-controlled fix and regression coverage, then rerun gates.",
+        "acceptance": [
+          "Any failure is classified, retried or repaired according to Loop policy, and written to intent debt or repair queue if not resolved."
+        ],
+        "scope": {
+          "include": [
+            "/tmp/xtgzpt-bootstrap/xtgzpt"
+          ],
+          "exclude": [
+            "Loop platform source changes",
+            "production writes",
+            "deployment",
+            "secrets",
+            "new DEV phase scope",
+            "finance system behavior",
+            "automatic contract signing",
+            "automatic payment",
+            "procurement system",
+            "inventory system",
+            "full approval engine implementation",
+            "external e-signature services",
+            "external OCR services",
+            "external notifications",
+            "mobile app",
+            "manual project edits outside Loop"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      }
+    ]
+  },
+  "failures": [],
+  "intent_debt": null,
+  "repair_queue": {
+    "queued": false
+  },
+  "verification": {
+    "ci_setup": {
+      "name": "setup",
+      "command": [
+        "/Users/jason/.local/nodejs/node-v24.17.0-darwin-arm64/bin/npm",
+        "ci"
+      ],
+      "cwd": "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-014-BROWSER-REPAIR-CODEX-1/WT-8950ADC5",
+      "exit_code": 0,
+      "stdout": "added 263 packages, and audited 268 packages in 3s\n\n73 packages are looking for funding\n  run `npm fund` for details\n\nfound 0 vulnerabilities",
+      "stderr": "",
+      "status": "passed"
+    },
+    "ci_summary": {
+      "total": 5,
+      "passed": 5,
+      "failed": 0,
+      "stopped_on_first_failure": false
+    },
+    "eval_summary": null,
+    "artifact_types": {
+      "repository_memory_context": 1,
+      "project_memory_index_context": 1,
+      "issue_backlog": 1,
+      "tool_contracts": 1,
+      "missing_auth": 1,
+      "tool_policy": 1,
+      "execution_log": 1,
+      "entities": 1,
+      "relationships": 1,
+      "page_map": 1,
+      "command": 1,
+      "working_directory": 1,
+      "exit_code": 1,
+      "stdout": 1,
+      "stderr": 1,
+      "ci_setup_result": 1,
+      "ci_suite_summary": 1,
+      "ci_suite_results": 1
+    },
+    "reports_count": 8,
+    "trace_count": 31
+  },
+  "worktrees": [
+    "WT-8950ADC5"
+  ],
+  "subagents": [],
+  "next_action": "No further action required unless a new task is opened."
+}

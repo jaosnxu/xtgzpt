@@ -208,13 +208,16 @@ export function App() {
       throw new Error("未登录");
     }
 
+    const headers = new Headers(init.headers);
+    headers.set("authorization", `Bearer ${session.token}`);
+
+    if (init.body !== undefined && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+
     const response = await fetch(`${apiBaseUrl}${path}`, {
       ...init,
-      headers: {
-        "Content-Type": "application/json",
-        authorization: `Bearer ${session.token}`,
-        ...init.headers
-      }
+      headers
     });
 
     if (!response.ok) {

@@ -39,7 +39,9 @@
 
 ## Findings
 
-未发现 DEV-014 范围内的阻塞代码问题。
+浏览器验证复核发现并已修复 1 个 DEV-014 范围内回归：
+
+- `AUDIT-014-P1-FIXED-001`：Web UI 创建合同成功后点击 AI 审查，浏览器请求 `POST /contracts/:id/ai-review` 没有 JSON body 但保留 `Content-Type: application/json`，Fastify JSON parser 在业务 handler 前返回 `400 Bad Request`。修复后前端无 body 请求不再设置 JSON content type，API 同时对 `/contracts/:id/ai-review` 和 `/contracts/:id/second-review` 的空 body JSON header 做 scoped 兼容；风险确认、审批边界、执行跟踪和 AI 人工确认边界未扩张。
 
 PR 前必须在可用环境补跑：
 
@@ -62,6 +64,7 @@ PR 前必须在可用环境补跑：
 - 上传、粘贴、AI 审查开始/完成、风险确认、版本变化、审批 handoff、执行跟踪和无权限访问均写审计
 - 合同页在既有“合同”一级菜单内完成，未新增新一级菜单
 - 无权限账号通过合同详情或 AI 审查接口无法拿到合同标题、正文、风险、来源证据或 AI 上下文
+- 浏览器式无 body POST 回归已覆盖：`ai-review`、`second-review` 在 `Content-Type: application/json` 且无 payload 时不再返回 parser 级 400；无权限 `ai-review` 仍返回非泄露 404。
 
 ## 非阻塞风险
 

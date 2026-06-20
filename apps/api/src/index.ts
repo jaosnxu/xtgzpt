@@ -257,6 +257,7 @@ const supportedFileSourceObjectTypes: FileSourceObjectType[] = [
 const contractFrameworkVersion = "contract-review-local-v1.0.0";
 
 const supportedContractExecutionEventTypes: ContractExecutionEventType[] = ["reminder", "record", "status_update"];
+const contractNoBodyActionRoutePattern = /^\/contracts\/[^/?]+\/(?:ai-review|second-review)(?:\?|$)/;
 
 function nowIso() {
   return new Date().toISOString();
@@ -269,6 +270,16 @@ function textOrDefault(value: string | undefined, fallback: string) {
 
 function isFileSourceObjectType(value: unknown): value is FileSourceObjectType {
   return typeof value === "string" && supportedFileSourceObjectTypes.includes(value as FileSourceObjectType);
+}
+
+function isJsonContentType(value: string | string[] | undefined) {
+  const contentType = Array.isArray(value) ? value[0] : value;
+  return typeof contentType === "string" && contentType.toLowerCase().includes("application/json");
+}
+
+function headerHasBody(value: string | string[] | undefined) {
+  const contentLength = Array.isArray(value) ? value[0] : value;
+  return typeof contentLength === "string" && contentLength.trim() !== "" && contentLength.trim() !== "0";
 }
 
 interface AuditRecordInput {
@@ -316,6 +327,18 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
   } = store.state;
   const server = Fastify({
     logger: true
+  });
+
+  server.addHook("onRequest", async (request) => {
+    if (
+      request.method === "POST" &&
+      contractNoBodyActionRoutePattern.test(request.url) &&
+      isJsonContentType(request.headers["content-type"]) &&
+      !headerHasBody(request.headers["content-length"]) &&
+      request.headers["transfer-encoding"] === undefined
+    ) {
+      delete request.raw.headers["content-type"];
+    }
   });
 
   function requestId(request: FastifyRequest) {

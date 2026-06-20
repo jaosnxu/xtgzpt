@@ -69,7 +69,8 @@ describe("DEV-014 contract closure", () => {
       method: "POST",
       url: `/contracts/${contractId}/ai-review`,
       headers: {
-        authorization: `Bearer ${contractToken}`
+        authorization: `Bearer ${contractToken}`,
+        "content-type": "application/json"
       }
     });
 
@@ -143,7 +144,8 @@ describe("DEV-014 contract closure", () => {
       method: "POST",
       url: `/contracts/${contractId}/second-review`,
       headers: {
-        authorization: `Bearer ${contractToken}`
+        authorization: `Bearer ${contractToken}`,
+        "content-type": "application/json"
       }
     });
 
@@ -272,7 +274,8 @@ describe("DEV-014 contract closure", () => {
       method: "POST",
       url: `/contracts/${contractId}/ai-review`,
       headers: {
-        authorization: `Bearer ${memberToken}`
+        authorization: `Bearer ${memberToken}`,
+        "content-type": "application/json"
       }
     });
 
