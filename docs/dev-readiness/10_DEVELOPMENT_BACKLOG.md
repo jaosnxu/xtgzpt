@@ -105,8 +105,8 @@
 
 下一阶段：
 
-- 已完成 `DEV-001` 到 `DEV-008`
-- 当前进入项目宪法与生产标准收口
+- 已完成 `DEV-001` 到 `DEV-011`
+- 当前进入 `DEV-012` 文件生产存储准备
 
 ## 5. 第一阶段代码开发顺序和当前状态
 
@@ -299,24 +299,28 @@
 - 系统管理员不能默认读取未授权业务项目
 - 拒绝访问事件可通过管理员权限查询
 
-### DEV-011 页面状态和响应式验收
+### DEV-011 我的工作台、通知和页面状态收口
+
+状态：已完成。本阶段把首页和我的工作台改为角色感知的工作入口，并补齐系统内通知与核心页面状态；完整文件、合同和审批闭环继续留到后续阶段。
 
 范围：
 
-- Normal
-- Empty
-- Loading
-- NoPermission
-- Error
-- AI_Generating
-- AI_Failed
-- Expired
-- Archived
-- 1440/1280/960 宽度
+- `/workbench` API 汇总本人待办、我负责的任务、我参与的项目、AI 待确认结果、通知和页面状态
+- 首页展示角色感知工作摘要，不再展示旧阶段门占位
+- 我的工作台展示待办、负责任务、参与项目、待审批、待确认合同和待确认 AI 结果
+- 系统内通知覆盖 pending work / approval / contract confirmation / AI result / no-permission / system status
+- 核心页面显式展示 normal / empty / loading / no-permission / error / AI_Generating / AI_Failed / expired / archived 状态
+- 管理员和普通用户按菜单、数据、操作、审批、文件、AI 权限看到不同内容
+- CSS 对 1440 / 1280 / 960 可用宽度做响应式约束
 
 验收：
 
-- 核心任务在 3 种宽度都可完成
+- 普通用户能看到自己的待办、负责任务、参与项目、AI 待确认结果和通知
+- 系统管理员能看到配置和权限上下文，但不默认获得普通用户业务项目
+- AI 结果仍必须人工确认后才能入库
+- 合同确认和审批实例不在 DEV-011 创建，页面只展示空状态和权限/边界
+- `npm run lint`、`npm run typecheck`、`npm run test`、`npm run build`、`npm run smoke:api`、`git diff --check` 通过
+- `npm audit --audit-level=low --offline` 通过；在线 audit 需网络环境补跑
 
 ## 6. 第一批建议 issue
 

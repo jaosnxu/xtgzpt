@@ -1,17 +1,25 @@
 import {
+  AlertTriangle,
+  Archive,
   Bell,
   BookOpen,
+  Brain,
   BriefcaseBusiness,
   CheckSquare,
+  Clock,
   ClipboardList,
   FileText,
   Home,
+  Inbox,
   LayoutDashboard,
+  LoaderCircle,
+  Lock,
   MessageSquare,
   Search,
   Settings,
   ShieldCheck,
-  Users
+  Users,
+  XCircle
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
@@ -29,11 +37,15 @@ import {
   type KnowledgeSearchResult,
   type ModuleKey,
   type Organization,
+  type PageStateDescriptor,
   type PermissionSummary,
   type ProjectMemoryRecord,
   type ProjectRecord,
   type PublicUser,
-  type TaskRecord
+  type TaskRecord,
+  type WorkbenchItem,
+  type WorkbenchNotification,
+  type WorkbenchResponse
 } from "@xtgzpt/shared";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api";
@@ -68,56 +80,42 @@ const menuIcon = {
 
 const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
   dashboard: {
-    stage: "DEV-008 进行中",
-    summary: "项目记忆检索与自动回用正在接入，聊天和项目任务闭环继续作为底座。"
+    stage: "DEV-011 已接入",
+    summary: "首页按角色汇总待处理工作、AI 待确认结果、通知和权限状态。"
   },
   workbench: {
-    stage: "DEV-005 待开发",
-    summary: "我的工作台将在项目、任务、审批真实数据接入后形成待办。"
+    stage: "DEV-011 已接入",
+    summary: "我的工作台展示本人待办、负责任务、参与项目、AI 待确认结果和系统内通知。"
   },
   projects: {
-    stage: "DEV-005 进行中",
-    summary: "项目列表、创建、成员、状态和任务关联已进入真实接口。"
+    stage: "DEV-011 状态已接入",
+    summary: "项目列表、创建、成员、状态和任务关联已进入真实接口，并展示空、加载、错误和归档状态。"
   },
   tasks: {
-    stage: "DEV-005 进行中",
-    summary: "任务列表、创建、负责人提交和人工确认已进入真实接口。"
+    stage: "DEV-011 状态已接入",
+    summary: "任务列表、创建、负责人提交和人工确认已进入真实接口，并保持人工确认边界。"
   },
   chat: {
-    stage: "DEV-008 进行中",
-    summary: "聊天会话、消息、AI 草稿、人工确认入库和记忆上下文回用已进入真实接口。"
+    stage: "DEV-011 状态已接入",
+    summary: "聊天、AI 草稿、人工确认入库和记忆上下文回用已进入真实接口。"
   },
   knowledge: {
-    stage: "DEV-008 进行中",
+    stage: "DEV-011 状态已接入",
     summary: "正式知识和项目记忆支持权限过滤检索，并可作为 AI 草稿上下文。"
   },
   contracts: {
-    stage: "DEV-009 待开发",
-    summary: "合同上传、AI 审查、人工确认、二次审查和执行跟踪尚未进入代码开发。"
+    stage: "DEV-014 待开发",
+    summary: "当前仅展示权限、空状态和人工确认边界；合同上传、AI 审查、二次审查和执行跟踪不在 DEV-011 范围。"
   },
   approvals: {
-    stage: "DEV-010 待开发",
-    summary: "审批发起、当前节点审批人、同意、驳回、退回、转交和加签尚未进入代码开发。"
+    stage: "DEV-015 待开发",
+    summary: "当前仅展示权限、空状态和人工审批边界；审批实例、当前节点、退回、转交和加签不在 DEV-011 范围。"
   },
   settings: {
-    stage: "DEV-004 已完成",
-    summary: "审计查询权限边界已接入，配置写入仍待真实后台持久化。"
+    stage: "DEV-011 状态已接入",
+    summary: "权限摘要、组织、角色、审批、文件和 AI 权限维度按角色展示。"
   }
 };
-
-const stageGateItems = [
-  { scope: "认证登录", owner: "API / Web", status: "已验证", stage: "DEV-002" },
-  { scope: "角色与菜单权限", owner: "API / Web", status: "已验证", stage: "DEV-002" },
-  { scope: "组织数据范围", owner: "API", status: "已验证", stage: "DEV-002" },
-  { scope: "统一权限中间层", owner: "API / Web", status: "已验证", stage: "DEV-003" },
-  { scope: "文件与 AI 权限", owner: "API", status: "已验证", stage: "DEV-003" },
-  { scope: "审计日志基础设施", owner: "API", status: "已验证", stage: "DEV-004" },
-  { scope: "项目与任务闭环", owner: "API / Web", status: "已验证", stage: "DEV-005" },
-  { scope: "聊天与 AI 草稿", owner: "API / Web", status: "已验证", stage: "DEV-006" },
-  { scope: "AI 草稿确认入库", owner: "API / Web", status: "已验证", stage: "DEV-007" },
-  { scope: "记忆检索与回用", owner: "API / Web", status: "开发中", stage: "DEV-008" },
-  { scope: "审批真实流程", owner: "未开发", status: "待开发", stage: "DEV-010" }
-];
 
 const auditReadinessItems = [
   "登录成功/失败、无权限访问和关键未实现动作已写 AuditLog",
@@ -134,12 +132,20 @@ export function App() {
   const [chatThreads, setChatThreads] = useState<ChatThreadSummary[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessageRecord[]>([]);
   const [aiDrafts, setAiDrafts] = useState<AiDraftRecord[]>([]);
+  const [workbench, setWorkbench] = useState<WorkbenchResponse | null>(null);
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItemRecord[]>([]);
   const [projectMemories, setProjectMemories] = useState<ProjectMemoryRecord[]>([]);
   const [knowledgeQuery, setKnowledgeQuery] = useState("");
   const [knowledgeResults, setKnowledgeResults] = useState<KnowledgeSearchResult[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [isWorkbenchLoading, setIsWorkbenchLoading] = useState(false);
+  const [isWorkLoading, setIsWorkLoading] = useState(false);
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [isKnowledgeLoading, setIsKnowledgeLoading] = useState(false);
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
+  const [aiFailure, setAiFailure] = useState<string | null>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [projectTitle, setProjectTitle] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [chatTitle, setChatTitle] = useState("");
@@ -169,6 +175,15 @@ export function App() {
     }
 
     return (await response.json()) as T;
+  }
+
+  async function refreshWorkbenchData() {
+    if (!session) {
+      return;
+    }
+
+    const result = await authorizedRequest<WorkbenchResponse>("/workbench");
+    setWorkbench(result);
   }
 
   async function refreshWorkData() {
@@ -224,6 +239,7 @@ export function App() {
 
   useEffect(() => {
     if (!session) {
+      setWorkbench(null);
       setProjects([]);
       setTasks([]);
       setChatThreads([]);
@@ -234,13 +250,49 @@ export function App() {
       setKnowledgeResults([]);
       setSelectedProjectId(null);
       setSelectedThreadId(null);
+      setIsWorkbenchLoading(false);
+      setIsWorkLoading(false);
+      setIsChatLoading(false);
+      setIsKnowledgeLoading(false);
+      setShowNotifications(false);
       return;
     }
 
-    void Promise.all([refreshWorkData(), refreshChatData(), refreshKnowledgeData()]).catch((error) => {
-      const message = error instanceof Error ? error.message : "数据加载失败";
-      setWorkError(message);
-      setChatError(message);
+    setIsWorkbenchLoading(true);
+    setIsWorkLoading(true);
+    setIsChatLoading(true);
+    setIsKnowledgeLoading(true);
+    setWorkError(null);
+    setChatError(null);
+    setKnowledgeError(null);
+
+    void Promise.allSettled([refreshWorkbenchData(), refreshWorkData(), refreshChatData(), refreshKnowledgeData()]).then((results) => {
+      const [workbenchResult, workResult, chatResult, knowledgeResult] = results;
+
+      if (workbenchResult.status === "rejected") {
+        const message = workbenchResult.reason instanceof Error ? workbenchResult.reason.message : "工作台加载失败";
+        setWorkError(message);
+      }
+
+      if (workResult.status === "rejected") {
+        const message = workResult.reason instanceof Error ? workResult.reason.message : "工作数据加载失败";
+        setWorkError(message);
+      }
+
+      if (chatResult.status === "rejected") {
+        const message = chatResult.reason instanceof Error ? chatResult.reason.message : "会话加载失败";
+        setChatError(message);
+      }
+
+      if (knowledgeResult.status === "rejected") {
+        const message = knowledgeResult.reason instanceof Error ? knowledgeResult.reason.message : "知识加载失败";
+        setKnowledgeError(message);
+      }
+
+      setIsWorkbenchLoading(false);
+      setIsWorkLoading(false);
+      setIsChatLoading(false);
+      setIsKnowledgeLoading(false);
     });
   }, [session?.token]);
 
@@ -276,7 +328,7 @@ export function App() {
     });
     setProjectTitle("");
     setSelectedProjectId(result.project.id);
-    await refreshWorkData();
+    await Promise.all([refreshWorkData(), refreshWorkbenchData()]);
   }
 
   async function addMemberToSelectedProject() {
@@ -291,7 +343,7 @@ export function App() {
         userId: "user-member"
       })
     });
-    await refreshWorkData();
+    await Promise.all([refreshWorkData(), refreshWorkbenchData()]);
   }
 
   async function createTask() {
@@ -313,7 +365,7 @@ export function App() {
       })
     });
     setTaskTitle("");
-    await refreshWorkData();
+    await Promise.all([refreshWorkData(), refreshWorkbenchData()]);
   }
 
   async function changeTaskStatus(task: TaskRecord, status: TaskRecord["status"]) {
@@ -325,7 +377,7 @@ export function App() {
         reason: status === "cancelled" ? "前端取消任务" : undefined
       })
     });
-    await refreshWorkData();
+    await Promise.all([refreshWorkData(), refreshWorkbenchData()]);
   }
 
   async function changeProjectStatus(project: ProjectSummary, status: ProjectRecord["status"]) {
@@ -336,7 +388,7 @@ export function App() {
         status
       })
     });
-    await refreshWorkData();
+    await Promise.all([refreshWorkData(), refreshWorkbenchData()]);
   }
 
   async function createChatThread() {
@@ -352,7 +404,7 @@ export function App() {
       })
     });
     setChatTitle("");
-    await refreshChatData(result.thread.id);
+    await Promise.all([refreshChatData(result.thread.id), refreshWorkbenchData()]);
   }
 
   async function sendChatMessage() {
@@ -368,7 +420,7 @@ export function App() {
       })
     });
     setChatMessage("");
-    await refreshChatData(selectedThreadId);
+    await Promise.all([refreshChatData(selectedThreadId), refreshWorkbenchData()]);
   }
 
   async function createAiDraft(kind: AiDraftRecord["kind"]) {
@@ -383,11 +435,22 @@ export function App() {
         : kind === "task_draft"
           ? "task-draft"
           : "knowledge-draft";
-    await authorizedRequest<{ draft: AiDraftRecord }>(`/chat/threads/${selectedThreadId}/ai/${path}`, {
-      method: "POST",
-      body: JSON.stringify({})
-    });
-    await refreshChatData(selectedThreadId);
+    setIsAiGenerating(true);
+    setAiFailure(null);
+
+    try {
+      await authorizedRequest<{ draft: AiDraftRecord }>(`/chat/threads/${selectedThreadId}/ai/${path}`, {
+        method: "POST",
+        body: JSON.stringify({})
+      });
+      await Promise.all([refreshChatData(selectedThreadId), refreshWorkbenchData()]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI 草稿生成失败";
+      setAiFailure(message);
+      throw error;
+    } finally {
+      setIsAiGenerating(false);
+    }
   }
 
   async function confirmAiDraft(draft: AiDraftRecord) {
@@ -401,7 +464,7 @@ export function App() {
         confirmerUserId: projects.find((project) => project.id === (selectedProjectId ?? projects[0]?.id))?.ownerUserId ?? activeUser?.id
       })
     });
-    await Promise.all([refreshWorkData(), refreshChatData(selectedThreadId), refreshKnowledgeData()]);
+    await Promise.all([refreshWorkData(), refreshChatData(selectedThreadId), refreshKnowledgeData(), refreshWorkbenchData()]);
   }
 
   async function queryKnowledge() {
@@ -423,10 +486,11 @@ export function App() {
 
   const visibleModules = platformModules.filter((item) => session.visibleModules.includes(item.key));
   const activeModuleAllowed = visibleModules.some((item) => item.key === activeModule);
-  const currentModule = activeModuleAllowed ? activeModule : "dashboard";
+  const currentModule = activeModule;
   const currentModuleName = platformModules.find((item) => item.key === currentModule)?.name ?? "首页";
   const dataOrganizations = session.dataOrganizations;
   const canOpenSettings = canManageOrganizations(activeUser.role) || canManageRoles(activeUser.role);
+  const notificationCount = workbench?.summary.notificationCount ?? 0;
 
   return (
     <div className="app-shell">
@@ -459,7 +523,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">已进入 DEV-008：项目记忆检索与回用</p>
+            <p className="eyebrow">DEV-011：工作入口、通知和页面状态</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
@@ -474,20 +538,36 @@ export function App() {
             <button className="text-button" onClick={() => setSession(null)}>
               退出
             </button>
-            <button className="icon-button" aria-label="通知">
+            <button className="icon-button notification-button" aria-label="通知" onClick={() => setShowNotifications((value) => !value)}>
               <Bell size={18} />
+              {notificationCount > 0 ? <span>{notificationCount}</span> : null}
             </button>
           </div>
         </header>
 
-        {currentModule === "dashboard" ? (
+        {showNotifications ? <NotificationDrawer notifications={workbench?.notifications ?? []} isLoading={isWorkbenchLoading} /> : null}
+
+        {!activeModuleAllowed ? (
+          <NoPermissionView moduleName={currentModuleName} />
+        ) : currentModule === "dashboard" ? (
           <DashboardView
             activeUser={activeUser}
             canOpenSettings={canOpenSettings}
             dataOrganizations={dataOrganizations}
+            error={workError}
+            isLoading={isWorkbenchLoading}
             onOpenApprovals={() => setActiveModule("approvals")}
+            onOpenWorkbench={() => setActiveModule("workbench")}
             permissions={session.permissions}
             visibleModuleCount={visibleModules.length}
+            workbench={workbench}
+          />
+        ) : currentModule === "workbench" ? (
+          <WorkbenchView
+            error={workError}
+            isLoading={isWorkbenchLoading}
+            onOpenModule={setActiveModule}
+            workbench={workbench}
           />
         ) : currentModule === "projects" || currentModule === "tasks" ? (
           <ProjectTaskView
@@ -495,6 +575,7 @@ export function App() {
             canCreateProject={session.permissions.operation.includes("create_project")}
             canCreateTask={session.permissions.operation.includes("create_task")}
             error={workError}
+            isLoading={isWorkLoading}
             onAddMember={() => {
               void addMemberToSelectedProject().catch((error) => {
                 setWorkError(error instanceof Error ? error.message : "添加成员失败");
@@ -533,11 +614,14 @@ export function App() {
           <ChatView
             activeUser={activeUser}
             aiDrafts={aiDrafts}
+            aiFailure={aiFailure}
             canConfirmKnowledge={session.permissions.operation.includes("publish_knowledge")}
             canConfirmTask={session.permissions.operation.includes("create_task") && projects.length > 0}
             chatMessage={chatMessage}
             chatTitle={chatTitle}
             error={chatError}
+            isAiGenerating={isAiGenerating}
+            isLoading={isChatLoading}
             messages={chatMessages}
             onCreateDraft={(kind) => {
               void createAiDraft(kind).catch((error) => {
@@ -573,6 +657,7 @@ export function App() {
         ) : currentModule === "knowledge" ? (
           <KnowledgeView
             error={knowledgeError}
+            isLoading={isKnowledgeLoading}
             knowledgeItems={knowledgeItems}
             knowledgeQuery={knowledgeQuery}
             onQuery={() => {
@@ -586,9 +671,14 @@ export function App() {
             setKnowledgeQuery={setKnowledgeQuery}
           />
         ) : currentModule === "settings" && canOpenSettings ? (
-          <SettingsView activeUser={activeUser} permissions={session.permissions} visibleModuleCount={visibleModules.length} />
+          <SettingsView
+            activeUser={activeUser}
+            pageStates={workbench?.pageStates ?? []}
+            permissions={session.permissions}
+            visibleModuleCount={visibleModules.length}
+          />
         ) : (
-          <ModuleStatusView moduleKey={currentModule} moduleName={currentModuleName} />
+          <ModuleStatusView moduleKey={currentModule} moduleName={currentModuleName} pageStates={workbench?.pageStates ?? []} />
         )}
       </main>
     </div>
@@ -599,53 +689,66 @@ function DashboardView({
   activeUser,
   canOpenSettings,
   dataOrganizations,
+  error,
+  isLoading,
   onOpenApprovals,
+  onOpenWorkbench,
   permissions,
-  visibleModuleCount
+  visibleModuleCount,
+  workbench
 }: {
   activeUser: PublicUser;
   canOpenSettings: boolean;
   dataOrganizations: Organization[];
+  error: string | null;
+  isLoading: boolean;
   onOpenApprovals: () => void;
+  onOpenWorkbench: () => void;
   permissions: PermissionSummary;
   visibleModuleCount: number;
+  workbench: WorkbenchResponse | null;
 }) {
+  const summary = workbench?.summary;
+
   return (
     <>
       <section className="metric-grid" aria-label="核心指标">
-        <MetricCard title="当前阶段" value="DEV-008" helper="项目记忆检索与回用" />
-        <MetricCard title="可见菜单" value={String(visibleModuleCount)} helper="按角色裁剪" />
-        <MetricCard title="可见组织" value={String(dataOrganizations.length)} helper={permissions.data.scope} />
-        <MetricCard title="审计查询" value="已接入" helper="对象 / 用户 / 全局审计" />
+        <MetricCard title="我的待办" value={String(summary?.pendingWorkCount ?? 0)} helper="任务处理与人工确认" />
+        <MetricCard title="AI 待确认" value={String(summary?.aiResultConfirmationCount ?? 0)} helper="草稿不能自动入库" />
+        <MetricCard title="参与项目" value={String(summary?.participatingProjectCount ?? 0)} helper="按数据权限裁剪" />
+        <MetricCard title="通知" value={String(summary?.notificationCount ?? 0)} helper="仅系统内通知" />
       </section>
+
+      <PageStateNotice state="loading" title="正在加载首页工作入口" body="工作台、项目、任务、聊天和知识数据正在通过 API 读取。" active={isLoading} />
+      <PageStateNotice state="error" title="首页数据加载失败" body={error ?? ""} active={Boolean(error)} />
 
       <section className="content-grid">
         <div className="panel work-panel">
           <div className="panel-header">
             <div>
-              <h2>阶段门检查</h2>
-              <p>这里只展示已验证范围和明确未开发范围，不展示模拟业务单据。</p>
+              <h2>今日工作入口</h2>
+              <p>{activeUser.displayName} 的首页只展示当前账号有权限访问的工作。</p>
             </div>
-            <button className="secondary-button" onClick={onOpenApprovals}>
-              <ClipboardList size={17} />
-              查看审批阶段
+            <button className="secondary-button" onClick={onOpenWorkbench}>
+              <LayoutDashboard size={17} />
+              打开工作台
             </button>
           </div>
-          <div className="table" role="table" aria-label="阶段门检查">
-            <div className="table-row table-head" role="row">
-              <span>范围</span>
-              <span>责任边界</span>
-              <span>状态</span>
-              <span>阶段</span>
-            </div>
-            {stageGateItems.map((item) => (
-              <div className="table-row" role="row" key={item.scope}>
-                <span>{item.scope}</span>
-                <span>{item.owner}</span>
-                <span className={item.status === "已验证" ? "status-pass" : "status-pending"}>{item.status}</span>
-                <strong>{item.stage}</strong>
-              </div>
-            ))}
+          <WorkbenchSection
+            emptyText="当前没有待处理工作。"
+            items={workbench?.sections.pendingWork ?? []}
+            title="我的待办"
+          />
+          <WorkbenchSection
+            emptyText="当前没有 AI 结果待人工确认。"
+            items={workbench?.sections.aiConfirmations ?? []}
+            title="AI 结果确认"
+          />
+          <div className="action-row section-actions">
+            <button className="secondary-button" onClick={onOpenApprovals}>
+              <ClipboardList size={17} />
+              查看审批状态
+            </button>
           </div>
         </div>
 
@@ -655,10 +758,258 @@ function DashboardView({
         <AuditPreviewPanel />
 
         {canOpenSettings ? (
-          <SettingsView activeUser={activeUser} permissions={permissions} visibleModuleCount={visibleModuleCount} />
+          <SettingsView
+            activeUser={activeUser}
+            pageStates={workbench?.pageStates ?? []}
+            permissions={permissions}
+            visibleModuleCount={visibleModuleCount}
+          />
         ) : null}
       </section>
     </>
+  );
+}
+
+function WorkbenchView({
+  error,
+  isLoading,
+  onOpenModule,
+  workbench
+}: {
+  error: string | null;
+  isLoading: boolean;
+  onOpenModule: (module: ModuleKey) => void;
+  workbench: WorkbenchResponse | null;
+}) {
+  const summary = workbench?.summary;
+
+  return (
+    <>
+      <section className="metric-grid" aria-label="工作台指标">
+        <MetricCard title="我的待办" value={String(summary?.pendingWorkCount ?? 0)} helper="待提交 / 待确认" />
+        <MetricCard title="我负责的任务" value={String(summary?.responsibleTaskCount ?? 0)} helper="未完成任务" />
+        <MetricCard title="我参与的项目" value={String(summary?.participatingProjectCount ?? 0)} helper="未归档项目" />
+        <MetricCard title="待审批 / 合同" value={`${summary?.pendingApprovalCount ?? 0}/${summary?.contractConfirmationCount ?? 0}`} helper="后续阶段接入实例" />
+      </section>
+
+      <PageStateNotice state="loading" title="正在加载我的工作台" body="正在从 API 读取本人工作入口。" active={isLoading} />
+      <PageStateNotice state="error" title="工作台加载失败" body={error ?? ""} active={Boolean(error)} />
+      <PageStateNotice
+        state="empty"
+        title="当前没有待处理事项"
+        body="工作台不会编造审批、合同或任务数据；有权限数据产生后会显示在这里。"
+        active={!isLoading && !error && Boolean(workbench) && (summary?.pendingWorkCount ?? 0) === 0 && (summary?.aiResultConfirmationCount ?? 0) === 0}
+      />
+
+      <section className="workbench-layout">
+        <div className="panel work-panel">
+          <div className="panel-header">
+            <div>
+              <h2>我的工作</h2>
+              <p>任务、确认和 AI 结果都要求人工处理，AI 不会自动执行正式动作。</p>
+            </div>
+          </div>
+          <WorkbenchSection title="我的待办" items={workbench?.sections.pendingWork ?? []} emptyText="暂无待办任务或确认项。" />
+          <WorkbenchSection title="我负责的任务" items={workbench?.sections.responsibleTasks ?? []} emptyText="暂无负责中的任务。" />
+          <WorkbenchSection title="待确认 AI 结果" items={workbench?.sections.aiConfirmations ?? []} emptyText="暂无 AI 草稿待确认。" />
+        </div>
+
+        <div className="panel">
+          <div className="panel-header compact">
+            <div>
+              <h2>参与项目</h2>
+              <p>归档项目不进入主列表。</p>
+            </div>
+            <button className="secondary-button compact-button" onClick={() => onOpenModule("projects")}>
+              打开项目
+            </button>
+          </div>
+          <WorkbenchSection title="项目" items={workbench?.sections.participatingProjects ?? []} emptyText="暂无参与项目。" />
+        </div>
+
+        <div className="panel">
+          <div className="panel-header compact">
+            <div>
+              <h2>审批与合同</h2>
+              <p>当前只展示状态和权限入口，不实现完整流程。</p>
+            </div>
+          </div>
+          <WorkbenchSection title="我待审批" items={workbench?.sections.pendingApprovals ?? []} emptyText="暂无当前节点审批。" />
+          <WorkbenchSection title="待确认合同" items={workbench?.sections.contractConfirmations ?? []} emptyText="暂无合同确认项。" />
+        </div>
+
+        <div className="panel state-panel">
+          <div className="panel-header compact">
+            <div>
+              <h2>页面状态</h2>
+              <p>核心页面按统一状态展示。</p>
+            </div>
+          </div>
+          <PageStateGrid states={workbench?.pageStates ?? []} />
+        </div>
+      </section>
+    </>
+  );
+}
+
+function WorkbenchSection({ title, items, emptyText }: { title: string; items: WorkbenchItem[]; emptyText: string }) {
+  return (
+    <div className="workbench-section">
+      <div className="section-title">
+        <strong>{title}</strong>
+        <span>{items.length}</span>
+      </div>
+      <div className="record-list">
+        {items.length > 0 ? (
+          items.map((item) => (
+            <div className="workbench-row" key={item.id}>
+              <div>
+                <strong>{item.title}</strong>
+                <small>{item.description}</small>
+              </div>
+              <span className="status-pill">{item.status}</span>
+              <span className="count-pill">{platformModules.find((module) => module.key === item.module)?.name ?? item.module}</span>
+            </div>
+          ))
+        ) : (
+          <div className="empty-state">{emptyText}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NotificationDrawer({
+  isLoading,
+  notifications
+}: {
+  isLoading: boolean;
+  notifications: WorkbenchNotification[];
+}) {
+  return (
+    <section className="notification-drawer" aria-label="系统内通知">
+      <div className="panel-header compact">
+        <div>
+          <h2>系统内通知</h2>
+          <p>覆盖待办、审批、合同确认、AI 结果、无权限和系统状态。</p>
+        </div>
+      </div>
+      {isLoading ? <PageStateNotice active state="loading" title="正在加载通知" body="通知来自当前会话权限范围。" /> : null}
+      <div className="notification-list">
+        {notifications.length > 0 ? (
+          notifications.map((item) => {
+            const Icon = notificationIcon(item.type);
+            return (
+              <article className={`notification-item ${item.severity}`} key={item.id}>
+                <Icon size={18} />
+                <div>
+                  <strong>{item.title}</strong>
+                  <p>{item.body}</p>
+                </div>
+                <span>{platformModules.find((module) => module.key === item.module)?.name ?? item.module}</span>
+              </article>
+            );
+          })
+        ) : (
+          <div className="empty-state">暂无系统内通知。</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function notificationIcon(type: WorkbenchNotification["type"]) {
+  if (type === "pending_work") {
+    return CheckSquare;
+  }
+
+  if (type === "approval") {
+    return ClipboardList;
+  }
+
+  if (type === "contract_confirmation") {
+    return FileText;
+  }
+
+  if (type === "ai_result") {
+    return Brain;
+  }
+
+  if (type === "no_permission") {
+    return Lock;
+  }
+
+  return Bell;
+}
+
+function PageStateNotice({
+  active,
+  body,
+  state,
+  title
+}: {
+  active: boolean;
+  body: string;
+  state: PageStateDescriptor["key"];
+  title: string;
+}) {
+  if (!active) {
+    return null;
+  }
+
+  const Icon =
+    state === "loading" || state === "AI_Generating"
+      ? LoaderCircle
+      : state === "error" || state === "AI_Failed"
+        ? XCircle
+        : state === "no-permission"
+          ? Lock
+          : state === "archived"
+            ? Archive
+            : state === "expired"
+              ? Clock
+              : state === "empty"
+                ? Inbox
+                : AlertTriangle;
+
+  return (
+    <div className={`state-notice state-${state}`}>
+      <Icon size={18} />
+      <div>
+        <strong>{title}</strong>
+        <p>{body}</p>
+      </div>
+    </div>
+  );
+}
+
+function PageStateGrid({ states }: { states: PageStateDescriptor[] }) {
+  if (states.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="state-grid">
+      {states.map((state) => (
+        <div className={`state-chip ${state.status}`} key={state.key}>
+          <strong>{state.label}</strong>
+          <span>{state.evidence}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function NoPermissionView({ moduleName }: { moduleName: string }) {
+  return (
+    <section className="module-status">
+      <div className="panel module-status-panel">
+        <PageStateNotice active state="no-permission" title="无权限访问" body={`${moduleName} 不在当前账号的菜单权限内。`} />
+        <p className="eyebrow">权限裁剪</p>
+        <h2>{moduleName}</h2>
+        <p>系统不会通过前端隐藏代替后端校验；无权限访问由 API 返回拒绝并写入审计。</p>
+      </div>
+    </section>
   );
 }
 
@@ -743,10 +1094,12 @@ function AuditPreviewPanel() {
 
 function SettingsView({
   activeUser,
+  pageStates,
   permissions,
   visibleModuleCount
 }: {
   activeUser: PublicUser;
+  pageStates: PageStateDescriptor[];
   permissions: PermissionSummary;
   visibleModuleCount: number;
 }) {
@@ -770,6 +1123,7 @@ function SettingsView({
         <SettingsItem title="数据范围" value={permissions.data.scope} enabled />
         <SettingsItem title="策略版本" value={permissions.policyVersion} enabled />
       </div>
+      <PageStateGrid states={pageStates} />
     </div>
   );
 }
@@ -779,6 +1133,7 @@ function ProjectTaskView({
   canCreateProject,
   canCreateTask,
   error,
+  isLoading,
   onAddMember,
   onCreateProject,
   onCreateTask,
@@ -797,6 +1152,7 @@ function ProjectTaskView({
   canCreateProject: boolean;
   canCreateTask: boolean;
   error: string | null;
+  isLoading: boolean;
   onAddMember: () => void;
   onCreateProject: () => void;
   onCreateTask: () => void;
@@ -825,6 +1181,7 @@ function ProjectTaskView({
             <p>项目是协作容器，成员、任务和状态都会进入审计。</p>
           </div>
         </div>
+        <PageStateNotice state="loading" title="正在加载项目" body="正在读取当前账号可见项目。" active={isLoading} />
         {error ? <p className="inline-error">{error}</p> : null}
         {canCreateProject ? (
           <div className="inline-form">
@@ -851,7 +1208,7 @@ function ProjectTaskView({
               </button>
             ))
           ) : (
-            <div className="empty-state">当前没有可见项目。</div>
+            <PageStateNotice active={!isLoading} state="empty" title="当前没有可见项目" body="没有权限或没有参与项目时不会显示业务数据。" />
           )}
         </div>
       </div>
@@ -867,6 +1224,12 @@ function ProjectTaskView({
         </div>
         {selectedProject ? (
           <>
+            <PageStateNotice
+              active={selectedProject.status === "archived"}
+              state="archived"
+              title="项目已归档"
+              body="归档项目默认不进入项目主列表。"
+            />
             <div className="detail-grid">
               <SettingsItem title="所属组织" value={organizationName(selectedProject.organizationId)} enabled />
               <SettingsItem title="负责人" value={userName(selectedProject.ownerUserId)} enabled />
@@ -937,7 +1300,7 @@ function ProjectTaskView({
               </div>
             ))
           ) : (
-            <div className="empty-state">当前项目没有任务。</div>
+            <PageStateNotice active={!isLoading} state="empty" title="当前项目没有任务" body="创建任务后会进入任务列表和工作台待办。" />
           )}
         </div>
       </div>
@@ -984,11 +1347,14 @@ function taskActionButtons(task: TaskRecord, onTaskStatusChange: (task: TaskReco
 function ChatView({
   activeUser,
   aiDrafts,
+  aiFailure,
   canConfirmKnowledge,
   canConfirmTask,
   chatMessage,
   chatTitle,
   error,
+  isAiGenerating,
+  isLoading,
   messages,
   onCreateDraft,
   onConfirmDraft,
@@ -1002,11 +1368,14 @@ function ChatView({
 }: {
   activeUser: PublicUser;
   aiDrafts: AiDraftRecord[];
+  aiFailure: string | null;
   canConfirmKnowledge: boolean;
   canConfirmTask: boolean;
   chatMessage: string;
   chatTitle: string;
   error: string | null;
+  isAiGenerating: boolean;
+  isLoading: boolean;
   messages: ChatMessageRecord[];
   onCreateDraft: (kind: AiDraftRecord["kind"]) => void;
   onConfirmDraft: (draft: AiDraftRecord) => void;
@@ -1034,6 +1403,7 @@ function ChatView({
             <p>会话只对成员可见，AI 只能整理和生成草稿。</p>
           </div>
         </div>
+        <PageStateNotice state="loading" title="正在加载会话" body="正在读取当前账号参与的聊天。" active={isLoading} />
         {error ? <p className="inline-error">{error}</p> : null}
         <div className="inline-form">
           <input value={chatTitle} onChange={(event) => setChatTitle(event.target.value)} placeholder="会话名称" />
@@ -1058,7 +1428,7 @@ function ChatView({
               </button>
             ))
           ) : (
-            <div className="empty-state">当前没有可见会话。</div>
+            <PageStateNotice active={!isLoading} state="empty" title="当前没有可见会话" body="只有会话成员才能读取聊天内容。" />
           )}
         </div>
       </div>
@@ -1100,7 +1470,7 @@ function ChatView({
                   </div>
                 ))
               ) : (
-                <div className="empty-state">当前会话没有消息。</div>
+                <PageStateNotice active={!isLoading} state="empty" title="当前会话没有消息" body="发送消息后才能生成 AI 草稿。" />
               )}
             </div>
           </>
@@ -1126,6 +1496,18 @@ function ChatView({
             知识草稿
           </button>
         </div>
+        <PageStateNotice
+          active={isAiGenerating}
+          state="AI_Generating"
+          title="AI 正在生成草稿"
+          body="生成期间不会创建正式任务、知识或项目记忆。"
+        />
+        <PageStateNotice
+          active={Boolean(aiFailure)}
+          state="AI_Failed"
+          title="AI 生成失败"
+          body={aiFailure ?? ""}
+        />
         <div className="record-list">
           {selectedDrafts.length > 0 ? (
             selectedDrafts.map((draft) => (
@@ -1143,7 +1525,7 @@ function ChatView({
               </div>
             ))
           ) : (
-            <div className="empty-state">还没有 AI 草稿。先发送消息，再生成草稿。</div>
+            <PageStateNotice active={!isLoading && !isAiGenerating} state="empty" title="还没有 AI 草稿" body="先发送消息，再生成需要人工确认的草稿。" />
           )}
         </div>
       </div>
@@ -1153,6 +1535,7 @@ function ChatView({
 
 function KnowledgeView({
   error,
+  isLoading,
   knowledgeItems,
   knowledgeQuery,
   onQuery,
@@ -1162,6 +1545,7 @@ function KnowledgeView({
   setKnowledgeQuery
 }: {
   error: string | null;
+  isLoading: boolean;
   knowledgeItems: KnowledgeItemRecord[];
   knowledgeQuery: string;
   onQuery: () => void;
@@ -1180,6 +1564,7 @@ function KnowledgeView({
             <p>检索只返回当前账号有权限读取的正式知识和项目记忆。</p>
           </div>
         </div>
+        <PageStateNotice state="loading" title="正在加载知识库" body="正在读取当前账号有权限访问的知识和项目记忆。" active={isLoading} />
         {error ? <p className="inline-error">{error}</p> : null}
         <div className="inline-form knowledge-search">
           <input value={knowledgeQuery} onChange={(event) => setKnowledgeQuery(event.target.value)} placeholder="输入要回读的项目上下文" />
@@ -1204,7 +1589,7 @@ function KnowledgeView({
               </div>
             ))
           ) : (
-            <div className="empty-state">输入关键词后检索。没有结果时不会编造知识。</div>
+            <PageStateNotice active={!isLoading} state="empty" title="暂无检索结果" body="输入关键词后检索；没有结果时不会编造知识。" />
           )}
         </div>
       </div>
@@ -1230,7 +1615,7 @@ function KnowledgeView({
               </div>
             ))
           ) : (
-            <div className="empty-state">还没有正式知识。请先在聊天中生成知识草稿并确认入库。</div>
+            <PageStateNotice active={!isLoading} state="empty" title="还没有正式知识" body="请先在聊天中生成知识草稿并由人工确认入库。" />
           )}
         </div>
       </div>
@@ -1256,7 +1641,7 @@ function KnowledgeView({
               </div>
             ))
           ) : (
-            <div className="empty-state">还没有项目记忆。请先在聊天中生成摘要并确认入库。</div>
+            <PageStateNotice active={!isLoading} state="empty" title="还没有项目记忆" body="请先在聊天中生成摘要并由人工确认入库。" />
           )}
         </div>
       </div>
@@ -1264,7 +1649,15 @@ function KnowledgeView({
   );
 }
 
-function ModuleStatusView({ moduleKey, moduleName }: { moduleKey: ModuleKey; moduleName: string }) {
+function ModuleStatusView({
+  moduleKey,
+  moduleName,
+  pageStates
+}: {
+  moduleKey: ModuleKey;
+  moduleName: string;
+  pageStates: PageStateDescriptor[];
+}) {
   const status = moduleStatus[moduleKey];
 
   return (
@@ -1273,6 +1666,24 @@ function ModuleStatusView({ moduleKey, moduleName }: { moduleKey: ModuleKey; mod
         <p className="eyebrow">{status.stage}</p>
         <h2>{moduleName}</h2>
         <p>{status.summary}</p>
+        <PageStateNotice
+          active={moduleKey === "contracts" || moduleKey === "approvals"}
+          state="empty"
+          title="暂无可处理实例"
+          body="本阶段只展示工作入口、通知和状态，不创建完整合同或审批流程。"
+        />
+        <PageStateNotice
+          active={moduleKey === "contracts"}
+          state="expired"
+          title="期限状态已预留"
+          body="合同期限和执行跟踪将在 DEV-014 接入。"
+        />
+        <PageStateNotice
+          active={moduleKey === "approvals"}
+          state="no-permission"
+          title="审批必须由当前节点人类处理"
+          body="没有当前节点实例时不会显示审批操作按钮，AI 不能成为审批人。"
+        />
         {moduleKey === "approvals" ? (
           <div className="stage-checklist">
             <span>审批发起：未开发</span>
@@ -1281,6 +1692,7 @@ function ModuleStatusView({ moduleKey, moduleName }: { moduleKey: ModuleKey; mod
             <span>AI 建议：未开发且不能自动审批</span>
           </div>
         ) : null}
+        <PageStateGrid states={pageStates} />
       </div>
     </section>
   );

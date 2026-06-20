@@ -114,6 +114,14 @@ try {
     "task completed audit entry missing"
   );
 
+  const memberWorkbenchBeforeAi = await inject("GET", "/workbench", memberToken);
+  assert(memberWorkbenchBeforeAi.statusCode === 200, `member workbench failed with ${memberWorkbenchBeforeAi.statusCode}`);
+  assert(memberWorkbenchBeforeAi.body.summary.participatingProjectCount >= 1, "member workbench missing participating project");
+  assert(
+    memberWorkbenchBeforeAi.body.notifications.some((item) => item.type === "pending_work"),
+    "member workbench missing pending work notification"
+  );
+
   const createThread = await inject("POST", "/chat/threads", ownerToken, {
     title: "Smoke 会话",
     organizationId: "org-product",
@@ -138,6 +146,14 @@ try {
   assert(summaryDraft.body.draft.isDraft === true, "summary is not marked as draft");
   assert(taskDraft.body.draft.kind === "task_draft", "task draft returned wrong kind");
   assert(knowledgeDraft.body.draft.kind === "knowledge_draft", "knowledge draft returned wrong kind");
+
+  const memberWorkbenchAfterAi = await inject("GET", "/workbench", memberToken);
+  assert(memberWorkbenchAfterAi.statusCode === 200, `member AI workbench failed with ${memberWorkbenchAfterAi.statusCode}`);
+  assert(memberWorkbenchAfterAi.body.summary.aiResultConfirmationCount >= 1, "workbench missing AI confirmation count");
+  assert(
+    memberWorkbenchAfterAi.body.notifications.some((item) => item.type === "ai_result"),
+    "workbench missing AI result notification"
+  );
 
   const memoryConfirm = await inject("POST", `/ai/drafts/${summaryDraft.body.draft.id}/confirm`, memberToken);
   const taskConfirm = await inject("POST", `/ai/drafts/${taskDraft.body.draft.id}/confirm`, ownerToken, {
