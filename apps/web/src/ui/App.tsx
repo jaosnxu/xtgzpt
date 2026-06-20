@@ -191,6 +191,7 @@ export function App() {
   const [executionTitle, setExecutionTitle] = useState("");
   const [knowledgeResults, setKnowledgeResults] = useState<KnowledgeSearchResult[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [knowledgeQueryProjectId, setKnowledgeQueryProjectId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
   const [selectedApprovalId, setSelectedApprovalId] = useState<string | null>(null);
@@ -293,8 +294,35 @@ export function App() {
   }
 
   function openKnowledgeWithProject(projectId: string | null) {
-    setSelectedProjectId(projectId);
+    setKnowledgeQueryProjectId(projectId);
+    if (projectId) {
+      setSelectedProjectId(projectId);
+    }
     navigateToModule("knowledge", projectId ? "已带入项目上下文检索。" : "已切到知识库。");
+  }
+
+  async function openAiDraft(draftId: string) {
+    const cachedDraft = aiDrafts.find((candidate) => candidate.id === draftId);
+
+    if (cachedDraft) {
+      openThread(cachedDraft.threadId);
+      return;
+    }
+
+    const threadResult = await authorizedRequest<{ threads: ChatThreadSummary[] }>("/chat/threads");
+    setChatThreads(threadResult.threads);
+
+    for (const thread of threadResult.threads) {
+      const draftResult = await authorizedRequest<{ drafts: AiDraftRecord[] }>(`/chat/threads/${thread.id}/ai/drafts`);
+      const draft = draftResult.drafts.find((candidate) => candidate.id === draftId);
+
+      if (draft) {
+        openThread(draft.threadId);
+        return;
+      }
+    }
+
+    navigateToModule("chat", "未找到 AI 草稿，已切到聊天模块。");
   }
 
   function openRelatedObject(objectType: string | null, objectId: string | null, moduleHint?: ModuleKey | null) {
@@ -328,13 +356,10 @@ export function App() {
     }
 
     if (objectType === "ai_draft") {
-      const draft = aiDrafts.find((candidate) => candidate.id === objectId);
-
-      if (draft) {
-        openThread(draft.threadId);
-      } else {
-        navigateToModule("chat", "已切到 AI 草稿所在模块。");
-      }
+      void openAiDraft(objectId).catch((error) => {
+        setChatError(error instanceof Error ? error.message : "AI 草稿定位失败");
+        navigateToModule("chat", "AI 草稿定位失败，已切到聊天模块。");
+      });
       return;
     }
 
@@ -496,6 +521,7 @@ export function App() {
       setFilePreview(null);
       setKnowledgeResults([]);
       setSelectedProjectId(null);
+      setKnowledgeQueryProjectId(null);
       setSelectedThreadId(null);
       setSelectedContractId(null);
       setSelectedApprovalId(null);
@@ -874,7 +900,7 @@ export function App() {
       method: "POST",
       body: JSON.stringify({
         query: knowledgeQuery.trim(),
-        projectId: selectedProjectId ?? undefined,
+        projectId: knowledgeQueryProjectId ?? undefined,
         limit: 8
       })
     });
@@ -1270,7 +1296,7 @@ export function App() {
               });
             }}
             projectMemories={projectMemories}
-            queryProject={projects.find((project) => project.id === selectedProjectId) ?? null}
+            queryProject={projects.find((project) => project.id === knowledgeQueryProjectId) ?? null}
             queryResults={knowledgeResults}
             onArchiveKnowledge={(item) => {
               void archiveKnowledgeItem(item).catch((error) => {
@@ -1287,9 +1313,9 @@ export function App() {
                 setKnowledgeError(error instanceof Error ? error.message : "知识驳回失败");
               });
             }}
-            onSelectQueryProject={setSelectedProjectId}
+            onSelectQueryProject={setKnowledgeQueryProjectId}
             projects={projects}
-            selectedProjectId={selectedProjectId}
+            queryProjectId={knowledgeQueryProjectId}
             setKnowledgeQuery={setKnowledgeQuery}
           />
         ) : currentModule === "contracts" ? (
@@ -2645,7 +2671,7 @@ function KnowledgeView({
   projectMemories,
   queryProject,
   queryResults,
-  selectedProjectId,
+  queryProjectId,
   setKnowledgeQuery
 }: {
   canReviewKnowledge: boolean;
@@ -2662,7 +2688,7 @@ function KnowledgeView({
   projectMemories: ProjectMemoryRecord[];
   queryProject: ProjectSummary | null;
   queryResults: KnowledgeSearchResult[];
-  selectedProjectId: string | null;
+  queryProjectId: string | null;
   setKnowledgeQuery: (value: string) => void;
 }) {
   const reviewQueue = knowledgeItems.filter((item) => item.status === "submitted_for_review");
@@ -2688,7 +2714,7 @@ function KnowledgeView({
         </div>
         <div className="scope-note scope-selector">
           <span>当前检索范围</span>
-          <select value={selectedProjectId ?? ""} onChange={(event) => onSelectQueryProject(event.target.value || null)}>
+          <select value={queryProjectId ?? ""} onChange={(event) => onSelectQueryProject(event.target.value || null)}>
             <option value="">全部可见范围</option>
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
