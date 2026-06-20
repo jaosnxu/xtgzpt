@@ -46,13 +46,14 @@
 
 - Phase 1 原型已冻结。
 - 已允许进入代码开发。
-- 已完成 `DEV-001` 到 `DEV-021`，并完成 `AUDIT-021`。
+- 已完成 `DEV-001` 到 `DEV-023`，并完成 `AUDIT-021`。
 - `DEV-018` 已补齐生产上线准备 runbook 和安全占位符模板，但仍未执行真实生产上线。
 - `DEV-019` 已完成 DEV-018 后的项目记忆和状态文档对齐。
 - `DEV-020` 已新增 API runtime store mode selection、PostgreSQL adapter/cutover boundary、配置校验和 migration 边界，但未执行真实 PostgreSQL 生产写入或切流。
 - `AUDIT-021` 已完成 DEV-020 后项目状态和生产准备审计，确认下一阶段应进入真实 PostgreSQL runtime adapter。
 - `DEV-021` 已新增 driver-backed PostgreSQL runtime adapter、连接池入口、RuntimeData document 初始化/读取/写入、checksum 条件更新和 mocked PostgreSQL adapter 测试；仍未执行真实生产切流。
 - `DEV-022` 已完成 release gate / production cutover audit 文档收口，确认代码和 runbook 具备进入外部 release gate 的材料，但 branch protection、production environment protection、真实生产 secrets 注入、备份恢复演练、production smoke 和 release signoff 仍必须在外部发布流程完成。
+- `DEV-023` 已完成现有 Phase 1 前端交互层产品化：在既有一级菜单内补强工作台/详情页跨模块对象跳转、选择优先的知识项目上下文、合同与审批互跳、设置治理面板锚点、操作反馈和局域网本地验收脚本；未新增一级菜单、未连接生产系统、未执行部署或切流。
 - 仍未达到“已经生产上线”状态。
 
 当前允许：
@@ -264,6 +265,8 @@ AI 严禁：
 - 合同来源审批实例、人工节点、当前处理人、同意、驳回、退回、转交、加签、工作台通知、审计和合同审批结果写回
 - AI Framework、Framework Version、AI Run、输入/输出快照、来源证据链接、人工采纳/驳回/修改记录、失败分类和重试策略 metadata
 - 1440 / 1280 / 960 响应式和页面状态验收材料
+- DEV-023 现有前端交互层产品化：dashboard/workbench 到项目、任务、合同、审批；项目到任务、文件、聊天、知识；任务回项目；聊天到关联项目和 AI 草稿结果；知识按选定项目上下文检索；合同到审批；审批回来源合同；设置到权限、AI 和页面状态治理面板
+- 本地 LAN 验收脚本和说明：API/Web 可用 `0.0.0.0` 监听，另一台同局域网电脑通过 Mac LAN IP 打开 Web
 - 生产上线准备 runbook、安全占位符配置、migration/备份/恢复/smoke/回滚/signoff 操作模板
 
 当前未完成：

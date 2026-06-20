@@ -16,6 +16,7 @@ import {
   LayoutDashboard,
   LoaderCircle,
   Lock,
+  Link,
   MessageSquare,
   Search,
   Settings,
@@ -190,6 +191,7 @@ export function App() {
   const [executionTitle, setExecutionTitle] = useState("");
   const [knowledgeResults, setKnowledgeResults] = useState<KnowledgeSearchResult[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [knowledgeQueryProjectId, setKnowledgeQueryProjectId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
   const [selectedApprovalId, setSelectedApprovalId] = useState<string | null>(null);
@@ -217,7 +219,154 @@ export function App() {
   const [approvalError, setApprovalError] = useState<string | null>(null);
   const [aiGovernanceError, setAiGovernanceError] = useState<string | null>(null);
   const [approvalTargetUserId, setApprovalTargetUserId] = useState("user-approver");
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const activeUser = session?.user ?? null;
+
+  function showActionFeedback(message: string) {
+    setActionMessage(message);
+    window.setTimeout(() => {
+      setActionMessage(null);
+    }, 2600);
+  }
+
+  function canNavigateTo(module: ModuleKey) {
+    return session?.visibleModules.includes(module) ?? false;
+  }
+
+  function navigateToModule(module: ModuleKey, feedback?: string) {
+    if (!canNavigateTo(module)) {
+      showActionFeedback("当前账号没有目标模块权限。");
+      return false;
+    }
+
+    setActiveModule(module);
+
+    if (feedback) {
+      showActionFeedback(feedback);
+    }
+
+    return true;
+  }
+
+  function openProject(projectId: string, module: ModuleKey = "projects") {
+    setSelectedProjectId(projectId);
+    navigateToModule(module, module === "tasks" ? "已跳转到项目任务。" : "已跳转到项目详情。");
+  }
+
+  function openTask(taskId: string) {
+    const task = tasks.find((candidate) => candidate.id === taskId);
+
+    if (task) {
+      setSelectedProjectId(task.projectId);
+    }
+
+    navigateToModule("tasks", "已跳转到任务所在项目。");
+  }
+
+  function openThread(threadId: string) {
+    setSelectedThreadId(threadId);
+    navigateToModule("chat", "已跳转到关联会话。");
+    void refreshChatData(threadId).catch((error) => {
+      setChatError(error instanceof Error ? error.message : "会话加载失败");
+    });
+  }
+
+  function openProjectChat(projectId: string) {
+    setSelectedProjectId(projectId);
+    const relatedThread = chatThreads.find((thread) => thread.relatedObjectType === "project" && thread.relatedObjectId === projectId);
+
+    if (relatedThread) {
+      openThread(relatedThread.id);
+      return;
+    }
+
+    navigateToModule("chat", "已切到聊天；创建会话会自动关联当前项目。");
+  }
+
+  function openContract(contractId: string) {
+    setSelectedContractId(contractId);
+    navigateToModule("contracts", "已跳转到来源合同。");
+  }
+
+  function openApproval(approvalId: string) {
+    setSelectedApprovalId(approvalId);
+    navigateToModule("approvals", "已跳转到审批详情。");
+  }
+
+  function openKnowledgeWithProject(projectId: string | null) {
+    setKnowledgeQueryProjectId(projectId);
+    if (projectId) {
+      setSelectedProjectId(projectId);
+    }
+    navigateToModule("knowledge", projectId ? "已带入项目上下文检索。" : "已切到知识库。");
+  }
+
+  async function openAiDraft(draftId: string) {
+    const cachedDraft = aiDrafts.find((candidate) => candidate.id === draftId);
+
+    if (cachedDraft) {
+      openThread(cachedDraft.threadId);
+      return;
+    }
+
+    const threadResult = await authorizedRequest<{ threads: ChatThreadSummary[] }>("/chat/threads");
+    setChatThreads(threadResult.threads);
+
+    for (const thread of threadResult.threads) {
+      const draftResult = await authorizedRequest<{ drafts: AiDraftRecord[] }>(`/chat/threads/${thread.id}/ai/drafts`);
+      const draft = draftResult.drafts.find((candidate) => candidate.id === draftId);
+
+      if (draft) {
+        openThread(draft.threadId);
+        return;
+      }
+    }
+
+    navigateToModule("chat", "未找到 AI 草稿，已切到聊天模块。");
+  }
+
+  function openRelatedObject(objectType: string | null, objectId: string | null, moduleHint?: ModuleKey | null) {
+    if (!objectType || !objectId) {
+      return;
+    }
+
+    if (objectType === "project") {
+      openProject(objectId, moduleHint === "tasks" ? "tasks" : "projects");
+      return;
+    }
+
+    if (objectType === "task") {
+      openTask(objectId);
+      return;
+    }
+
+    if (objectType === "chat_thread") {
+      openThread(objectId);
+      return;
+    }
+
+    if (objectType === "contract") {
+      openContract(objectId);
+      return;
+    }
+
+    if (objectType === "approval") {
+      openApproval(objectId);
+      return;
+    }
+
+    if (objectType === "ai_draft") {
+      void openAiDraft(objectId).catch((error) => {
+        setChatError(error instanceof Error ? error.message : "AI 草稿定位失败");
+        navigateToModule("chat", "AI 草稿定位失败，已切到聊天模块。");
+      });
+      return;
+    }
+
+    if (objectType === "knowledge_item" || objectType === "project_memory") {
+      navigateToModule("knowledge", "已切到知识库证据面板。");
+    }
+  }
 
   async function authorizedRequest<T>(path: string, init: RequestInit = {}) {
     if (!session) {
@@ -372,6 +521,7 @@ export function App() {
       setFilePreview(null);
       setKnowledgeResults([]);
       setSelectedProjectId(null);
+      setKnowledgeQueryProjectId(null);
       setSelectedThreadId(null);
       setSelectedContractId(null);
       setSelectedApprovalId(null);
@@ -750,7 +900,7 @@ export function App() {
       method: "POST",
       body: JSON.stringify({
         query: knowledgeQuery.trim(),
-        projectId: selectedProjectId ?? undefined,
+        projectId: knowledgeQueryProjectId ?? undefined,
         limit: 8
       })
     });
@@ -969,7 +1119,17 @@ export function App() {
           </div>
         </header>
 
-        {showNotifications ? <NotificationDrawer notifications={workbench?.notifications ?? []} isLoading={isWorkbenchLoading} /> : null}
+        <PageStateNotice active={Boolean(actionMessage)} state="normal" title="操作已处理" body={actionMessage ?? ""} />
+
+        {showNotifications ? (
+          <NotificationDrawer
+            notifications={workbench?.notifications ?? []}
+            isLoading={isWorkbenchLoading}
+            onOpenNotification={(notification) =>
+              openRelatedObject(notification.relatedObjectType, notification.relatedObjectId, notification.module)
+            }
+          />
+        ) : null}
 
         {!activeModuleAllowed ? (
           <NoPermissionView moduleName={currentModuleName} />
@@ -981,6 +1141,7 @@ export function App() {
             error={workError}
             isLoading={isWorkbenchLoading}
             onOpenApprovals={() => setActiveModule("approvals")}
+            onOpenWorkItem={openRelatedObject}
             onOpenWorkbench={() => setActiveModule("workbench")}
             permissions={session.permissions}
             visibleModuleCount={visibleModules.length}
@@ -991,6 +1152,7 @@ export function App() {
             error={workError}
             isLoading={isWorkbenchLoading}
             onOpenModule={setActiveModule}
+            onOpenWorkItem={openRelatedObject}
             workbench={workbench}
           />
         ) : currentModule === "projects" || currentModule === "tasks" ? (
@@ -1037,6 +1199,10 @@ export function App() {
                 setFileError(error instanceof Error ? error.message : "文件预览失败");
               });
             }}
+            onOpenChatForProject={openProjectChat}
+            onOpenKnowledgeForProject={openKnowledgeWithProject}
+            onOpenProjectTasks={(projectId) => openProject(projectId, "tasks")}
+            onOpenTaskProject={(task) => openProject(task.projectId, "projects")}
             onProjectStatusChange={(project, status) => {
               void changeProjectStatus(project, status).catch((error) => {
                 setWorkError(error instanceof Error ? error.message : "项目状态变更失败");
@@ -1091,6 +1257,9 @@ export function App() {
                 setChatError(error instanceof Error ? error.message : "AI 草稿驳回失败");
               });
             }}
+            onOpenDraftObject={openRelatedObject}
+            onOpenKnowledgeWithProject={openKnowledgeWithProject}
+            onOpenRelatedObject={openRelatedObject}
             onCreateThread={() => {
               void createChatThread().catch((error) => {
                 setChatError(error instanceof Error ? error.message : "创建会话失败");
@@ -1110,6 +1279,8 @@ export function App() {
             selectedThreadId={selectedThreadId}
             setChatMessage={setChatMessage}
             setChatTitle={setChatTitle}
+            projects={projects}
+            tasks={tasks}
             threads={chatThreads}
           />
         ) : currentModule === "knowledge" ? (
@@ -1125,7 +1296,7 @@ export function App() {
               });
             }}
             projectMemories={projectMemories}
-            queryProject={projects.find((project) => project.id === selectedProjectId) ?? null}
+            queryProject={projects.find((project) => project.id === knowledgeQueryProjectId) ?? null}
             queryResults={knowledgeResults}
             onArchiveKnowledge={(item) => {
               void archiveKnowledgeItem(item).catch((error) => {
@@ -1142,6 +1313,9 @@ export function App() {
                 setKnowledgeError(error instanceof Error ? error.message : "知识驳回失败");
               });
             }}
+            onSelectQueryProject={setKnowledgeQueryProjectId}
+            projects={projects}
+            queryProjectId={knowledgeQueryProjectId}
             setKnowledgeQuery={setKnowledgeQuery}
           />
         ) : currentModule === "contracts" ? (
@@ -1187,6 +1361,7 @@ export function App() {
                 setContractError(error instanceof Error ? error.message : "二次审查失败");
               });
             }}
+            onOpenApproval={openApproval}
             onSelectContract={setSelectedContractId}
             onSubmitApproval={(contract) => {
               void submitContractApproval(contract).catch((error) => {
@@ -1223,6 +1398,7 @@ export function App() {
                 setApprovalError(error instanceof Error ? error.message : "审批操作失败");
               });
             }}
+            onOpenSourceContract={openContract}
             onSelectApproval={setSelectedApprovalId}
             selectedApprovalId={selectedApprovalId}
             setApprovalTargetUserId={setApprovalTargetUserId}
@@ -1252,6 +1428,7 @@ function DashboardView({
   error,
   isLoading,
   onOpenApprovals,
+  onOpenWorkItem,
   onOpenWorkbench,
   permissions,
   visibleModuleCount,
@@ -1263,6 +1440,7 @@ function DashboardView({
   error: string | null;
   isLoading: boolean;
   onOpenApprovals: () => void;
+  onOpenWorkItem: (objectType: string | null, objectId: string | null, moduleHint?: ModuleKey | null) => void;
   onOpenWorkbench: () => void;
   permissions: PermissionSummary;
   visibleModuleCount: number;
@@ -1297,12 +1475,20 @@ function DashboardView({
           <WorkbenchSection
             emptyText="当前没有待处理工作。"
             items={workbench?.sections.pendingWork ?? []}
+            onOpenItem={onOpenWorkItem}
             title="我的待办"
           />
           <WorkbenchSection
             emptyText="当前没有 AI 结果待人工确认。"
             items={workbench?.sections.aiConfirmations ?? []}
+            onOpenItem={onOpenWorkItem}
             title="AI 结果确认"
+          />
+          <WorkbenchSection
+            emptyText="当前没有合同确认事项。"
+            items={workbench?.sections.contractConfirmations ?? []}
+            onOpenItem={onOpenWorkItem}
+            title="合同确认"
           />
           <div className="action-row section-actions">
             <button className="secondary-button" onClick={onOpenApprovals}>
@@ -1337,11 +1523,13 @@ function WorkbenchView({
   error,
   isLoading,
   onOpenModule,
+  onOpenWorkItem,
   workbench
 }: {
   error: string | null;
   isLoading: boolean;
   onOpenModule: (module: ModuleKey) => void;
+  onOpenWorkItem: (objectType: string | null, objectId: string | null, moduleHint?: ModuleKey | null) => void;
   workbench: WorkbenchResponse | null;
 }) {
   const summary = workbench?.summary;
@@ -1386,9 +1574,9 @@ function WorkbenchView({
               <p>任务、确认和 AI 结果都要求人工处理，AI 不会自动执行正式动作。</p>
             </div>
           </div>
-          <WorkbenchSection title="我的待办" items={workbench?.sections.pendingWork ?? []} emptyText="暂无待办任务或确认项。" />
-          <WorkbenchSection title="我负责的任务" items={workbench?.sections.responsibleTasks ?? []} emptyText="暂无负责中的任务。" />
-          <WorkbenchSection title="待确认 AI 结果" items={workbench?.sections.aiConfirmations ?? []} emptyText="暂无 AI 草稿待确认。" />
+          <WorkbenchSection title="我的待办" items={workbench?.sections.pendingWork ?? []} emptyText="暂无待办任务或确认项。" onOpenItem={onOpenWorkItem} />
+          <WorkbenchSection title="我负责的任务" items={workbench?.sections.responsibleTasks ?? []} emptyText="暂无负责中的任务。" onOpenItem={onOpenWorkItem} />
+          <WorkbenchSection title="待确认 AI 结果" items={workbench?.sections.aiConfirmations ?? []} emptyText="暂无 AI 草稿待确认。" onOpenItem={onOpenWorkItem} />
         </div>
 
         <div className="panel">
@@ -1401,7 +1589,7 @@ function WorkbenchView({
               打开项目
             </button>
           </div>
-          <WorkbenchSection title="项目" items={workbench?.sections.participatingProjects ?? []} emptyText="暂无参与项目。" />
+          <WorkbenchSection title="项目" items={workbench?.sections.participatingProjects ?? []} emptyText="暂无参与项目。" onOpenItem={onOpenWorkItem} />
         </div>
 
         <div className="panel">
@@ -1411,8 +1599,8 @@ function WorkbenchView({
               <p>当前只展示状态和权限入口，不实现完整流程。</p>
             </div>
           </div>
-          <WorkbenchSection title="我待审批" items={workbench?.sections.pendingApprovals ?? []} emptyText="暂无当前节点审批。" />
-          <WorkbenchSection title="待确认合同" items={workbench?.sections.contractConfirmations ?? []} emptyText="暂无合同确认项。" />
+          <WorkbenchSection title="我待审批" items={workbench?.sections.pendingApprovals ?? []} emptyText="暂无当前节点审批。" onOpenItem={onOpenWorkItem} />
+          <WorkbenchSection title="待确认合同" items={workbench?.sections.contractConfirmations ?? []} emptyText="暂无合同确认项。" onOpenItem={onOpenWorkItem} />
         </div>
 
         <div className="panel state-panel">
@@ -1429,7 +1617,17 @@ function WorkbenchView({
   );
 }
 
-function WorkbenchSection({ title, items, emptyText }: { title: string; items: WorkbenchItem[]; emptyText: string }) {
+function WorkbenchSection({
+  title,
+  items,
+  emptyText,
+  onOpenItem
+}: {
+  title: string;
+  items: WorkbenchItem[];
+  emptyText: string;
+  onOpenItem?: (objectType: string | null, objectId: string | null, moduleHint?: ModuleKey | null) => void;
+}) {
   return (
     <div className="workbench-section">
       <div className="section-title">
@@ -1439,14 +1637,19 @@ function WorkbenchSection({ title, items, emptyText }: { title: string; items: W
       <div className="record-list">
         {items.length > 0 ? (
           items.map((item) => (
-            <div className="workbench-row" key={item.id}>
+            <button
+              className="workbench-row"
+              disabled={!onOpenItem}
+              key={item.id}
+              onClick={() => onOpenItem?.(item.objectType, item.objectId, item.module)}
+            >
               <div>
                 <strong>{item.title}</strong>
                 <small>{item.description}</small>
               </div>
               <span className="status-pill">{item.status}</span>
               <span className="count-pill">{platformModules.find((module) => module.key === item.module)?.name ?? item.module}</span>
-            </div>
+            </button>
           ))
         ) : (
           <div className="empty-state">{emptyText}</div>
@@ -1458,10 +1661,12 @@ function WorkbenchSection({ title, items, emptyText }: { title: string; items: W
 
 function NotificationDrawer({
   isLoading,
-  notifications
+  notifications,
+  onOpenNotification
 }: {
   isLoading: boolean;
   notifications: WorkbenchNotification[];
+  onOpenNotification: (notification: WorkbenchNotification) => void;
 }) {
   return (
     <section className="notification-drawer" aria-label="系统内通知">
@@ -1477,14 +1682,14 @@ function NotificationDrawer({
           notifications.map((item) => {
             const Icon = notificationIcon(item.type);
             return (
-              <article className={`notification-item ${item.severity}`} key={item.id}>
+              <button className={`notification-item ${item.severity}`} key={item.id} onClick={() => onOpenNotification(item)}>
                 <Icon size={18} />
                 <div>
                   <strong>{item.title}</strong>
                   <p>{item.body}</p>
                 </div>
                 <span>{platformModules.find((module) => module.key === item.module)?.name ?? item.module}</span>
-              </article>
+              </button>
             );
           })
         ) : (
@@ -1695,7 +1900,18 @@ function SettingsView({
         </div>
         <Settings size={22} />
       </div>
-      <div className="settings-grid">
+      <div className="action-row section-actions">
+        <button className="secondary-button compact-button" onClick={() => document.getElementById("settings-permission-governance")?.scrollIntoView()}>
+          权限治理
+        </button>
+        <button className="secondary-button compact-button" onClick={() => document.getElementById("settings-ai-governance")?.scrollIntoView()}>
+          AI 治理
+        </button>
+        <button className="secondary-button compact-button" onClick={() => document.getElementById("settings-page-state-governance")?.scrollIntoView()}>
+          页面状态
+        </button>
+      </div>
+      <div className="settings-grid" id="settings-permission-governance">
         <SettingsItem title="组织管理" value={`${seedOrganizations.length} 个组织`} enabled={canManageOrganizations(activeUser.role)} />
         <SettingsItem title="角色管理" value={`${Object.keys(rolePolicies).length} 个角色`} enabled={canManageRoles(activeUser.role)} />
         <SettingsItem title="菜单权限" value={`${visibleModuleCount} 个可见菜单`} enabled />
@@ -1713,7 +1929,9 @@ function SettingsView({
         canConfigure={permissions.ai.includes("configure_ai_frameworks")}
         canReadRuns={permissions.ai.includes("read_ai_runs")}
       />
-      <PageStateGrid states={pageStates} />
+      <div id="settings-page-state-governance">
+        <PageStateGrid states={pageStates} />
+      </div>
     </div>
   );
 }
@@ -1734,7 +1952,7 @@ function AiGovernancePanel({
   const recentRuns = runs.slice(0, 6);
 
   return (
-    <div className="ai-governance">
+    <div className="ai-governance" id="settings-ai-governance">
       <div className="panel-header compact">
         <div>
           <h2>AI 框架与运行证据</h2>
@@ -1817,6 +2035,10 @@ function ProjectTaskView({
   onCreateProject,
   onCreateTask,
   onDownloadFile,
+  onOpenChatForProject,
+  onOpenKnowledgeForProject,
+  onOpenProjectTasks,
+  onOpenTaskProject,
   onPreviewFile,
   onProjectStatusChange,
   onSelectProject,
@@ -1849,6 +2071,10 @@ function ProjectTaskView({
   onCreateProject: () => void;
   onCreateTask: () => void;
   onDownloadFile: (file: FileAssetRecord) => void;
+  onOpenChatForProject: (projectId: string) => void;
+  onOpenKnowledgeForProject: (projectId: string | null) => void;
+  onOpenProjectTasks: (projectId: string) => void;
+  onOpenTaskProject: (task: TaskRecord) => void;
   onPreviewFile: (file: FileAssetRecord) => void;
   onProjectStatusChange: (project: ProjectSummary, status: ProjectRecord["status"]) => void;
   onSelectProject: (projectId: string) => void;
@@ -1939,6 +2165,18 @@ function ProjectTaskView({
               ))}
             </div>
             <div className="action-row">
+              <button className="secondary-button" onClick={() => onOpenProjectTasks(selectedProject.id)}>
+                <CheckSquare size={16} />
+                查看任务
+              </button>
+              <button className="secondary-button" onClick={() => onOpenChatForProject(selectedProject.id)}>
+                <MessageSquare size={16} />
+                关联聊天
+              </button>
+              <button className="secondary-button" onClick={() => onOpenKnowledgeForProject(selectedProject.id)}>
+                <BookOpen size={16} />
+                项目知识
+              </button>
               {canManageSelectedProject && !selectedProject.memberUserIds.includes("user-member") ? (
                 <button className="secondary-button" onClick={onAddMember}>
                   添加普通成员
@@ -2010,7 +2248,12 @@ function ProjectTaskView({
                 <span>{userName(task.assigneeUserId)}</span>
                 <span>{userName(task.confirmerUserId)}</span>
                 <span className="status-pill">{task.status}</span>
-                <span className="task-actions">{taskActionButtons(task, onTaskStatusChange)}</span>
+                <span className="task-actions">
+                  <button className="secondary-button compact-button" onClick={() => onOpenTaskProject(task)}>
+                    项目
+                  </button>
+                  {taskActionButtons(task, onTaskStatusChange)}
+                </span>
               </div>
             ))
           ) : (
@@ -2176,12 +2419,17 @@ function ChatView({
   onCreateDraft,
   onConfirmDraft,
   onCreateThread,
+  onOpenDraftObject,
+  onOpenKnowledgeWithProject,
+  onOpenRelatedObject,
   onRejectDraft,
   onSelectThread,
   onSendMessage,
   selectedThreadId,
   setChatMessage,
   setChatTitle,
+  projects,
+  tasks,
   threads
 }: {
   activeUser: PublicUser;
@@ -2198,17 +2446,30 @@ function ChatView({
   onCreateDraft: (kind: AiDraftRecord["kind"]) => void;
   onConfirmDraft: (draft: AiDraftRecord) => void;
   onCreateThread: () => void;
+  onOpenDraftObject: (objectType: string | null, objectId: string | null, moduleHint?: ModuleKey | null) => void;
+  onOpenKnowledgeWithProject: (projectId: string | null) => void;
+  onOpenRelatedObject: (objectType: string | null, objectId: string | null, moduleHint?: ModuleKey | null) => void;
   onRejectDraft: (draft: AiDraftRecord) => void;
   onSelectThread: (threadId: string) => void;
   onSendMessage: () => void;
   selectedThreadId: string | null;
   setChatMessage: (value: string) => void;
   setChatTitle: (value: string) => void;
+  projects: ProjectSummary[];
+  tasks: TaskRecord[];
   threads: ChatThreadSummary[];
 }) {
   const selectedThread = threads.find((thread) => thread.id === selectedThreadId) ?? threads[0] ?? null;
   const selectedDrafts = selectedThread ? aiDrafts.filter((draft) => draft.threadId === selectedThread.id) : [];
   const isSelectedThreadArchived = selectedThread?.status === "archived";
+  const relatedTask = selectedThread?.relatedObjectType === "task"
+    ? tasks.find((task) => task.id === selectedThread.relatedObjectId) ?? null
+    : null;
+  const relatedProjectId =
+    selectedThread?.relatedObjectType === "project"
+      ? selectedThread.relatedObjectId
+      : relatedTask?.projectId ?? null;
+  const relatedProject = relatedProjectId ? projects.find((project) => project.id === relatedProjectId) ?? null : null;
   const canConfirmDraft = (draft: AiDraftRecord) =>
     draft.status === "draft" &&
     (draft.kind === "chat_summary" || (draft.kind === "task_draft" && canConfirmTask) || (draft.kind === "knowledge_draft" && canConfirmKnowledge));
@@ -2263,6 +2524,32 @@ function ChatView({
         </div>
         {selectedThread ? (
           <>
+            <div className="relationship-bar">
+              <span>
+                <Link size={15} />
+                {selectedThread.relatedObjectType
+                  ? `${selectedThread.relatedObjectType}:${selectedThread.relatedObjectId}`
+                  : "未关联业务对象"}
+              </span>
+              {relatedProject ? (
+                <button className="secondary-button compact-button" onClick={() => onOpenRelatedObject("project", relatedProject.id, "projects")}>
+                  打开项目
+                </button>
+              ) : null}
+              {relatedProjectId ? (
+                <button className="secondary-button compact-button" onClick={() => onOpenKnowledgeWithProject(relatedProjectId)}>
+                  带项目检索
+                </button>
+              ) : null}
+              {selectedThread.relatedObjectType && selectedThread.relatedObjectId ? (
+                <button
+                  className="secondary-button compact-button"
+                  onClick={() => onOpenRelatedObject(selectedThread.relatedObjectType, selectedThread.relatedObjectId)}
+                >
+                  打开关联对象
+                </button>
+              ) : null}
+            </div>
             <div className="inline-form">
               <input value={chatMessage} onChange={(event) => setChatMessage(event.target.value)} placeholder="输入工作消息" />
               <button className="primary-button" disabled={isSelectedThreadArchived} onClick={onSendMessage}>
@@ -2351,6 +2638,13 @@ function ChatView({
                 <button className="secondary-button compact-button" disabled={draft.status !== "draft"} onClick={() => onRejectDraft(draft)}>
                   驳回
                 </button>
+                <button
+                  className="secondary-button compact-button"
+                  disabled={!draft.promotedObjectId}
+                  onClick={() => onOpenDraftObject(draft.promotedObjectType, draft.promotedObjectId)}
+                >
+                  打开结果
+                </button>
               </div>
             ))
           ) : (
@@ -2372,9 +2666,12 @@ function KnowledgeView({
   onPublishKnowledge,
   onQuery,
   onRejectKnowledge,
+  onSelectQueryProject,
+  projects,
   projectMemories,
   queryProject,
   queryResults,
+  queryProjectId,
   setKnowledgeQuery
 }: {
   canReviewKnowledge: boolean;
@@ -2386,9 +2683,12 @@ function KnowledgeView({
   onPublishKnowledge: (item: KnowledgeItemWithVersions) => void;
   onQuery: () => void;
   onRejectKnowledge: (item: KnowledgeItemWithVersions) => void;
+  onSelectQueryProject: (projectId: string | null) => void;
+  projects: ProjectSummary[];
   projectMemories: ProjectMemoryRecord[];
   queryProject: ProjectSummary | null;
   queryResults: KnowledgeSearchResult[];
+  queryProjectId: string | null;
   setKnowledgeQuery: (value: string) => void;
 }) {
   const reviewQueue = knowledgeItems.filter((item) => item.status === "submitted_for_review");
@@ -2412,8 +2712,16 @@ function KnowledgeView({
             检索
           </button>
         </div>
-        <div className="scope-note">
+        <div className="scope-note scope-selector">
           <span>当前检索范围</span>
+          <select value={queryProjectId ?? ""} onChange={(event) => onSelectQueryProject(event.target.value || null)}>
+            <option value="">全部可见范围</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.title}
+              </option>
+            ))}
+          </select>
           <strong>{queryProject ? queryProject.title : "全部可见范围"}</strong>
         </div>
         <PageStateNotice
@@ -2594,6 +2902,7 @@ function ContractView({
   onConfirmRisks,
   onCreateContract,
   onExecutionEvent,
+  onOpenApproval,
   onRunAiReview,
   onRunSecondReview,
   onSelectContract,
@@ -2626,6 +2935,7 @@ function ContractView({
   onConfirmRisks: (contract: ContractWithDetails) => void;
   onCreateContract: () => void;
   onExecutionEvent: (contract: ContractWithDetails) => void;
+  onOpenApproval: (approvalId: string) => void;
   onRunAiReview: (contract: ContractWithDetails) => void;
   onRunSecondReview: (contract: ContractWithDetails) => void;
   onSelectContract: (contractId: string) => void;
@@ -2871,6 +3181,13 @@ function ContractView({
                   </span>
                   <span className="status-pill">{handoff.status}</span>
                   <span className="count-pill">{handoff.approvalEngineImplemented ? "已创建审批" : "边界记录"}</span>
+                  <button
+                    className="secondary-button compact-button"
+                    disabled={!handoff.approvalId}
+                    onClick={() => handoff.approvalId ? onOpenApproval(handoff.approvalId) : undefined}
+                  >
+                    打开审批
+                  </button>
                 </div>
               ))}
               {selectedContract.executionEvents.map((event) => (
@@ -2903,6 +3220,7 @@ function ApprovalView({
   canTransfer,
   isLoading,
   onAction,
+  onOpenSourceContract,
   onSelectApproval,
   selectedApprovalId,
   setApprovalTargetUserId
@@ -2918,6 +3236,7 @@ function ApprovalView({
   canTransfer: boolean;
   isLoading: boolean;
   onAction: (approval: ApprovalWithDetails, action: "approve" | "reject" | "return" | "transfer" | "add-sign") => void;
+  onOpenSourceContract: (contractId: string) => void;
   onSelectApproval: (approvalId: string) => void;
   selectedApprovalId: string | null;
   setApprovalTargetUserId: (value: string) => void;
@@ -2990,6 +3309,15 @@ function ApprovalView({
               <SettingsItem title="来源状态" value={selectedApproval.sourceSummary.status} enabled />
               <SettingsItem title="当前处理人" value={selectedApproval.currentApprover?.displayName ?? "无"} enabled={Boolean(selectedApproval.currentApprover)} />
               <SettingsItem title="结果写回" value={selectedApproval.resultWritebackStatus ?? "待处理"} enabled={Boolean(selectedApproval.resultWritebackStatus)} />
+            </div>
+            <div className="relationship-bar">
+              <span>
+                <Link size={15} />
+                {selectedApproval.sourceSummary.objectType}:{selectedApproval.sourceSummary.objectId}
+              </span>
+              <button className="secondary-button compact-button" onClick={() => onOpenSourceContract(selectedApproval.sourceSummary.objectId)}>
+                返回来源合同
+              </button>
             </div>
 
             <PageStateNotice

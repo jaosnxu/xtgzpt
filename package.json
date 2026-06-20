@@ -20,7 +20,9 @@
   "scripts": {
     "dev": "npm run dev:web",
     "dev:web": "npm run dev -w @xtgzpt/web",
+    "dev:web:lan": "npm run dev:lan -w @xtgzpt/web",
     "dev:api": "npm run dev -w @xtgzpt/api",
+    "dev:api:lan": "HOST=0.0.0.0 PORT=3002 npm run dev -w @xtgzpt/api",
     "build": "npm run build -w @xtgzpt/shared && npm run build -w @xtgzpt/api && npm run build -w @xtgzpt/database && npm run build -w @xtgzpt/web",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.typecheck.json",

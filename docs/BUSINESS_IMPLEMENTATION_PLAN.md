@@ -45,6 +45,7 @@
 | AUDIT-021 | 项目状态和生产准备审计 | 已完成，确认下一阶段应进入 DEV-021 真实 PostgreSQL runtime adapter |
 | DEV-021 | 真实 PostgreSQL runtime adapter | 已完成 driver-backed RuntimeData read/write、checksum 条件更新、pg 连接池入口、mocked PostgreSQL adapter 测试和 runbook 更新；真实生产切流仍未执行 |
 | DEV-022 | release gate / production cutover audit | 已完成文档和 runtime memory 收口；确认外部 branch protection、required checks、environment protection、生产 secrets、备份恢复演练、production smoke 和 release signoff 仍是切流前硬门槛 |
+| DEV-023 | 前端交互层产品化 | 已完成既有 Phase 1 模块内的详情页、跨模块跳转、操作反馈、关系可见性、选择优先知识上下文和 LAN 本地验收交付；未新增一级菜单、未部署、未切流生产 |
 
 ## 2. 总体阶段顺序
 
@@ -66,7 +67,8 @@
 14. AUDIT-021 项目状态和生产准备审计
 15. DEV-021 真实 PostgreSQL runtime adapter
 16. DEV-022 release gate / production cutover audit
-17. 外部 release window：branch protection / required checks / environment protection / backup restore / production smoke / signoff 后才允许 cutover
+17. DEV-023 前端交互层产品化
+18. 外部 release window：branch protection / required checks / environment protection / backup restore / production smoke / signoff 后才允许 cutover
 
 ## 3. GOV-001 项目宪法和标准收口
 
@@ -601,3 +603,39 @@
 - 文档、runtime memory、structured-data 和本地 verifier gate 审计通过。
 - 允许进入 PR / release operator 外部门槛复核。
 - 不允许直接生产切流；必须先取得 GitHub required checks、branch protection、review approval、production environment approval、真实 secrets 已配置但不外泄的证明、备份和隔离恢复演练、production smoke、rollback 目标和第 13 节 signoff。
+
+## 19. DEV-023 前端交互层产品化
+
+状态：已完成。
+
+目标：
+
+- 产品化既有 Phase 1 前端交互层，使用户能从工作入口、详情页和关系证据直接跳到相关对象。
+
+范围：
+
+- dashboard / workbench 到项目、任务、合同、审批和 AI 草稿。
+- 项目详情到任务、文件、聊天和知识上下文。
+- 任务回项目。
+- 聊天到关联项目 / 任务 / 合同、项目知识上下文和 AI 草稿确认结果。
+- 知识问答使用选择优先的项目上下文。
+- 合同审批 handoff 到审批实例。
+- 审批详情回来源合同。
+- 系统设置到权限、AI 和页面状态治理面板。
+- 操作反馈、disabled / loading / error / empty / archived / no-permission 状态补强。
+- 本地 LAN 验收脚本和 README 指南：`0.0.0.0` 监听、通过 Mac LAN IP 打开 Web。
+
+不做：
+
+- 不新增一级菜单。
+- 不扩展 ERP、财务、采购、库存、销售、资产或经营报表系统。
+- 不接生产系统、不提交 secret、不部署、不执行生产切流。
+- 不让 AI 执行正式审批、发布、付款、签署或确认完成。
+
+验收：
+
+- 既有模块内跨对象跳转可用，且保留当前选择上下文。
+- 登录页不暴露高权限测试账号清单。
+- 1440 desktop-first 布局不被新增关系控件破坏，1280/960 继续压缩为可用布局。
+- LAN 本地验收可由另一台同局域网电脑通过 `http://<Mac-LAN-IP>:3001` 打开。
+- 本地 gate 需运行 `git diff --check`、JSON/JSONL parse、`npm ci`、`npm run lint`、`npm run typecheck`、`npm run test`、`npm run build`、`npm run smoke:api`、`npm audit --audit-level=low` 和浏览器验证；当前执行结果见 `docs/dev-log/DEV-023.md`。
