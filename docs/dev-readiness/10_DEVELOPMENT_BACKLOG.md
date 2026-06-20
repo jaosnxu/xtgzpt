@@ -28,7 +28,7 @@
 | DR-008 | 建立测试和验收标准 | 已完成 |
 | DR-009 | 建立 P0/P1 风险审计 | 已完成 |
 | DR-010 | 启动 Phase 1 Figma 原型 | 已完成 |
-| DR-011 | 建立项目宪法、技术标准、业务实现阶段和测试标准 | 已完成，DEV-020 继续做 API runtime PostgreSQL cutover boundary |
+| DR-011 | 建立项目宪法、技术标准、业务实现阶段和测试标准 | 已完成，AUDIT-021 已确认下一阶段进入 DEV-021 真实 PostgreSQL runtime adapter |
 
 ## 3. 阶段顺序
 
@@ -106,7 +106,9 @@
 下一阶段：
 
 - 已完成 `DEV-001` 到 `DEV-020`
+- 已完成 `AUDIT-021` 项目状态和生产准备审计
 - 当前 DEV-020 已建立 API runtime PostgreSQL adapter/cutover boundary；真实 driver-backed writes 和生产切流仍未执行
+- 下一阶段是 `DEV-021` 真实 PostgreSQL runtime adapter，仍不允许真实生产切流
 
 ## 5. 第一阶段代码开发顺序和当前状态
 
@@ -598,6 +600,51 @@
 - placeholder 或非 PostgreSQL URL 被拒绝
 - file runtime store 仍能用于本地持久化和回归测试
 - PostgreSQL adapter boundary 不执行 live writes，避免把 DEV-020 误当作生产切流
+
+### AUDIT-021 项目状态和生产准备审计
+
+状态：已完成。本阶段只做项目状态审计和文档/runtime memory 收口，未修改应用源代码、API、数据库 schema、UI、菜单、权限、AI 行为、依赖、secrets 或部署。
+
+范围：
+
+- 项目宪法、技术标准、业务实施计划和测试标准一致性
+- DEV-001 到 DEV-020 的 dev-log / audit-log 状态一致性
+- runtime memory 当前状态和 run history
+- 生产上线禁令、AI 边界、权限边界和一级菜单冻结
+- 下一阶段优先级判断
+
+结论：
+
+- 未发现阻止下一阶段开发的 P0/P1 问题
+- 下一阶段应进入 `DEV-021` 真实 PostgreSQL runtime adapter
+
+### DEV-021 真实 PostgreSQL runtime adapter
+
+状态：待执行。必须继续通过 Loop 执行，不得手工跳过审计、验证、PR、required checks 或 review gate。
+
+范围：
+
+- PostgreSQL driver 和连接池
+- `RuntimeData` 从 PostgreSQL 读取和写入
+- 事务、checksum 或版本条件更新，避免并发覆盖
+- file runtime 到 PostgreSQL runtime 的迁移/回填和回滚策略
+- 单元测试、API smoke、runbook 更新
+
+不做：
+
+- 不新增业务模块
+- 不扩展财务、ERP、采购、库存、销售或经营报表系统
+- 不新增一级菜单
+- 不提交真实生产 secrets
+- 不执行真实生产写入或生产切流
+
+验收：
+
+- `XTGZPT_RUNTIME_STORE_MODE=postgres` 可在测试数据库或本地替身环境完成真实读写
+- file mode 仍可用，测试默认仍为 memory
+- PostgreSQL 写入失败必须安全失败，不得静默回退导致数据分叉
+- 迁移、回填、回滚和备份恢复文档明确
+- required checks 和本地 gate 全部通过
 
 ## 7. 开发禁止事项
 
