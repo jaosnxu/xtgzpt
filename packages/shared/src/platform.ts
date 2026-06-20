@@ -47,6 +47,10 @@ export type OperationPermission =
   | "create_task"
   | "assign_task"
   | "complete_task"
+  | "create_contract"
+  | "revise_contract"
+  | "confirm_contract_risk"
+  | "track_contract_execution"
   | "upload_file"
   | "archive_file"
   | "publish_knowledge"
@@ -76,7 +80,7 @@ export type AiCapability =
 
 export type PermissionDimension = "menu" | "data" | "operation" | "approval" | "file" | "ai";
 
-export const permissionPolicyVersion = "seed-dev-013";
+export const permissionPolicyVersion = "seed-dev-014";
 
 export type AuditResult = "success" | "failure" | "denied";
 
@@ -95,6 +99,150 @@ export type AiDraftStatus = "draft" | "confirmed";
 export type KnowledgeItemStatus = "draft" | "submitted_for_review" | "published" | "rejected" | "archived";
 
 export type KnowledgeEvidenceSourceType = "ai_draft" | "chat_message" | "project_memory" | "manual";
+
+export type ContractEntryMethod = "upload" | "paste";
+
+export type ContractStatus =
+  | "draft"
+  | "ai_reviewing"
+  | "risk_pending_confirm"
+  | "revision_required"
+  | "second_reviewing"
+  | "approval_pending"
+  | "approved"
+  | "execution_tracking"
+  | "completed"
+  | "rejected"
+  | "cancelled"
+  | "archived";
+
+export type ContractReviewType = "initial" | "second";
+
+export type ContractReviewStatus = "succeeded" | "failed";
+
+export type ContractRiskSeverity = "low" | "medium" | "high";
+
+export type ContractOptionKey = "A" | "B" | "C";
+
+export type ContractExecutionEventType = "reminder" | "record" | "status_update";
+
+export interface ContractSourceEvidence {
+  sourceType: ContractEntryMethod | "revision";
+  sourceId: string;
+  title: string;
+  fileName: string | null;
+  mimeType: string | null;
+  capturedByUserId: string;
+  capturedAt: string;
+  excerpt: string;
+}
+
+export interface ContractRecord {
+  id: string;
+  title: string;
+  organizationId: string;
+  creatorUserId: string;
+  participantUserIds: string[];
+  status: ContractStatus;
+  currentVersion: number;
+  approvalHandoffId: string | null;
+  executionStatus: "not_started" | "tracking";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContractVersionRecord {
+  id: string;
+  contractId: string;
+  version: number;
+  title: string;
+  originalText: string;
+  entryMethod: ContractEntryMethod | "revision";
+  sourceEvidence: ContractSourceEvidence[];
+  createdByUserId: string;
+  createdAt: string;
+}
+
+export interface ContractReviewRisk {
+  id: string;
+  title: string;
+  severity: ContractRiskSeverity;
+  sourceRef: string;
+  sourceQuote: string;
+  explanation: string;
+  options: Record<ContractOptionKey, string>;
+  requiresHumanConfirmation: true;
+  humanConfirmed: boolean;
+  selectedOption: ContractOptionKey | null;
+  confirmationNote: string | null;
+  confirmedByUserId: string | null;
+  confirmedAt: string | null;
+}
+
+export interface ContractTextHighlight {
+  id: string;
+  riskId: string;
+  sourceRef: string;
+  quote: string;
+  startOffset: number;
+  endOffset: number;
+  severity: ContractRiskSeverity;
+  reason: string;
+}
+
+export interface ContractReviewRecord {
+  id: string;
+  contractId: string;
+  versionId: string;
+  version: number;
+  reviewType: ContractReviewType;
+  status: ContractReviewStatus;
+  frameworkId: "contract_review_v1";
+  frameworkVersion: string;
+  summary: string;
+  riskLevel: ContractRiskSeverity;
+  risks: ContractReviewRisk[];
+  highlights: ContractTextHighlight[];
+  nextRequiredAction: "human_confirm_risks";
+  createdByUserId: string;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface ContractRiskConfirmationRecord {
+  id: string;
+  contractId: string;
+  reviewId: string;
+  riskId: string;
+  confirmed: boolean;
+  selectedOption: ContractOptionKey;
+  note: string;
+  confirmedByUserId: string;
+  confirmedAt: string;
+}
+
+export interface ContractApprovalHandoffRecord {
+  id: string;
+  contractId: string;
+  versionId: string;
+  submittedByUserId: string;
+  status: "submitted_boundary";
+  approvalEngineImplemented: false;
+  reason: string;
+  createdAt: string;
+}
+
+export interface ContractExecutionEventRecord {
+  id: string;
+  contractId: string;
+  eventType: ContractExecutionEventType;
+  title: string;
+  notes: string;
+  status: string;
+  dueAt: string | null;
+  createdByUserId: string;
+  createdAt: string;
+}
 
 export interface KnowledgeSourceEvidence {
   sourceType: KnowledgeEvidenceSourceType;
@@ -510,6 +658,10 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
       "create_task",
       "assign_task",
       "complete_task",
+      "create_contract",
+      "revise_contract",
+      "confirm_contract_risk",
+      "track_contract_execution",
       "upload_file",
       "archive_file",
       "publish_knowledge",
@@ -571,7 +723,7 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     canManageSettings: false,
     canManageOrganizations: false,
     canManageRoles: false,
-    operations: ["create_task", "complete_task", "upload_file"],
+    operations: ["create_task", "complete_task", "confirm_contract_risk", "upload_file"],
     approval: [
       "approve_current_node",
       "reject_current_node",
@@ -590,7 +742,7 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     canManageSettings: false,
     canManageOrganizations: false,
     canManageRoles: false,
-    operations: ["create_task", "complete_task", "upload_file"],
+    operations: ["create_task", "complete_task", "confirm_contract_risk", "upload_file"],
     approval: ["approve_current_node", "reject_current_node", "return_for_revision", "transfer_approval"],
     files: ["view", "preview", "download", "upload", "reference_ai"],
     ai: ["chat_summarize", "knowledge_query", "approval_suggestion", "risk_hint"]
@@ -603,7 +755,7 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     canManageSettings: false,
     canManageOrganizations: false,
     canManageRoles: false,
-    operations: ["create_task", "complete_task", "upload_file"],
+    operations: ["create_task", "complete_task", "confirm_contract_risk", "upload_file"],
     approval: [
       "approve_current_node",
       "reject_current_node",
@@ -623,7 +775,7 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     canManageSettings: false,
     canManageOrganizations: false,
     canManageRoles: false,
-    operations: ["create_task", "complete_task", "upload_file"],
+    operations: ["create_task", "complete_task", "create_contract", "revise_contract", "confirm_contract_risk", "track_contract_execution", "upload_file"],
     approval: ["initiate_approval"],
     files: ["view", "preview", "download", "upload", "reference_ai"],
     ai: ["chat_summarize", "task_draft", "knowledge_query", "contract_review", "risk_hint"]

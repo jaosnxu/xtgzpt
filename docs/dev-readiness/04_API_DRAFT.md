@@ -143,6 +143,14 @@ AI 结果不得自动发布或自动创建正式对象。
 | POST | `/contracts/{id}/execution-events` | 执行跟踪 |
 | GET | `/contracts/{id}/audit-logs` | 审计 |
 
+DEV-014 当前实现要求：
+
+- 合同入口只开放 `/contracts/upload` 和 `/contracts/paste`，不提供其他创建入口。
+- AI 审查返回风险清单、原文高亮和 A/B/C 方案，但风险确认和方案选择必须由人类账号完成。
+- `/contracts/{id}/submit-approval` 只表示审批边界 handoff 和 `approval_pending` 状态，不创建完整审批节点、不执行审批结果。
+- `/contracts/{id}/execution-events` 只记录提醒、执行记录和状态事项，不触发外部通知、签署、付款或执行完成确认。
+- 无权限访问必须返回不泄露合同标题、正文、风险、来源证据或 AI 上下文的拒绝响应。
+
 ## 10. 审批
 
 | 方法 | 路径 | 用途 |

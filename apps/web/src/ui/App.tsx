@@ -36,6 +36,14 @@ import {
   type AiDraftRecord,
   type ChatMessageRecord,
   type ChatThreadRecord,
+  type ContractApprovalHandoffRecord,
+  type ContractEntryMethod,
+  type ContractExecutionEventRecord,
+  type ContractExecutionEventType,
+  type ContractOptionKey,
+  type ContractRecord,
+  type ContractReviewRecord,
+  type ContractVersionRecord,
   type FileAssetRecord,
   type FileDownloadResponse,
   type FilePreviewResponse,
@@ -83,6 +91,13 @@ interface KnowledgeItemWithVersions extends KnowledgeItemRecord {
   versions?: KnowledgeVersionRecord[];
 }
 
+interface ContractWithDetails extends ContractRecord {
+  versions: ContractVersionRecord[];
+  reviews: ContractReviewRecord[];
+  approvalHandoffs: ContractApprovalHandoffRecord[];
+  executionEvents: ContractExecutionEventRecord[];
+}
+
 const menuIcon = {
   dashboard: Home,
   workbench: LayoutDashboard,
@@ -121,8 +136,8 @@ const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
     summary: "知识草稿、提交审核、发布、驳回、归档、版本历史和来源证据进入真实接口；AI 不能自动发布。"
   },
   contracts: {
-    stage: "DEV-014 待开发",
-    summary: "当前仅展示权限、空状态和人工确认边界；合同上传、AI 审查、二次审查和执行跟踪不在 DEV-012 范围。"
+    stage: "DEV-014 已接入",
+    summary: "合同入口只支持上传或粘贴；版本、原文证据、AI 风险审查、人工确认、二次审查、审批边界和执行跟踪已接入。"
   },
   approvals: {
     stage: "DEV-015 待开发",
@@ -152,16 +167,25 @@ export function App() {
   const [workbench, setWorkbench] = useState<WorkbenchResponse | null>(null);
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItemWithVersions[]>([]);
   const [projectMemories, setProjectMemories] = useState<ProjectMemoryRecord[]>([]);
+  const [contracts, setContracts] = useState<ContractWithDetails[]>([]);
   const [projectFiles, setProjectFiles] = useState<FileAssetRecord[]>([]);
   const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
   const [knowledgeQuery, setKnowledgeQuery] = useState("");
+  const [contractTitle, setContractTitle] = useState("");
+  const [contractText, setContractText] = useState("");
+  const [contractFileName, setContractFileName] = useState("");
+  const [contractEntryMethod, setContractEntryMethod] = useState<ContractEntryMethod>("paste");
+  const [contractRevisionText, setContractRevisionText] = useState("");
+  const [executionTitle, setExecutionTitle] = useState("");
   const [knowledgeResults, setKnowledgeResults] = useState<KnowledgeSearchResult[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
   const [isWorkbenchLoading, setIsWorkbenchLoading] = useState(false);
   const [isWorkLoading, setIsWorkLoading] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isKnowledgeLoading, setIsKnowledgeLoading] = useState(false);
+  const [isContractLoading, setIsContractLoading] = useState(false);
   const [isFileLoading, setIsFileLoading] = useState(false);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiFailure, setAiFailure] = useState<string | null>(null);
@@ -176,6 +200,7 @@ export function App() {
   const [chatError, setChatError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [knowledgeError, setKnowledgeError] = useState<string | null>(null);
+  const [contractError, setContractError] = useState<string | null>(null);
   const activeUser = session?.user ?? null;
 
   async function authorizedRequest<T>(path: string, init: RequestInit = {}) {
@@ -260,6 +285,16 @@ export function App() {
     setProjectMemories(memoryResult.items);
   }
 
+  async function refreshContractData() {
+    if (!session) {
+      return;
+    }
+
+    const result = await authorizedRequest<{ contracts: ContractWithDetails[] }>("/contracts");
+    setContracts(result.contracts);
+    setSelectedContractId((current) => current ?? result.contracts[0]?.id ?? null);
+  }
+
   async function refreshProjectFiles(projectId = selectedProjectId) {
     if (!session || !projectId) {
       setProjectFiles([]);
@@ -282,15 +317,18 @@ export function App() {
       setAiDrafts([]);
       setKnowledgeItems([]);
       setProjectMemories([]);
+      setContracts([]);
       setProjectFiles([]);
       setFilePreview(null);
       setKnowledgeResults([]);
       setSelectedProjectId(null);
       setSelectedThreadId(null);
+      setSelectedContractId(null);
       setIsWorkbenchLoading(false);
       setIsWorkLoading(false);
       setIsChatLoading(false);
       setIsKnowledgeLoading(false);
+      setIsContractLoading(false);
       setIsFileLoading(false);
       setShowNotifications(false);
       return;
@@ -300,13 +338,15 @@ export function App() {
     setIsWorkLoading(true);
     setIsChatLoading(true);
     setIsKnowledgeLoading(true);
+    setIsContractLoading(true);
     setWorkError(null);
     setChatError(null);
     setKnowledgeError(null);
+    setContractError(null);
     setFileError(null);
 
-    void Promise.allSettled([refreshWorkbenchData(), refreshWorkData(), refreshChatData(), refreshKnowledgeData()]).then((results) => {
-      const [workbenchResult, workResult, chatResult, knowledgeResult] = results;
+    void Promise.allSettled([refreshWorkbenchData(), refreshWorkData(), refreshChatData(), refreshKnowledgeData(), refreshContractData()]).then((results) => {
+      const [workbenchResult, workResult, chatResult, knowledgeResult, contractResult] = results;
 
       if (workbenchResult.status === "rejected") {
         const message = workbenchResult.reason instanceof Error ? workbenchResult.reason.message : "工作台加载失败";
@@ -328,10 +368,16 @@ export function App() {
         setKnowledgeError(message);
       }
 
+      if (contractResult.status === "rejected") {
+        const message = contractResult.reason instanceof Error ? contractResult.reason.message : "合同加载失败";
+        setContractError(message);
+      }
+
       setIsWorkbenchLoading(false);
       setIsWorkLoading(false);
       setIsChatLoading(false);
       setIsKnowledgeLoading(false);
+      setIsContractLoading(false);
     });
   }, [session?.token]);
 
@@ -625,6 +671,130 @@ export function App() {
     setKnowledgeResults(result.results);
   }
 
+  async function createContract() {
+    setContractError(null);
+    const organizationId = session?.dataOrganizations[0]?.id ?? activeUser?.defaultOrganizationId;
+    const path = contractEntryMethod === "upload" ? "/contracts/upload" : "/contracts/paste";
+    const payload =
+      contractEntryMethod === "upload"
+        ? {
+            title: contractTitle.trim() || contractFileName.trim() || "上传合同",
+            organizationId,
+            fileName: contractFileName.trim() || "contract.txt",
+            mimeType: "text/plain",
+            contentText: contractText
+          }
+        : {
+            title: contractTitle.trim() || "粘贴合同",
+            organizationId,
+            originalText: contractText
+          };
+    const result = await authorizedRequest<{ contract: ContractWithDetails }>(path, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    setContractTitle("");
+    setContractText("");
+    setContractFileName("");
+    setSelectedContractId(result.contract.id);
+    await Promise.all([refreshContractData(), refreshWorkbenchData()]);
+  }
+
+  async function runContractAiReview(contract: ContractWithDetails) {
+    setContractError(null);
+    setIsAiGenerating(true);
+    setAiFailure(null);
+
+    try {
+      await authorizedRequest(`/contracts/${contract.id}/ai-review`, {
+        method: "POST"
+      });
+      await Promise.all([refreshContractData(), refreshWorkbenchData()]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "合同 AI 审查失败";
+      setAiFailure(message);
+      throw error;
+    } finally {
+      setIsAiGenerating(false);
+    }
+  }
+
+  async function confirmContractRisks(contract: ContractWithDetails) {
+    const review = contract.reviews[0];
+
+    if (!review) {
+      return;
+    }
+
+    setContractError(null);
+    await authorizedRequest(`/contracts/${contract.id}/risk-confirm`, {
+      method: "POST",
+      body: JSON.stringify({
+        reason: "contract_page_human_risk_confirmation",
+        confirmations: review.risks.map((risk) => ({
+          riskId: risk.id,
+          confirmed: true,
+          selectedOption: "B" satisfies ContractOptionKey,
+          note: "人工确认风险并选择 B 平衡方案。"
+        }))
+      })
+    });
+    await Promise.all([refreshContractData(), refreshWorkbenchData()]);
+  }
+
+  async function submitContractRevision(contract: ContractWithDetails) {
+    setContractError(null);
+    await authorizedRequest(`/contracts/${contract.id}/revision`, {
+      method: "POST",
+      body: JSON.stringify({
+        originalText: contractRevisionText,
+        reason: "contract_page_revision_after_risk_confirmation"
+      })
+    });
+    setContractRevisionText("");
+    await Promise.all([refreshContractData(), refreshWorkbenchData()]);
+  }
+
+  async function runContractSecondReview(contract: ContractWithDetails) {
+    setContractError(null);
+    setIsAiGenerating(true);
+
+    try {
+      await authorizedRequest(`/contracts/${contract.id}/second-review`, {
+        method: "POST"
+      });
+      await Promise.all([refreshContractData(), refreshWorkbenchData()]);
+    } finally {
+      setIsAiGenerating(false);
+    }
+  }
+
+  async function submitContractApproval(contract: ContractWithDetails) {
+    setContractError(null);
+    await authorizedRequest(`/contracts/${contract.id}/submit-approval`, {
+      method: "POST",
+      body: JSON.stringify({
+        reason: "contract_page_bounded_approval_handoff"
+      })
+    });
+    await Promise.all([refreshContractData(), refreshWorkbenchData()]);
+  }
+
+  async function recordExecutionEvent(contract: ContractWithDetails) {
+    setContractError(null);
+    await authorizedRequest(`/contracts/${contract.id}/execution-events`, {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "reminder" satisfies ContractExecutionEventType,
+        title: executionTitle.trim() || "合同执行提醒",
+        notes: "系统内记录提醒，不发送外部通知。",
+        status: "pending"
+      })
+    });
+    setExecutionTitle("");
+    await Promise.all([refreshContractData(), refreshWorkbenchData()]);
+  }
+
   if (!session || !activeUser) {
     return <LoginScreen onLogin={handleLogin} />;
   }
@@ -668,7 +838,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">DEV-013：知识库生产化</p>
+            <p className="eyebrow">DEV-014：合同闭环</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
@@ -859,6 +1029,68 @@ export function App() {
               });
             }}
             setKnowledgeQuery={setKnowledgeQuery}
+          />
+        ) : currentModule === "contracts" ? (
+          <ContractView
+            aiFailure={aiFailure}
+            canCreateContract={session.permissions.operation.includes("create_contract")}
+            canConfirmRisk={session.permissions.operation.includes("confirm_contract_risk")}
+            canReviseContract={session.permissions.operation.includes("revise_contract")}
+            canSubmitApproval={session.permissions.approval.includes("initiate_approval")}
+            canTrackExecution={session.permissions.operation.includes("track_contract_execution")}
+            contractEntryMethod={contractEntryMethod}
+            contractError={contractError}
+            contractFileName={contractFileName}
+            contractRevisionText={contractRevisionText}
+            contractText={contractText}
+            contractTitle={contractTitle}
+            contracts={contracts}
+            executionTitle={executionTitle}
+            isAiGenerating={isAiGenerating}
+            isLoading={isContractLoading}
+            onConfirmRisks={(contract) => {
+              void confirmContractRisks(contract).catch((error) => {
+                setContractError(error instanceof Error ? error.message : "风险确认失败");
+              });
+            }}
+            onCreateContract={() => {
+              void createContract().catch((error) => {
+                setContractError(error instanceof Error ? error.message : "合同创建失败");
+              });
+            }}
+            onExecutionEvent={(contract) => {
+              void recordExecutionEvent(contract).catch((error) => {
+                setContractError(error instanceof Error ? error.message : "执行记录失败");
+              });
+            }}
+            onRunAiReview={(contract) => {
+              void runContractAiReview(contract).catch((error) => {
+                setContractError(error instanceof Error ? error.message : "AI 审查失败");
+              });
+            }}
+            onRunSecondReview={(contract) => {
+              void runContractSecondReview(contract).catch((error) => {
+                setContractError(error instanceof Error ? error.message : "二次审查失败");
+              });
+            }}
+            onSelectContract={setSelectedContractId}
+            onSubmitApproval={(contract) => {
+              void submitContractApproval(contract).catch((error) => {
+                setContractError(error instanceof Error ? error.message : "提交审批失败");
+              });
+            }}
+            onSubmitRevision={(contract) => {
+              void submitContractRevision(contract).catch((error) => {
+                setContractError(error instanceof Error ? error.message : "提交修改失败");
+              });
+            }}
+            selectedContractId={selectedContractId}
+            setContractEntryMethod={setContractEntryMethod}
+            setContractFileName={setContractFileName}
+            setContractRevisionText={setContractRevisionText}
+            setContractText={setContractText}
+            setContractTitle={setContractTitle}
+            setExecutionTitle={setExecutionTitle}
           />
         ) : currentModule === "settings" && canOpenSettings ? (
           <SettingsView
@@ -2064,6 +2296,311 @@ function KnowledgeView({
             <PageStateNotice active={!isLoading} state="empty" title="还没有项目记忆" body="请先在聊天中生成摘要并由人工确认入库。" />
           )}
         </div>
+      </div>
+    </section>
+  );
+}
+
+function ContractView({
+  aiFailure,
+  canCreateContract,
+  canConfirmRisk,
+  canReviseContract,
+  canSubmitApproval,
+  canTrackExecution,
+  contractEntryMethod,
+  contractError,
+  contractFileName,
+  contractRevisionText,
+  contractText,
+  contractTitle,
+  contracts,
+  executionTitle,
+  isAiGenerating,
+  isLoading,
+  onConfirmRisks,
+  onCreateContract,
+  onExecutionEvent,
+  onRunAiReview,
+  onRunSecondReview,
+  onSelectContract,
+  onSubmitApproval,
+  onSubmitRevision,
+  selectedContractId,
+  setContractEntryMethod,
+  setContractFileName,
+  setContractRevisionText,
+  setContractText,
+  setContractTitle,
+  setExecutionTitle
+}: {
+  aiFailure: string | null;
+  canCreateContract: boolean;
+  canConfirmRisk: boolean;
+  canReviseContract: boolean;
+  canSubmitApproval: boolean;
+  canTrackExecution: boolean;
+  contractEntryMethod: ContractEntryMethod;
+  contractError: string | null;
+  contractFileName: string;
+  contractRevisionText: string;
+  contractText: string;
+  contractTitle: string;
+  contracts: ContractWithDetails[];
+  executionTitle: string;
+  isAiGenerating: boolean;
+  isLoading: boolean;
+  onConfirmRisks: (contract: ContractWithDetails) => void;
+  onCreateContract: () => void;
+  onExecutionEvent: (contract: ContractWithDetails) => void;
+  onRunAiReview: (contract: ContractWithDetails) => void;
+  onRunSecondReview: (contract: ContractWithDetails) => void;
+  onSelectContract: (contractId: string) => void;
+  onSubmitApproval: (contract: ContractWithDetails) => void;
+  onSubmitRevision: (contract: ContractWithDetails) => void;
+  selectedContractId: string | null;
+  setContractEntryMethod: (value: ContractEntryMethod) => void;
+  setContractFileName: (value: string) => void;
+  setContractRevisionText: (value: string) => void;
+  setContractText: (value: string) => void;
+  setContractTitle: (value: string) => void;
+  setExecutionTitle: (value: string) => void;
+}) {
+  const selectedContract = contracts.find((contract) => contract.id === selectedContractId) ?? contracts[0] ?? null;
+  const latestReview = selectedContract?.reviews[0] ?? null;
+  const latestVersion = selectedContract?.versions[0] ?? null;
+  const allRisksConfirmed = latestReview?.risks.every((risk) => risk.humanConfirmed && risk.selectedOption) ?? false;
+  const canStartInitialReview = Boolean(selectedContract && ["draft", "revision_required"].includes(selectedContract.status));
+  const canStartSecondReview = Boolean(selectedContract && selectedContract.currentVersion > 1 && selectedContract.status === "revision_required");
+  const canSubmitApprovalNow = Boolean(
+    selectedContract &&
+      canSubmitApproval &&
+      selectedContract.currentVersion > 1 &&
+      latestReview?.reviewType === "second" &&
+      allRisksConfirmed
+  );
+
+  return (
+    <section className="contract-workspace">
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">上传 / 粘贴</p>
+            <h2>合同入口</h2>
+            <p>入口固定为上传文本或粘贴文本，原文和来源证据会进入版本历史。</p>
+          </div>
+          <FileText size={22} />
+        </div>
+        <PageStateNotice state="loading" title="正在加载合同" body="正在读取当前账号有权限访问的合同。" active={isLoading} />
+        <PageStateNotice state="error" title="合同操作失败" body={contractError ?? ""} active={Boolean(contractError)} />
+        <PageStateNotice
+          state="no-permission"
+          title="无合同创建权限"
+          body="当前账号可查看授权合同；新建合同需要合同发起权限。"
+          active={!canCreateContract}
+        />
+        {canCreateContract ? (
+          <div className="contract-entry">
+            <div className="segmented-control">
+              <button className={contractEntryMethod === "paste" ? "active" : ""} onClick={() => setContractEntryMethod("paste")}>
+                粘贴
+              </button>
+              <button className={contractEntryMethod === "upload" ? "active" : ""} onClick={() => setContractEntryMethod("upload")}>
+                上传
+              </button>
+            </div>
+            <input value={contractTitle} onChange={(event) => setContractTitle(event.target.value)} placeholder="合同名称" />
+            {contractEntryMethod === "upload" ? (
+              <input value={contractFileName} onChange={(event) => setContractFileName(event.target.value)} placeholder="文件名" />
+            ) : null}
+            <textarea value={contractText} onChange={(event) => setContractText(event.target.value)} placeholder="合同原文" rows={7} />
+            <button className="primary-button" disabled={contractText.trim().length === 0} onClick={onCreateContract}>
+              <Upload size={16} />
+              创建合同
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">合同列表</p>
+            <h2>版本与状态</h2>
+            <p>无权限用户不会收到合同正文、风险、来源证据或 AI 上下文。</p>
+          </div>
+        </div>
+        <div className="record-list">
+          {contracts.length > 0 ? (
+            contracts.map((contract) => (
+              <button
+                className={selectedContract?.id === contract.id ? "record-row active" : "record-row"}
+                key={contract.id}
+                onClick={() => onSelectContract(contract.id)}
+              >
+                <span>
+                  <strong>{contract.title}</strong>
+                  <small>v{contract.currentVersion} · {organizationName(contract.organizationId)}</small>
+                </span>
+                <span className="status-pill">{contract.status}</span>
+                <span className="count-pill">{contract.reviews.length} 审查</span>
+              </button>
+            ))
+          ) : (
+            <PageStateNotice active={!isLoading} state="empty" title="暂无可见合同" body="创建合同或获得授权后会显示在这里。" />
+          )}
+        </div>
+      </div>
+
+      <div className="panel contract-detail-panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">AI 审查与人工确认</p>
+            <h2>{selectedContract?.title ?? "未选择合同"}</h2>
+            <p>AI 只列风险、标注原文和给 A/B/C 方案，不确认风险、不选择方案、不提交审批。</p>
+          </div>
+          {selectedContract ? <span className="status-pill strong">{selectedContract.status}</span> : null}
+        </div>
+        {selectedContract ? (
+          <>
+            <div className="detail-grid">
+              <SettingsItem title="当前版本" value={`v${selectedContract.currentVersion}`} enabled />
+              <SettingsItem title="入口来源" value={latestVersion?.entryMethod ?? "-"} enabled />
+              <SettingsItem title="执行状态" value={selectedContract.executionStatus} enabled />
+              <SettingsItem title="审批边界" value={selectedContract.approvalHandoffId ? "已提交" : "未提交"} enabled />
+            </div>
+            <div className="action-row">
+              <button className="secondary-button" disabled={!canStartInitialReview || isAiGenerating} onClick={() => onRunAiReview(selectedContract)}>
+                <Brain size={16} />
+                AI 审查
+              </button>
+              <button className="secondary-button" disabled={!canConfirmRisk || !latestReview || allRisksConfirmed} onClick={() => onConfirmRisks(selectedContract)}>
+                人工确认风险
+              </button>
+              <button className="secondary-button" disabled={!canStartSecondReview || isAiGenerating} onClick={() => onRunSecondReview(selectedContract)}>
+                二次审查
+              </button>
+              <button className="secondary-button" disabled={!canSubmitApprovalNow} onClick={() => onSubmitApproval(selectedContract)}>
+                提交审批边界
+              </button>
+            </div>
+            <PageStateNotice active={isAiGenerating} state="AI_Generating" title="AI 正在审查" body="审查结果只会生成风险建议和原文标注。" />
+            <PageStateNotice active={Boolean(aiFailure)} state="AI_Failed" title="AI 审查失败" body={aiFailure ?? ""} />
+            <PageStateNotice
+              active={selectedContract.currentVersion > 1 && latestReview?.reviewType !== "second"}
+              state="no-permission"
+              title="修改版本需要二次审查"
+              body="修改后的合同版本必须完成二次审查并人工确认风险后，才能提交审批边界。"
+            />
+            {latestReview ? (
+              <div className="contract-review">
+                <div className="section-title">
+                  <strong>{latestReview.reviewType === "second" ? "二次审查" : "初次审查"} · {latestReview.riskLevel}</strong>
+                  <span>{latestReview.frameworkVersion}</span>
+                </div>
+                <p>{latestReview.summary}</p>
+                <div className="record-list">
+                  {latestReview.risks.map((risk) => (
+                    <article className="risk-row" key={risk.id}>
+                      <div>
+                        <strong>{risk.title}</strong>
+                        <small>{risk.explanation}</small>
+                        <mark>{risk.sourceQuote}</mark>
+                        <small>A：{risk.options.A}</small>
+                        <small>B：{risk.options.B}</small>
+                        <small>C：{risk.options.C}</small>
+                      </div>
+                      <span className={`status-pill ${risk.severity}`}>{risk.severity}</span>
+                      <span className="count-pill">{risk.humanConfirmed ? `人工选择 ${risk.selectedOption}` : "待人工确认"}</span>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <PageStateNotice active state="empty" title="尚未审查" body="发起 AI 审查后会显示风险清单、原文标注和 A/B/C 方案。" />
+            )}
+          </>
+        ) : null}
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">修改与二次审查</p>
+            <h2>合同修改</h2>
+            <p>首次风险确认后才能提交修改版本；修改版本必须二次审查。</p>
+          </div>
+        </div>
+        {selectedContract ? (
+          <div className="contract-entry">
+            <textarea value={contractRevisionText} onChange={(event) => setContractRevisionText(event.target.value)} placeholder="修改后的合同原文" rows={6} />
+            <button
+              className="primary-button"
+              disabled={!canReviseContract || selectedContract.status !== "revision_required" || contractRevisionText.trim().length === 0}
+              onClick={() => onSubmitRevision(selectedContract)}
+            >
+              提交修改版本
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">版本历史与执行跟踪</p>
+            <h2>证据链</h2>
+            <p>审批提交只记录边界交接；执行跟踪只记录提醒、事项和状态。</p>
+          </div>
+        </div>
+        {selectedContract ? (
+          <>
+            <div className="record-list">
+              {selectedContract.versions.map((version) => (
+                <div className="record-row" key={version.id}>
+                  <span>
+                    <strong>v{version.version} · {version.title}</strong>
+                    <small>{version.originalText}</small>
+                    <small>来源：{version.sourceEvidence.map((source) => `${source.sourceType}:${source.fileName ?? source.sourceId}`).join(" / ")}</small>
+                  </span>
+                  <span className="status-pill">{version.entryMethod}</span>
+                </div>
+              ))}
+            </div>
+            <div className="inline-form">
+              <input value={executionTitle} onChange={(event) => setExecutionTitle(event.target.value)} placeholder="执行提醒标题" />
+              <button
+                className="secondary-button"
+                disabled={!canTrackExecution || selectedContract.status !== "approval_pending"}
+                onClick={() => onExecutionEvent(selectedContract)}
+              >
+                记录执行提醒
+              </button>
+            </div>
+            <div className="record-list">
+              {selectedContract.approvalHandoffs.map((handoff) => (
+                <div className="record-row" key={handoff.id}>
+                  <span>
+                    <strong>审批边界提交</strong>
+                    <small>{handoff.reason}</small>
+                  </span>
+                  <span className="status-pill">{handoff.status}</span>
+                  <span className="count-pill">非完整审批引擎</span>
+                </div>
+              ))}
+              {selectedContract.executionEvents.map((event) => (
+                <div className="record-row" key={event.id}>
+                  <span>
+                    <strong>{event.title}</strong>
+                    <small>{event.notes}</small>
+                  </span>
+                  <span className="status-pill">{event.eventType}</span>
+                  <span className="count-pill">{event.status}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : null}
       </div>
     </section>
   );

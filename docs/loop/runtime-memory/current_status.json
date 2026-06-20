@@ -1,14 +1,14 @@
 {
-  "updated_at": "2026-06-20T05:50:00+00:00",
-  "active_task_id": "TASK-XTGZPT-DEV-013-CODEX-1",
-  "active_goal": "Complete DEV-013 for xtgzpt: knowledge base productionization in the current working tree.",
+  "updated_at": "2026-06-20T06:55:00+00:00",
+  "active_task_id": "TASK-XTGZPT-DEV-014-CODEX-1",
+  "active_goal": "Complete DEV-014 for xtgzpt: contract closure in the current working tree.",
   "status": "completed",
   "current_stage": "completed",
-  "last_summary": "DEV-013 knowledge review states, version history, source evidence, human publish/reject/archive actions, local permission-filtered search and frontend review controls implemented; local gates passed, online audit requires network environment.",
+  "last_summary": "DEV-014 contract upload/paste entry, versions with original text/source evidence, AI structured review, human risk confirmation, revision and second review gate, bounded approval handoff, execution tracking, audit and frontend controls implemented; local gates passed, online audit and browser validation require suitable environment.",
   "gate_status": {
     "npm_ci": {
       "status": "passed",
-      "summary": "lint, typecheck, test, build and smoke:api passed; Vitest reported 11 files / 49 tests."
+      "summary": "lint, typecheck, test, build and smoke:api passed; Vitest reported 12 files / 51 tests."
     },
     "npm_audit_offline": {
       "status": "passed",
@@ -32,10 +32,10 @@
   "issue_count": 0,
   "failure_count": 2,
   "intent_debt": {
-    "goal": "Complete DEV-013 online audit and browser validation.",
+    "goal": "Complete DEV-014 online audit and browser validation.",
     "failure_type": "external_environment",
     "reason": "Online npm audit requires DNS/network access; current sandbox cannot resolve registry.npmjs.org and cannot bind localhost for browser validation.",
     "next_step": "Run online npm audit and browser validation in a network/browser-capable PR environment.",
-    "created_at": "2026-06-20T05:50:00+00:00"
+    "created_at": "2026-06-20T06:55:00+00:00"
   }
 }
