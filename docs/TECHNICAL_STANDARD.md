@@ -97,6 +97,10 @@ API 必须遵守：
 - `/approvals/:id/return`
 - `/approvals/:id/transfer`
 - `/approvals/:id/add-sign`
+- `/settings/ai-frameworks`
+- `/settings/ai-frameworks/:id`
+- `/ai/runs`
+- `/ai/runs/:id`
 
 ## 4. 前端标准
 
@@ -122,6 +126,7 @@ API 必须遵守：
 - 已有迁移目录。
 - 已有运行时持久化边界覆盖项目、任务、聊天、AI 草稿、知识、项目记忆、审计和文件元数据。
 - PostgreSQL 兼容 migration 资产已覆盖当前运行时对象、文件元数据/版本/对象绑定/归档事件、知识审核状态/版本历史/来源证据、合同、合同版本、AI 审查、风险确认、审批边界交接、执行跟踪事件，以及审批实例、节点、动作历史和合同审批结果写回字段。
+- DEV-016 已新增 AI Framework、Framework Version、AI Run、输入/输出快照、来源证据链接和人工采纳/驳回/修改记录的 PostgreSQL 兼容 migration 资产。
 - 仍未接入真实 PostgreSQL adapter、连接池、事务和备份恢复。
 
 生产目标：
@@ -161,6 +166,7 @@ API 必须遵守：
 - `approval` 已成为独立权限维度，审批权限不再混在操作权限中。
 - 合同来源审批闭环已校验当前节点处理人，支持同意、驳回、退回、转交、加签和结果写回。
 - 文件权限已继承项目、任务、聊天、知识和项目记忆等来源对象权限，并覆盖上传、预览、下载、归档和 AI 引用。
+- AI 框架配置权限和 AI Run 读取权限已拆分；AI Run 读取继续按来源对象权限过滤。
 - 权限还没有生产数据库配置表完整落地。
 
 ## 7. AI 技术标准
@@ -189,6 +195,15 @@ AI Run 生产字段必须包含：
 - `failureClass`
 - `createdAt`
 - `completedAt`
+
+DEV-016 当前实现：
+
+- AI Framework / Framework Version 进入共享模型、运行时持久化边界和 migration。
+- Chat AI 草稿、知识问答和合同 AI 审查会创建 AI Run。
+- AI Run 记录 `frameworkId`、`frameworkVersion`、scenario、actor、organization、source object、source ids、input/output snapshot、context source ids、status、failure class、retry policy metadata 和 completion time。
+- 输入/输出快照、来源证据链接和人工采纳/驳回/修改记录进入独立记录。
+- 框架配置只允许系统管理员或超级管理员在既有系统设置内操作；AI Run 读取按 `read_ai_runs` 和来源对象权限过滤。
+- AI 仍不能审批、驳回、退回、转交、加签、发布知识、创建正式任务、签署、付款或确认执行。
 
 ## 7.1 知识检索技术策略
 

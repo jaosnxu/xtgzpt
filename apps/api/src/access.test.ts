@@ -147,7 +147,7 @@ describe("access control", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().permissions).toEqual(
       expect.objectContaining({
-        policyVersion: "seed-dev-015",
+        policyVersion: "seed-dev-016",
         role: "admin",
         data: expect.objectContaining({
           scope: "assigned_organizations",
@@ -156,7 +156,7 @@ describe("access control", () => {
         operation: expect.arrayContaining(["manage_permissions"]),
         approval: expect.arrayContaining(["configure_approval_policy"]),
         file: expect.arrayContaining(["reference_ai"]),
-        ai: expect.arrayContaining(["configure_ai_frameworks"])
+        ai: expect.arrayContaining(["read_ai_runs", "configure_ai_frameworks"])
       })
     );
   });
@@ -174,8 +174,12 @@ describe("access control", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(
       expect.objectContaining({
-        policyVersion: "seed-dev-015",
+        policyVersion: "seed-dev-016",
         policies: expect.arrayContaining([
+          expect.objectContaining({
+            role: "admin",
+            ai: expect.arrayContaining(["read_ai_runs", "configure_ai_frameworks"])
+          }),
           expect.objectContaining({
             role: "legal_approver",
             menu: expect.any(Array),
@@ -203,7 +207,7 @@ describe("access control", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(
       expect.objectContaining({
-        policyVersion: "seed-dev-015",
+        policyVersion: "seed-dev-016",
         dimension: "approval",
         approval: expect.arrayContaining([
           expect.objectContaining({

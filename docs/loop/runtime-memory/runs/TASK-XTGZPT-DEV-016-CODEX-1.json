@@ -1,0 +1,72 @@
+{
+  "schema_version": "loop.run_summary.v1",
+  "task_id": "TASK-XTGZPT-DEV-016-CODEX-1",
+  "goal": "Complete DEV-016 for xtgzpt: AI Framework Center and AI Run productionization in the current working tree.",
+  "scope": {
+    "include": [
+      "AI Framework and Framework Version records",
+      "AI Run records",
+      "input and output snapshots",
+      "source evidence linkage",
+      "human adoption, rejection, and change records",
+      "failure classification",
+      "retry policy metadata",
+      "AI framework configuration permissions",
+      "AI run read permissions",
+      "PostgreSQL-compatible migrations",
+      "tests and smoke coverage candidates",
+      "frontend evidence and configuration surfaces inside existing menus",
+      "DEV-016 and AUDIT-016 logs"
+    ],
+    "exclude": [
+      "finance workflow",
+      "procurement workflow",
+      "inventory workflow",
+      "ERP expansion",
+      "external agents",
+      "external vector database",
+      "external notifications",
+      "mobile app",
+      "production writes",
+      "deployment",
+      "secrets",
+      "new top-level menu",
+      "AI approval, rejection, return, transfer, add-sign, signing, payment, publishing knowledge, creating official tasks, or execution confirmation"
+    ]
+  },
+  "status": "verified_with_screenshot_capture_limitation",
+  "current_stage": "verification",
+  "created_at": "2026-06-20T00:00:00+03:00",
+  "updated_at": "2026-06-20T00:00:00+03:00",
+  "verification": {
+    "passed": [
+      "git diff --check",
+      "npm run lint",
+      "npm run typecheck",
+      "npm run test: 14 files / 56 tests",
+      "npm run build",
+      "npm run smoke:api",
+      "npm audit --audit-level=low: 0 vulnerabilities",
+      "static source scan for forbidden AI top-level menu labels",
+      "Browser DOM verification on http://127.0.0.1:3014 at 1440 viewport"
+    ],
+    "blocked": [],
+    "limitations": [
+      "Browser CDP screenshot capture timed out; DOM verification succeeded and screenshot artifact success is not claimed."
+    ],
+    "browser_summary": "admin/113113 login succeeded; System Settings displayed policy seed-dev-016 and AI Framework list; AI Frameworks stayed inside the existing System Settings menu; no new top-level AI menu appeared.",
+    "test_summary": "Added ai-run-production regression coverage for framework config permissions, immutable versions, run snapshots, source evidence, retry metadata, human changed/rejected decisions, read filtering, and contract validation failure classification; external verifier test run passed with 14 files / 56 tests."
+  },
+  "artifacts": [
+    "packages/shared/src/platform.ts",
+    "apps/api/src/runtime-store.ts",
+    "apps/api/src/index.ts",
+    "apps/api/src/ai-run-production.test.ts",
+    "apps/web/src/ui/App.tsx",
+    "apps/web/src/styles.css",
+    "packages/database/migrations/0010_ai_framework_run_productionization.sql",
+    "docs/dev-log/DEV-016.md",
+    "docs/dev-log/AUDIT-016.md"
+  ],
+  "next_action": "Automated verifier commands are complete. If a screenshot artifact is mandatory, rerun Browser screenshot capture; DOM verification has already passed."
+}

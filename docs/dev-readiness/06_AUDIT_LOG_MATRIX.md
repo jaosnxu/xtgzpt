@@ -188,6 +188,14 @@ DEV-015 要求：
 | 输出被拒绝 | 是 |
 | 失败重试 | 是 |
 
+DEV-016 要求：
+
+- `ai.run_created`、`ai.run_succeeded`、`ai.run_failed` 必须记录 actor、object、organization、request id、AI framework version 和 snapshot refs。
+- `ai.framework_config_viewed` 和 `ai.framework_version_created` 必须记录人类管理员、变更原因和新旧版本引用。
+- `ai.output_adopted`、`ai.output_changed`、`ai.output_rejected` 必须记录人类账号、AI Run、草稿、目标对象和原因。
+- 权限拒绝的 AI Run 读取必须写拒绝审计，且响应不得泄露输入/输出快照或来源内容。
+- AI 不得写入人工审批、知识发布、任务正式创建、签署、付款或执行完成审计动作。
+
 ## 12. 审计验收
 
 任意一个关键动作，测试必须能回答：

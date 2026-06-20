@@ -76,11 +76,12 @@ export type AiCapability =
   | "contract_review"
   | "approval_suggestion"
   | "risk_hint"
+  | "read_ai_runs"
   | "configure_ai_frameworks";
 
 export type PermissionDimension = "menu" | "data" | "operation" | "approval" | "file" | "ai";
 
-export const permissionPolicyVersion = "seed-dev-015";
+export const permissionPolicyVersion = "seed-dev-016";
 
 export type AuditResult = "success" | "failure" | "denied";
 
@@ -94,7 +95,35 @@ export type ChatMessageStatus = "sent" | "edited" | "withdrawn";
 
 export type AiDraftKind = "chat_summary" | "task_draft" | "knowledge_draft";
 
-export type AiDraftStatus = "draft" | "confirmed";
+export type AiDraftStatus = "draft" | "confirmed" | "rejected";
+
+export type AiFrameworkStatus = "active" | "disabled";
+
+export type AiScenario =
+  | "chat_summary"
+  | "task_draft"
+  | "knowledge_draft"
+  | "knowledge_query"
+  | "contract_review"
+  | "approval_suggestion";
+
+export type AiRunSourceObjectType = "chat_thread" | "contract" | "knowledge_query" | "approval";
+
+export type AiRunStatus = "created" | "running" | "succeeded" | "failed";
+
+export type AiRunFailureClass =
+  | "provider_error"
+  | "permission_denied"
+  | "validation_error"
+  | "timeout"
+  | "rate_limited"
+  | "unknown";
+
+export type AiSnapshotKind = "input" | "output";
+
+export type AiSourceAccessResult = "allowed" | "denied" | "filtered";
+
+export type AiRunDecisionType = "adopted" | "rejected" | "changed";
 
 export type KnowledgeItemStatus = "draft" | "submitted_for_review" | "published" | "rejected" | "archived";
 
@@ -343,6 +372,106 @@ export interface AiDraftRecord {
   promotedObjectType: "task" | "knowledge_item" | "project_memory" | null;
   promotedObjectId: string | null;
   createdAt: string;
+}
+
+export interface AiRetryPolicy {
+  maxRetries: number;
+  retryableFailureClasses: AiRunFailureClass[];
+  backoffSeconds: number;
+}
+
+export interface AiFrameworkRecord {
+  id: string;
+  name: string;
+  scenario: AiScenario;
+  organizationId: string | null;
+  status: AiFrameworkStatus;
+  activeVersionId: string;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiFrameworkVersionRecord {
+  id: string;
+  frameworkId: string;
+  version: string;
+  provider: "template" | "ark" | "local_structured";
+  model: string;
+  promptTemplate: string;
+  boundaryPolicy: string;
+  sourceEvidenceRequired: boolean;
+  retryPolicy: AiRetryPolicy;
+  createdByUserId: string;
+  changeReason: string;
+  createdAt: string;
+}
+
+export interface AiRunRecord {
+  id: string;
+  frameworkId: string;
+  frameworkVersionId: string;
+  frameworkVersion: string;
+  scenario: AiScenario;
+  actorUserId: string;
+  organizationId: string;
+  sourceObjectType: AiRunSourceObjectType;
+  sourceObjectId: string;
+  sourceIds: string[];
+  inputSnapshotRef: string;
+  outputSnapshotRef: string | null;
+  contextSourceIds: string[];
+  status: AiRunStatus;
+  failureClass: AiRunFailureClass | null;
+  failureMessage: string | null;
+  retryPolicy: AiRetryPolicy;
+  retryAttempt: number;
+  maxRetries: number;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface AiSnapshotRecord {
+  id: string;
+  runId: string;
+  kind: AiSnapshotKind;
+  checksum: string;
+  payload: unknown;
+  createdAt: string;
+}
+
+export interface AiRunSourceEvidenceRecord {
+  id: string;
+  runId: string;
+  sourceObjectType: string;
+  sourceObjectId: string;
+  sourceId: string;
+  title: string;
+  excerpt: string;
+  accessResult: AiSourceAccessResult;
+  createdAt: string;
+}
+
+export interface AiRunDecisionRecord {
+  id: string;
+  runId: string;
+  draftId: string | null;
+  decision: AiRunDecisionType;
+  actorUserId: string;
+  targetObjectType: string | null;
+  targetObjectId: string | null;
+  changeSummary: string | null;
+  reason: string;
+  createdAt: string;
+}
+
+export interface AiRunWithDetails extends AiRunRecord {
+  framework: AiFrameworkRecord | null;
+  frameworkVersionRecord: AiFrameworkVersionRecord | null;
+  inputSnapshot: AiSnapshotRecord | null;
+  outputSnapshot: AiSnapshotRecord | null;
+  sourceEvidence: AiRunSourceEvidenceRecord[];
+  decisions: AiRunDecisionRecord[];
 }
 
 export interface KnowledgeItemRecord {
@@ -767,6 +896,7 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
       "contract_review",
       "approval_suggestion",
       "risk_hint",
+      "read_ai_runs",
       "configure_ai_frameworks"
     ]
   },
@@ -781,7 +911,7 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     operations: ["manage_permissions", "upload_file", "archive_file"],
     approval: ["configure_approval_policy"],
     files: ["view", "preview", "download", "upload", "archive", "reference_ai"],
-    ai: ["chat_summarize", "knowledge_query", "risk_hint", "configure_ai_frameworks"]
+    ai: ["chat_summarize", "knowledge_query", "risk_hint", "read_ai_runs", "configure_ai_frameworks"]
   },
   knowledge_admin: {
     role: "knowledge_admin",
@@ -794,7 +924,7 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     operations: ["create_task", "complete_task", "upload_file", "archive_file", "publish_knowledge"],
     approval: [],
     files: ["view", "preview", "download", "upload", "archive", "reference_ai"],
-    ai: ["chat_summarize", "task_draft", "knowledge_query", "risk_hint"]
+    ai: ["chat_summarize", "task_draft", "knowledge_query", "risk_hint", "read_ai_runs"]
   },
   approver: {
     role: "approver",
@@ -813,7 +943,7 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
       "add_sign"
     ],
     files: ["view", "preview", "download", "upload", "reference_ai"],
-    ai: ["chat_summarize", "knowledge_query", "approval_suggestion", "risk_hint"]
+    ai: ["chat_summarize", "knowledge_query", "approval_suggestion", "risk_hint", "read_ai_runs"]
   },
   finance_approver: {
     role: "finance_approver",
@@ -826,7 +956,7 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     operations: ["create_task", "complete_task", "confirm_contract_risk", "upload_file"],
     approval: ["approve_current_node", "reject_current_node", "return_for_revision", "transfer_approval"],
     files: ["view", "preview", "download", "upload", "reference_ai"],
-    ai: ["chat_summarize", "knowledge_query", "approval_suggestion", "risk_hint"]
+    ai: ["chat_summarize", "knowledge_query", "approval_suggestion", "risk_hint", "read_ai_runs"]
   },
   legal_approver: {
     role: "legal_approver",
@@ -846,7 +976,7 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
       "write_back_approval_result"
     ],
     files: ["view", "preview", "download", "upload", "archive", "reference_ai"],
-    ai: ["chat_summarize", "knowledge_query", "contract_review", "approval_suggestion", "risk_hint"]
+    ai: ["chat_summarize", "knowledge_query", "contract_review", "approval_suggestion", "risk_hint", "read_ai_runs"]
   },
   contract_initiator: {
     role: "contract_initiator",
@@ -859,7 +989,7 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     operations: ["create_task", "complete_task", "create_contract", "revise_contract", "confirm_contract_risk", "track_contract_execution", "upload_file"],
     approval: ["initiate_approval"],
     files: ["view", "preview", "download", "upload", "reference_ai"],
-    ai: ["chat_summarize", "task_draft", "knowledge_query", "contract_review", "risk_hint"]
+    ai: ["chat_summarize", "task_draft", "knowledge_query", "contract_review", "risk_hint", "read_ai_runs"]
   },
   executive: {
     role: "executive",
@@ -872,7 +1002,7 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     operations: ["create_task", "complete_task", "upload_file"],
     approval: ["approve_current_node", "reject_current_node", "return_for_revision"],
     files: ["view", "preview", "download", "reference_ai"],
-    ai: ["chat_summarize", "knowledge_query", "approval_suggestion", "risk_hint"]
+    ai: ["chat_summarize", "knowledge_query", "approval_suggestion", "risk_hint", "read_ai_runs"]
   },
   department_head: {
     role: "department_head",
@@ -885,7 +1015,7 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     operations: ["edit_project", "close_project", "create_task", "assign_task", "complete_task", "upload_file"],
     approval: ["approve_current_node", "reject_current_node", "return_for_revision", "transfer_approval"],
     files: ["view", "preview", "download", "upload", "archive", "reference_ai"],
-    ai: ["chat_summarize", "task_draft", "knowledge_query", "approval_suggestion", "risk_hint"]
+    ai: ["chat_summarize", "task_draft", "knowledge_query", "approval_suggestion", "risk_hint", "read_ai_runs"]
   },
   project_owner: {
     role: "project_owner",
@@ -907,7 +1037,7 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     ],
     approval: ["initiate_approval"],
     files: ["view", "preview", "download", "upload", "archive", "reference_ai"],
-    ai: ["chat_summarize", "task_draft", "knowledge_query", "approval_suggestion", "risk_hint"]
+    ai: ["chat_summarize", "task_draft", "knowledge_query", "approval_suggestion", "risk_hint", "read_ai_runs"]
   },
   member: {
     role: "member",
@@ -920,7 +1050,7 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     operations: ["create_task", "complete_task", "upload_file"],
     approval: ["initiate_approval"],
     files: ["view", "preview", "download", "upload", "reference_ai"],
-    ai: ["chat_summarize", "task_draft", "knowledge_query", "approval_suggestion"]
+    ai: ["chat_summarize", "task_draft", "knowledge_query", "approval_suggestion", "read_ai_runs"]
   }
 };
 
@@ -1188,7 +1318,7 @@ export function canUseAiCapability(user: UserAccount, capability: AiCapability, 
   }
 
   if (!resource) {
-    return capability === "configure_ai_frameworks";
+    return capability === "configure_ai_frameworks" || capability === "read_ai_runs";
   }
 
   return canAccessResourceData(user, resource);
