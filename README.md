@@ -13,13 +13,13 @@
 - G018 原型工具制作交付标准
 - G019 原型制作前最终冻结确认
 - Phase 1 原型冻结
-- DEV-001 到 DEV-018 代码和生产上线准备阶段
+- DEV-001 到 DEV-020 代码、生产上线准备和 API runtime PostgreSQL adapter/cutover boundary 阶段
 - 项目宪法、技术标准、业务实现阶段和测试标准收口
 
 当前允许进入：
 
 - Phase 1 代码开发
-- 数据库生产持久化
+- 数据库生产持久化和 API runtime PostgreSQL cutover boundary
 - API 生产实现
 - 完整权限、文件、知识、合同、审批开发
 - 本地质量门禁

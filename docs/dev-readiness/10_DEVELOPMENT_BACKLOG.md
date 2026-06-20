@@ -28,7 +28,7 @@
 | DR-008 | 建立测试和验收标准 | 已完成 |
 | DR-009 | 建立 P0/P1 风险审计 | 已完成 |
 | DR-010 | 启动 Phase 1 Figma 原型 | 已完成 |
-| DR-011 | 建立项目宪法、技术标准、业务实现阶段和测试标准 | 已完成，DEV-019 继续做状态记忆对齐 |
+| DR-011 | 建立项目宪法、技术标准、业务实现阶段和测试标准 | 已完成，DEV-020 继续做 API runtime PostgreSQL cutover boundary |
 
 ## 3. 阶段顺序
 
@@ -105,8 +105,8 @@
 
 下一阶段：
 
-- 已完成 `DEV-001` 到 `DEV-018`
-- 当前进入 `DEV-019` 项目记忆和状态文档对齐
+- 已完成 `DEV-001` 到 `DEV-020`
+- 当前 DEV-020 已建立 API runtime PostgreSQL adapter/cutover boundary；真实 driver-backed writes 和生产切流仍未执行
 
 ## 5. 第一阶段代码开发顺序和当前状态
 
@@ -413,6 +413,7 @@
 - `[DEV-017] 全链路响应式和页面状态验收`
 - `[DEV-018] 生产上线准备`
 - `[DEV-019] DEV-018 后项目记忆和状态文档对齐`
+- `[DEV-020] API runtime PostgreSQL adapter/cutover boundary`
 
 ### DEV-016 AI 框架中心和 AI Run 生产化
 
@@ -554,6 +555,49 @@
 - 真实备份和隔离恢复演练
 - release signoff
 - 真实生产 secrets 注入和平台侧配置审计
+
+### DEV-019 DEV-018 后项目记忆和状态文档对齐
+
+状态：已完成。本阶段只对齐 DEV-018 后项目记忆和状态文档，未修改业务源代码、API、UI、数据库 schema、权限、AI 边界、secrets、部署、生产写入或菜单。
+
+范围：
+
+- DEV-019 / AUDIT-019 执行记录
+- runtime memory 当前状态
+- 项目宪法、业务计划、README 和 backlog 的 stale 状态口径
+
+验收：
+
+- DEV-018 被记录为生产 readiness 完成，不等同于已经生产上线
+- 外部 release gates 仍保留
+
+### DEV-020 API runtime PostgreSQL adapter/cutover boundary
+
+状态：已完成 code/docs boundary。本阶段建立 runtime store mode selection、PostgreSQL config validation、adapter boundary 和 `0011_runtime_store_cutover_boundary.sql`；真实 driver-backed writes、连接池、事务、备份恢复演练和生产切流仍未执行。
+
+范围：
+
+- `XTGZPT_RUNTIME_STORE_MODE=memory|file|postgres`
+- 测试默认 `memory`
+- 本地和非测试默认 `file`，并继续支持 `XTGZPT_RUNTIME_DATA_FILE`
+- PostgreSQL mode 要求 `XTGZPT_RUNTIME_DATABASE_URL` 或 `DATABASE_URL`
+- PostgreSQL schema/table/document id 配置校验
+- 当前 `RuntimeData` JSON shape 的 PostgreSQL cutover document migration
+- 聚焦测试覆盖 mode resolution、file fallback、PostgreSQL config validation 和 missing-env failure
+
+不做：
+
+- 不连接真实生产数据库
+- 不写入真实生产数据
+- 不提交真实数据库 credentials
+- 不改 UI、菜单、权限、审批或 AI 人工确认边界
+
+验收：
+
+- 未配置数据库 URL 时 PostgreSQL mode 在启动边界安全失败
+- placeholder 或非 PostgreSQL URL 被拒绝
+- file runtime store 仍能用于本地持久化和回归测试
+- PostgreSQL adapter boundary 不执行 live writes，避免把 DEV-020 误当作生产切流
 
 ## 7. 开发禁止事项
 

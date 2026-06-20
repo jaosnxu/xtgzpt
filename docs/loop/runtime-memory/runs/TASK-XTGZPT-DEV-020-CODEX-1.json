@@ -1,0 +1,57 @@
+{
+  "task_id": "TASK-XTGZPT-DEV-020-CODEX-1",
+  "timestamp": "2026-06-20T12:50:43.000000+00:00",
+  "goal": "Implement DEV-020 API runtime PostgreSQL adapter/cutover boundary in the current working tree without production writes, hardcoded credentials, UI/menu changes, or permission/AI boundary changes.",
+  "status": "completed",
+  "scope": {
+    "included": [
+      "runtime store mode selection",
+      "file runtime store preservation",
+      "PostgreSQL runtime config validation",
+      "PostgreSQL no-live-write adapter boundary",
+      "RuntimeData JSON cutover migration boundary",
+      "focused runtime-store tests",
+      "project docs, runbook, DEV-020/AUDIT-020, runtime memory"
+    ],
+    "excluded": [
+      "real production database writes",
+      "hardcoded production credentials",
+      "driver-backed PostgreSQL live cutover",
+      "UI redesign",
+      "new menus",
+      "permission boundary changes",
+      "AI execution boundary changes"
+    ]
+  },
+  "changes": [
+    {
+      "path": "apps/api/src/runtime-store.ts",
+      "summary": "Added memory/file/postgres modes, PostgreSQL config validation, file fallback and no-live-write PostgreSQL adapter boundary."
+    },
+    {
+      "path": "apps/api/src/runtime-store.test.ts",
+      "summary": "Added focused tests for mode resolution, file fallback, PostgreSQL config validation, missing-env failure and boundary save failure."
+    },
+    {
+      "path": "packages/database/migrations/0011_runtime_store_cutover_boundary.sql",
+      "summary": "Added runtime_data_documents table for the current RuntimeData JSON shape cutover boundary."
+    },
+    {
+      "path": "docs/operations/PRODUCTION_READINESS_RUNBOOK.md",
+      "summary": "Updated runtime store mode, PostgreSQL boundary config, migration, backup, recovery and rollback guidance."
+    }
+  ],
+  "verification": {
+    "passed": [
+      "git diff --check",
+      "npm run lint",
+      "npm run typecheck",
+      "npm run test",
+      "npm run build",
+      "npm run smoke:api",
+      "npm audit --audit-level=low"
+    ],
+    "blocked": []
+  },
+  "next_action": "Open PR and wait for required checks/review. Do not treat DEV-020 as real PostgreSQL production cutover until driver-backed writes, migration/backfill, backup/restore drill, production smoke and release signoff are complete."
+}
