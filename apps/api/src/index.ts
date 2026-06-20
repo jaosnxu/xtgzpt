@@ -41,13 +41,19 @@ import {
   type KnowledgeSearchResult,
   type ModuleKey,
   type OperationPermission,
+  type PageStateDescriptor,
   type ProjectMemoryRecord,
   type ProjectRecord,
   type ProjectStatus,
   type ResourceAccessContext,
   type TaskRecord,
   type TaskStatus,
-  type UserAccount
+  type UserAccount,
+  type WorkbenchItem,
+  type WorkbenchNotification,
+  type WorkbenchNotificationSeverity,
+  type WorkbenchNotificationType,
+  type WorkbenchResponse
 } from "@xtgzpt/shared";
 
 loadLocalEnv();
@@ -587,6 +593,366 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     return false;
   }
 
+  function workbenchItem(input: WorkbenchItem): WorkbenchItem {
+    return input;
+  }
+
+  function workbenchNotification({
+    user,
+    type,
+    severity,
+    title,
+    body,
+    module,
+    relatedObjectType = null,
+    relatedObjectId = null
+  }: {
+    user: UserAccount;
+    type: WorkbenchNotificationType;
+    severity: WorkbenchNotificationSeverity;
+    title: string;
+    body: string;
+    module: ModuleKey;
+    relatedObjectType?: string | null;
+    relatedObjectId?: string | null;
+  }): WorkbenchNotification {
+    return {
+      id: `notification-${type}-${user.id}-${relatedObjectId ?? module}`,
+      type,
+      severity,
+      title,
+      body,
+      module,
+      relatedObjectType,
+      relatedObjectId,
+      createdAt: nowIso()
+    };
+  }
+
+  function canConfirmAiDraftForWorkbench(user: UserAccount, draft: AiDraftRecord, thread: ChatThreadRecord) {
+    if (draft.status !== "draft") {
+      return false;
+    }
+
+    if (draft.kind === "chat_summary") {
+      return true;
+    }
+
+    if (draft.kind === "task_draft") {
+      const project =
+        thread.relatedObjectType === "project" && thread.relatedObjectId
+          ? findVisibleProject(user, thread.relatedObjectId)
+          : undefined;
+
+      return Boolean(
+        project &&
+          canPerformOperation(user, "create_task", {
+            organizationId: project.organizationId,
+            ownerUserId: user.id,
+            participantUserIds: project.memberUserIds
+          })
+      );
+    }
+
+    return canPerformOperation(user, "publish_knowledge", {
+      organizationId: thread.organizationId,
+      participantUserIds: thread.memberUserIds
+    });
+  }
+
+  function pageStatesForWorkbench({
+    hasVisibleWork,
+    hasErrors,
+    hasArchivedProjects
+  }: {
+    hasVisibleWork: boolean;
+    hasErrors: boolean;
+    hasArchivedProjects: boolean;
+  }): PageStateDescriptor[] {
+    return [
+      {
+        key: "normal",
+        label: "正常",
+        status: hasVisibleWork ? "active" : "available",
+        evidence: hasVisibleWork ? "当前账号存在可处理或可查看工作。" : "有数据时进入正常列表和详情。"
+      },
+      {
+        key: "empty",
+        label: "空状态",
+        status: hasVisibleWork ? "available" : "active",
+        evidence: hasVisibleWork ? "列表为空时展示空状态，不编造业务数据。" : "当前账号暂无待处理工作。"
+      },
+      {
+        key: "loading",
+        label: "加载中",
+        status: "available",
+        evidence: "前端请求工作台、项目、任务、聊天和知识数据时展示。"
+      },
+      {
+        key: "no-permission",
+        label: "无权限",
+        status: "available",
+        evidence: "菜单、数据、操作、审批、文件和 AI 权限拒绝时展示，并由后端记录审计。"
+      },
+      {
+        key: "error",
+        label: "错误",
+        status: hasErrors ? "active" : "available",
+        evidence: hasErrors ? "当前会话存在无权限或失败审计。" : "请求失败或状态流转失败时展示。"
+      },
+      {
+        key: "AI_Generating",
+        label: "AI 生成中",
+        status: "available",
+        evidence: "生成 AI 草稿期间禁用重复提交，AI 仍只能输出草稿。"
+      },
+      {
+        key: "AI_Failed",
+        label: "AI 失败",
+        status: "available",
+        evidence: "AI provider 失败返回失败状态，不生成正式对象。"
+      },
+      {
+        key: "expired",
+        label: "已过期",
+        status: "available",
+        evidence: "后续合同和审批期限对象接入后展示；当前 DEV-011 不创建期限实例。"
+      },
+      {
+        key: "archived",
+        label: "已归档",
+        status: hasArchivedProjects ? "active" : "available",
+        evidence: hasArchivedProjects ? "当前存在归档项目，默认列表不展示。" : "归档对象默认从主列表移除。"
+      }
+    ];
+  }
+
+  function workbenchForUser(user: UserAccount): WorkbenchResponse {
+    const visibleProjects = visibleProjectsForUser(user);
+    const visibleTasks = visibleTasksForUser(user);
+    const visibleThreads = visibleChatThreadsForUser(user);
+    const visibleThreadIds = new Set(visibleThreads.map((thread) => thread.id));
+    const responsibleTasks = visibleTasks.filter(
+      (task) => task.assigneeUserId === user.id && task.status !== "completed" && task.status !== "archived"
+    );
+    const submittedConfirmations = visibleTasks.filter(
+      (task) => task.confirmerUserId === user.id && task.status === "submitted"
+    );
+    const pendingWork = visibleTasks.filter(
+      (task) =>
+        ((task.assigneeUserId === user.id && ["todo", "in_progress", "blocked"].includes(task.status)) ||
+          (task.confirmerUserId === user.id && task.status === "submitted")) &&
+        task.status !== "archived"
+    );
+    const aiConfirmations = aiDrafts
+      .filter((draft) => visibleThreadIds.has(draft.threadId) && draft.status === "draft")
+      .flatMap((draft) => {
+        const thread = visibleThreads.find((item) => item.id === draft.threadId);
+
+        if (!thread || !canConfirmAiDraftForWorkbench(user, draft, thread)) {
+          return [];
+        }
+
+        return [
+          workbenchItem({
+            id: `ai-confirmation:${draft.id}`,
+            kind: "ai_confirmation",
+            title: draft.title,
+            description: "AI 输出仍是草稿，必须由人工确认后才可入库。",
+            module: "chat",
+            status: draft.kind,
+            objectType: "ai_draft",
+            objectId: draft.id,
+            organizationId: thread.organizationId,
+            updatedAt: draft.createdAt
+          })
+        ];
+      });
+    const projectItems = visibleProjects.map((project) =>
+      workbenchItem({
+        id: `participating-project:${project.id}`,
+        kind: "participating_project",
+        title: project.title,
+        description: project.summary,
+        module: "projects",
+        status: project.status,
+        objectType: "project",
+        objectId: project.id,
+        organizationId: project.organizationId,
+        updatedAt: project.updatedAt
+      })
+    );
+    const pendingTaskItems = pendingWork.map((task) => {
+      const project = projects.find((item) => item.id === task.projectId);
+      return workbenchItem({
+        id: `pending-task:${task.id}`,
+        kind: "pending_task",
+        title: task.title,
+        description:
+          task.confirmerUserId === user.id && task.status === "submitted"
+            ? "等待你人工确认完成，AI 不能代为确认。"
+            : task.description,
+        module: "tasks",
+        status: task.status,
+        objectType: "task",
+        objectId: task.id,
+        organizationId: project?.organizationId ?? null,
+        updatedAt: task.updatedAt
+      });
+    });
+    const responsibleTaskItems = responsibleTasks.map((task) => {
+      const project = projects.find((item) => item.id === task.projectId);
+      return workbenchItem({
+        id: `responsible-task:${task.id}`,
+        kind: "responsible_task",
+        title: task.title,
+        description: task.description,
+        module: "tasks",
+        status: task.status,
+        objectType: "task",
+        objectId: task.id,
+        organizationId: project?.organizationId ?? null,
+        updatedAt: task.updatedAt
+      });
+    });
+    const notifications: WorkbenchNotification[] = [];
+    const latestPendingTask = pendingTaskItems[0];
+    const latestAiConfirmation = aiConfirmations[0];
+    const userDeniedCount = deniedAccessEvents.filter((event) => event.actorUserId === user.id).length;
+    const canHandleApproval = rolePolicies[user.role].approval.some((permission) =>
+      ["approve_current_node", "reject_current_node", "return_for_revision"].includes(permission)
+    );
+    const canReviewContracts = rolePolicies[user.role].ai.includes("contract_review") || rolePolicies[user.role].menu.includes("contracts");
+    const isAdministrator = canManageSettings(user.role);
+    const archivedProjectCount = projects.filter((project) => project.status === "archived" && canReadProject(user, project)).length;
+
+    if (latestPendingTask) {
+      notifications.push(
+        workbenchNotification({
+          user,
+          type: "pending_work",
+          severity: submittedConfirmations.length > 0 ? "warning" : "info",
+          title: `${pendingTaskItems.length} 项待处理工作`,
+          body: latestPendingTask.description,
+          module: "tasks",
+          relatedObjectType: latestPendingTask.objectType,
+          relatedObjectId: latestPendingTask.objectId
+        })
+      );
+    } else {
+      notifications.push(
+        workbenchNotification({
+          user,
+          type: "pending_work",
+          severity: "info",
+          title: "暂无待处理工作",
+          body: "当前账号没有待提交或待确认任务。",
+          module: "workbench"
+        })
+      );
+    }
+
+    notifications.push(
+      workbenchNotification({
+        user,
+        type: "approval",
+        severity: canHandleApproval ? "info" : "warning",
+        title: canHandleApproval ? "暂无待审批节点" : "无审批处理权限",
+        body: "完整审批实例和节点流转保留到 DEV-015；当前不会生成可处理的正式审批单。",
+        module: "approvals"
+      })
+    );
+
+    notifications.push(
+      workbenchNotification({
+        user,
+        type: "contract_confirmation",
+        severity: canReviewContracts ? "info" : "warning",
+        title: canReviewContracts ? "暂无待确认合同" : "无合同确认权限",
+        body: "合同风险确认保留到 DEV-014；当前不创建合同正式流程。",
+        module: "contracts"
+      })
+    );
+
+    notifications.push(
+      workbenchNotification({
+        user,
+        type: "ai_result",
+        severity: latestAiConfirmation ? "warning" : "info",
+        title: latestAiConfirmation ? `${aiConfirmations.length} 个 AI 结果待人工确认` : "暂无 AI 结果待确认",
+        body: latestAiConfirmation?.description ?? "AI 草稿必须由人确认后才能成为正式任务、知识或项目记忆。",
+        module: "chat",
+        relatedObjectType: latestAiConfirmation?.objectType ?? null,
+        relatedObjectId: latestAiConfirmation?.objectId ?? null
+      })
+    );
+
+    if (!isAdministrator || userDeniedCount > 0 || rolePolicies[user.role].dataScope !== "all_organizations") {
+      notifications.push(
+        workbenchNotification({
+          user,
+          type: "no_permission",
+          severity: userDeniedCount > 0 ? "warning" : "info",
+          title: isAdministrator ? "管理员数据范围受限" : "系统设置不可见",
+          body:
+            userDeniedCount > 0
+              ? `当前会话已有 ${userDeniedCount} 次访问拒绝记录。`
+              : "菜单和数据按角色、组织、对象成员关系裁剪。",
+          module: isAdministrator ? "settings" : "workbench"
+        })
+      );
+    }
+
+    notifications.push(
+      workbenchNotification({
+        user,
+        type: "system_status",
+        severity: "info",
+        title: "DEV-011 工作台状态",
+        body: "仅启用系统内通知；外部通知、完整合同和完整审批流不在本阶段范围。",
+        module: "workbench"
+      })
+    );
+
+    const visibleWorkCount =
+      pendingTaskItems.length + responsibleTaskItems.length + projectItems.length + aiConfirmations.length;
+
+    return {
+      summary: {
+        pendingWorkCount: pendingTaskItems.length,
+        responsibleTaskCount: responsibleTaskItems.length,
+        participatingProjectCount: projectItems.length,
+        pendingApprovalCount: 0,
+        contractConfirmationCount: 0,
+        aiResultConfirmationCount: aiConfirmations.length,
+        notificationCount: notifications.length,
+        archivedProjectCount,
+        expiredItemCount: 0
+      },
+      sections: {
+        pendingWork: pendingTaskItems,
+        responsibleTasks: responsibleTaskItems,
+        participatingProjects: projectItems,
+        pendingApprovals: [],
+        contractConfirmations: [],
+        aiConfirmations
+      },
+      notifications,
+      pageStates: pageStatesForWorkbench({
+        hasVisibleWork: visibleWorkCount > 0,
+        hasErrors: userDeniedCount > 0,
+        hasArchivedProjects: archivedProjectCount > 0
+      }),
+      permissionContext: {
+        role: user.role,
+        isAdministrator,
+        visibleModules: rolePolicies[user.role].menu,
+        dataScope: rolePolicies[user.role].dataScope,
+        canManageSettings: isAdministrator
+      }
+    };
+  }
+
   function getSessionUser(token: string | undefined) {
     if (!token) {
       return undefined;
@@ -1045,6 +1411,16 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     return {
       organizations: visibleOrganizationsForUser(user)
     };
+  });
+
+  server.get("/workbench", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "workbench");
+
+    if (!user) {
+      return;
+    }
+
+    return workbenchForUser(user);
   });
 
   server.get("/projects", async (request, reply) => {

@@ -289,6 +289,102 @@ export interface PermissionSummary {
   ai: AiCapability[];
 }
 
+export type WorkbenchItemKind =
+  | "pending_task"
+  | "responsible_task"
+  | "participating_project"
+  | "pending_approval"
+  | "contract_confirmation"
+  | "ai_confirmation";
+
+export type WorkbenchNotificationType =
+  | "pending_work"
+  | "approval"
+  | "contract_confirmation"
+  | "ai_result"
+  | "no_permission"
+  | "system_status";
+
+export type WorkbenchNotificationSeverity = "info" | "warning" | "critical";
+
+export type PageStateKey =
+  | "normal"
+  | "empty"
+  | "loading"
+  | "no-permission"
+  | "error"
+  | "AI_Generating"
+  | "AI_Failed"
+  | "expired"
+  | "archived";
+
+export type PageStateStatus = "active" | "available" | "not_active";
+
+export interface WorkbenchItem {
+  id: string;
+  kind: WorkbenchItemKind;
+  title: string;
+  description: string;
+  module: ModuleKey;
+  status: string;
+  objectType: string;
+  objectId: string;
+  organizationId: string | null;
+  updatedAt: string;
+}
+
+export interface WorkbenchNotification {
+  id: string;
+  type: WorkbenchNotificationType;
+  severity: WorkbenchNotificationSeverity;
+  title: string;
+  body: string;
+  module: ModuleKey;
+  relatedObjectType: string | null;
+  relatedObjectId: string | null;
+  createdAt: string;
+}
+
+export interface PageStateDescriptor {
+  key: PageStateKey;
+  label: string;
+  status: PageStateStatus;
+  evidence: string;
+}
+
+export interface WorkbenchSummary {
+  pendingWorkCount: number;
+  responsibleTaskCount: number;
+  participatingProjectCount: number;
+  pendingApprovalCount: number;
+  contractConfirmationCount: number;
+  aiResultConfirmationCount: number;
+  notificationCount: number;
+  archivedProjectCount: number;
+  expiredItemCount: number;
+}
+
+export interface WorkbenchResponse {
+  summary: WorkbenchSummary;
+  sections: {
+    pendingWork: WorkbenchItem[];
+    responsibleTasks: WorkbenchItem[];
+    participatingProjects: WorkbenchItem[];
+    pendingApprovals: WorkbenchItem[];
+    contractConfirmations: WorkbenchItem[];
+    aiConfirmations: WorkbenchItem[];
+  };
+  notifications: WorkbenchNotification[];
+  pageStates: PageStateDescriptor[];
+  permissionContext: {
+    role: RoleKey;
+    isAdministrator: boolean;
+    visibleModules: ModuleKey[];
+    dataScope: DataScope;
+    canManageSettings: boolean;
+  };
+}
+
 const coreWorkModules: ModuleKey[] = [
   "dashboard",
   "workbench",

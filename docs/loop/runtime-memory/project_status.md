@@ -2,14 +2,16 @@
 
 Current source of truth:
 - Repository: xtgzpt current managed worktree
-- Current phase: DEV-010 role and permission productionization
-- Active branch or PR: `loop/dev-010-role-permission-productionization` target; current managed checkout has no `.git` metadata
+- Current phase: DEV-011 workbench, in-app notifications, page states and responsive acceptance
+- Active branch or PR: `loop/dev-011-workbench-notifications-page-states` target
 - Required gates: lint, typecheck, test, build-smoke, audit
 
 Latest update:
-- 2026-06-20 DEV-010 role and permission productionization is code-verified locally.
-- `npm run ci` passed with 8 test files / 42 tests and API smoke.
+- 2026-06-20 DEV-011 workbench, notifications and page states are code-verified locally.
+- `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`, `npm run smoke:api` and `git diff --check` passed.
+- `npm run test` passed with 9 test files / 43 tests.
 - `npm audit --audit-level=low --offline` passed with 0 vulnerabilities.
-- Online `npm audit --audit-level=low` and `git diff --check` must be rerun in the real Git / network-enabled PR environment.
+- Online `npm audit --audit-level=low` must be rerun in a network-enabled PR environment.
+- Browser plugin `iab` and local port binding are unavailable in this sandbox; 1440 / 1280 / 960 browser screenshot validation must be rerun in a browser-capable environment.
 
 Update this file whenever a project milestone changes.
