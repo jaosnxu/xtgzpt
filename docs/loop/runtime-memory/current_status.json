@@ -1,14 +1,15 @@
 {
-  "updated_at": "2026-06-20T16:06:03.000000+00:00",
-  "active_task_id": "TASK-XTGZPT-DEV-021-CODEX-1",
-  "active_goal": "Implement DEV-021 real driver-backed PostgreSQL runtime adapter for RuntimeData read/write without production cutover.",
+  "updated_at": "2026-06-20T16:52:30.000000+00:00",
+  "active_task_id": "TASK-XTGZPT-DEV-022-CODEX-1",
+  "active_goal": "Audit release readiness after DEV-021 and close documentation gaps for PostgreSQL runtime production cutover without production cutover.",
   "status": "completed",
   "current_stage": "completed",
-  "last_summary": "DEV-021 upgraded the DEV-020 PostgreSQL runtime boundary into a driver-backed adapter using pg, async store lifecycle, RuntimeData document initialization/read/write, checksum conditional updates, safe failure on read/write errors, mocked PostgreSQL adapter tests, runbook updates and runtime-memory records. No production cutover or production secrets were used.",
+  "last_summary": "DEV-022 completed release gate / production cutover audit documentation and runtime-memory updates. It confirmed driver-backed PostgreSQL adapter readiness from existing code/tests/docs, aligned runbook/backlog/standards, and kept production cutover blocked pending external branch protection, required checks, environment protection, secret-store evidence, backup/restore drill, production smoke, rollback target and signoff. No production database connection, production write, production secret, deploy or cutover was performed. Repair/verifier reran the full local gate successfully after the executor PATH issue.",
   "gate_status": {
     "npm_ci": {
       "status": "passed",
-      "command": "npm ci"
+      "command": "npm ci",
+      "result": "276 packages installed, 0 vulnerabilities"
     },
     "git_diff_check": {
       "status": "passed",
@@ -18,7 +19,7 @@
       "status": "passed",
       "commands": [
         "python3 -m json.tool docs/loop/runtime-memory/current_status.json",
-        "python3 -m json.tool docs/loop/runtime-memory/runs/TASK-XTGZPT-DEV-021-CODEX-1.json"
+        "python3 JSON parse for docs/loop/runtime-memory/runs/TASK-XTGZPT-DEV-022-CODEX-1.json"
       ]
     },
     "jsonl_parse": {
@@ -47,7 +48,8 @@
     },
     "smoke_api": {
       "status": "passed",
-      "command": "npm run smoke:api"
+      "command": "npm run smoke:api",
+      "result": "ok true, 29 smoke checks"
     },
     "audit": {
       "status": "passed",
@@ -58,5 +60,5 @@
   "issue_count": 0,
   "failure_count": 1,
   "intent_debt": null,
-  "next_recommended_task": "DEV-022 release gate / production cutover audit"
+  "next_recommended_task": "External PR/release gate evidence collection; do not cut over production until signed release window."
 }

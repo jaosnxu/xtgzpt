@@ -13,7 +13,7 @@
 - G018 原型工具制作交付标准
 - G019 原型制作前最终冻结确认
 - Phase 1 原型冻结
-- DEV-001 到 DEV-021 代码、生产上线准备和 API runtime PostgreSQL adapter 阶段
+- DEV-001 到 DEV-022 代码、生产上线准备、API runtime PostgreSQL adapter 和 release gate audit 阶段
 - AUDIT-021 项目状态和生产准备审计
 - 项目宪法、技术标准、业务实现阶段和测试标准收口
 
@@ -30,6 +30,7 @@
 当前仍禁止进入：
 
 - 生产上线
+- 未完成外部 release signoff 的生产 PostgreSQL cutover
 - 未经冻结确认的新一级菜单
 - 新增端形态
 - ERP 扩展
@@ -71,6 +72,8 @@
 AI 只能分析、整理、提醒、建议、生成草稿，不能自动审批、发布、付款、签署、确认收货、确认执行完成或创建正式任务。
 
 AI Provider 通过环境变量配置。公开仓库只提交 `.env.example`，真实 `ARK_API_KEY` 必须放在 `.env.local`、服务器环境变量或 GitHub Secrets 中，不能提交到 GitHub。
+
+API runtime 支持 `memory`、`file` 和 `postgres` store mode。`postgres` mode 已具备 driver-backed adapter 和本地/mock 测试证据，但真实生产 PostgreSQL cutover 仍必须先完成 GitHub required checks、branch protection / environment protection 复核、生产 secrets 注入审计、备份和隔离恢复演练、production smoke 与 release signoff。
 
 审批必须人工完成。
 

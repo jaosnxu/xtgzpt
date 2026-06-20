@@ -28,7 +28,7 @@
 | DR-008 | 建立测试和验收标准 | 已完成 |
 | DR-009 | 建立 P0/P1 风险审计 | 已完成 |
 | DR-010 | 启动 Phase 1 Figma 原型 | 已完成 |
-| DR-011 | 建立项目宪法、技术标准、业务实现阶段和测试标准 | 已完成，DEV-021 已完成真实 PostgreSQL runtime adapter；下一阶段进入 release gate / production cutover audit |
+| DR-011 | 建立项目宪法、技术标准、业务实现阶段和测试标准 | 已完成，DEV-022 已完成 release gate / production cutover audit；真实生产切流仍需外部 release window 和 signoff |
 
 ## 3. 阶段顺序
 
@@ -105,10 +105,11 @@
 
 下一阶段：
 
-- 已完成 `DEV-001` 到 `DEV-020`
+- 已完成 `DEV-001` 到 `DEV-022`
 - 已完成 `AUDIT-021` 项目状态和生产准备审计
-- 当前 DEV-020 已建立 API runtime PostgreSQL adapter/cutover boundary；真实 driver-backed writes 和生产切流仍未执行
-- 下一阶段是 `DEV-021` 真实 PostgreSQL runtime adapter，仍不允许真实生产切流
+- 已完成 `DEV-021` 真实 driver-backed PostgreSQL runtime adapter
+- 已完成 `DEV-022` release gate / production cutover audit
+- 下一阶段只能是外部 release gate 复核和签字；仍不允许在未签字 release window 内真实生产切流
 
 ## 5. 第一阶段代码开发顺序和当前状态
 
@@ -416,6 +417,8 @@
 - `[DEV-018] 生产上线准备`
 - `[DEV-019] DEV-018 后项目记忆和状态文档对齐`
 - `[DEV-020] API runtime PostgreSQL adapter/cutover boundary`
+- `[DEV-021] 真实 PostgreSQL runtime adapter`
+- `[DEV-022] release gate / production cutover audit`
 
 ### DEV-016 AI 框架中心和 AI Run 生产化
 
@@ -575,7 +578,7 @@
 
 ### DEV-020 API runtime PostgreSQL adapter/cutover boundary
 
-状态：已完成 code/docs boundary。本阶段建立 runtime store mode selection、PostgreSQL config validation、adapter boundary 和 `0011_runtime_store_cutover_boundary.sql`；真实 driver-backed writes、连接池、事务、备份恢复演练和生产切流仍未执行。
+状态：已完成 code/docs boundary。本阶段建立 runtime store mode selection、PostgreSQL config validation、adapter boundary 和 `0011_runtime_store_cutover_boundary.sql`；DEV-020 本身不含真实 PostgreSQL 写入 adapter，DEV-021 已补齐 adapter，真实备份恢复演练和生产切流仍未执行。
 
 范围：
 
@@ -599,7 +602,7 @@
 - 未配置数据库 URL 时 PostgreSQL mode 在启动边界安全失败
 - placeholder 或非 PostgreSQL URL 被拒绝
 - file runtime store 仍能用于本地持久化和回归测试
-- PostgreSQL adapter boundary 不执行 live writes，避免把 DEV-020 误当作生产切流
+- PostgreSQL adapter boundary 在 DEV-020 不执行 live writes，避免把 DEV-020 误当作生产切流；DEV-021 已补齐 driver-backed adapter，但仍未生产切流
 
 ### AUDIT-021 项目状态和生产准备审计
 
@@ -649,7 +652,7 @@
 
 ### DEV-022 release gate / production cutover audit
 
-状态：待执行。
+状态：已完成。本阶段完成 release gate / production cutover audit 文档和 runtime memory 收口，未修改业务源代码、API、数据库 schema、UI、菜单、权限、AI 行为、依赖、secrets、部署或生产数据。
 
 范围：
 
@@ -658,12 +661,20 @@
 - 备份恢复演练证据
 - 生产 smoke 计划和 rollback 计划
 - 是否允许进入真实生产切流的审计结论
+- runbook、README、项目宪法、技术标准、测试标准、业务计划、backlog 和 runtime memory 对齐
 
 不做：
 
 - 不在未签字 release window 内切生产
 - 不提交真实生产 secrets
 - 不绕过 PR、required checks 或 review gate
+- 不连接或写入真实生产数据库
+
+结论：
+
+- 文档、runtime memory、structured-data 和本地 verifier gate 审计通过。
+- 允许进入 PR / release operator 外部门槛复核。
+- 不允许直接生产切流。生产 PostgreSQL cutover 必须先完成 branch protection、required checks、review approval、production environment approval、真实 secrets 注入审计、备份和隔离恢复演练、production smoke、rollback 目标确认和 release signoff。
 
 ## 7. 开发禁止事项
 

@@ -219,6 +219,7 @@ GitHub required checks 必须包括：
 - release checklist
 - 数据库 migration 记录
 - 生产 secrets 配置证明
+- branch protection、required checks 和 production environment approval 证明
 - 生产 smoke test 结果
 - 权限矩阵测试结果
 - 审计矩阵测试结果
@@ -228,3 +229,4 @@ GitHub required checks 必须包括：
 - 审批闭环测试结果
 - 备份恢复说明
 - 回滚方案
+- release signoff
