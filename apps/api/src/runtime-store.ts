@@ -6,6 +6,9 @@ import type {
   AuditLogEntry,
   ChatMessageRecord,
   ChatThreadRecord,
+  FileAssetRecord,
+  FileObjectBindingRecord,
+  FileVersionRecord,
   KnowledgeItemRecord,
   ProjectMemoryRecord,
   ProjectRecord,
@@ -33,6 +36,9 @@ export interface RuntimeData {
   aiDrafts: AiDraftRecord[];
   knowledgeItems: KnowledgeItemRecord[];
   projectMemories: ProjectMemoryRecord[];
+  files: FileAssetRecord[];
+  fileVersions: FileVersionRecord[];
+  fileObjectBindings: FileObjectBindingRecord[];
 }
 
 export interface RuntimeStore {
@@ -56,7 +62,10 @@ function emptyRuntimeData(): RuntimeData {
     chatMessages: [],
     aiDrafts: [],
     knowledgeItems: [],
-    projectMemories: []
+    projectMemories: [],
+    files: [],
+    fileVersions: [],
+    fileObjectBindings: []
   };
 }
 
@@ -76,7 +85,10 @@ function normalizeRuntimeData(value: unknown): RuntimeData {
     chatMessages: arrayOrEmpty<ChatMessageRecord>(source.chatMessages),
     aiDrafts: arrayOrEmpty<AiDraftRecord>(source.aiDrafts),
     knowledgeItems: arrayOrEmpty<KnowledgeItemRecord>(source.knowledgeItems),
-    projectMemories: arrayOrEmpty<ProjectMemoryRecord>(source.projectMemories)
+    projectMemories: arrayOrEmpty<ProjectMemoryRecord>(source.projectMemories),
+    files: arrayOrEmpty<FileAssetRecord>(source.files),
+    fileVersions: arrayOrEmpty<FileVersionRecord>(source.fileVersions),
+    fileObjectBindings: arrayOrEmpty<FileObjectBindingRecord>(source.fileObjectBindings)
   };
 }
 

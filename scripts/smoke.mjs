@@ -137,6 +137,26 @@ try {
   });
   assert(sendMessage.statusCode === 201, `send chat message failed with ${sendMessage.statusCode}`);
 
+  const uploadFile = await inject("POST", "/files", ownerToken, {
+    sourceObjectType: "project",
+    sourceObjectId: projectId,
+    displayName: "smoke-project-file.txt",
+    mimeType: "text/plain",
+    contentText: "Smoke file content for authorized preview and AI reference."
+  });
+  assert(uploadFile.statusCode === 201, `file upload failed with ${uploadFile.statusCode}`);
+  const fileId = uploadFile.body.file.id;
+
+  const projectFiles = await inject("GET", `/files?objectType=project&objectId=${projectId}`, memberToken);
+  assert(projectFiles.statusCode === 200, `file list failed with ${projectFiles.statusCode}`);
+  assert(projectFiles.body.files.some((file) => file.id === fileId), "member cannot see bound project file");
+
+  const filePreview = await inject("GET", `/files/${fileId}/preview`, memberToken);
+  const fileDownload = await inject("GET", `/files/${fileId}/download`, memberToken);
+  assert(filePreview.statusCode === 200, `file preview failed with ${filePreview.statusCode}`);
+  assert(fileDownload.statusCode === 200, `file download failed with ${fileDownload.statusCode}`);
+  assert(fileDownload.body.contentText.includes("Smoke file content"), "file download returned wrong content");
+
   const summaryDraft = await inject("POST", `/chat/threads/${threadId}/ai/summarize`, memberToken);
   const taskDraft = await inject("POST", `/chat/threads/${threadId}/ai/task-draft`, memberToken);
   const knowledgeDraft = await inject("POST", `/chat/threads/${threadId}/ai/knowledge-draft`, memberToken);
@@ -195,6 +215,24 @@ try {
   assert(reuseDraft.statusCode === 200, `memory reuse draft failed with ${reuseDraft.statusCode}`);
   assert(reuseDraft.body.draft.contextSourceIds.length > 0, "AI draft did not reuse memory context");
 
+  const fileReferenceDraft = await inject("POST", `/chat/threads/${threadId}/ai/summarize`, memberToken, {
+    fileIds: [fileId]
+  });
+  assert(fileReferenceDraft.statusCode === 200, `AI file reference failed with ${fileReferenceDraft.statusCode}`);
+  assert(
+    fileReferenceDraft.body.draft.contextSourceIds.includes(fileId),
+    "AI draft did not record accessible file reference"
+  );
+
+  const archiveFile = await inject("POST", `/files/${fileId}/archive`, ownerToken, {
+    reason: "smoke archive"
+  });
+  assert(archiveFile.statusCode === 200, `file archive failed with ${archiveFile.statusCode}`);
+  assert(archiveFile.body.file.status === "archived", "file archive did not mark archived");
+
+  const archivedPreview = await inject("GET", `/files/${fileId}/preview`, memberToken);
+  assert(archivedPreview.statusCode === 404, "archived file remained previewable");
+
   const chatModule = await inject("GET", "/modules/chat", memberToken);
   const knowledgeModule = await inject("GET", "/modules/knowledge", superToken);
   assert(chatModule.body.status === "available", "chat module is not available");
@@ -219,7 +257,11 @@ try {
           "knowledge_items",
           "project_memory",
           "knowledge_query",
-          "memory_context_reuse"
+          "memory_context_reuse",
+          "file_upload",
+          "file_preview_download",
+          "file_archive",
+          "ai_file_reference"
         ]
       },
       null,

@@ -465,6 +465,10 @@ h2 {
   grid-column: 1 / -1;
 }
 
+.project-file-panel {
+  grid-column: 1 / -1;
+}
+
 .inline-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -478,6 +482,77 @@ h2 {
   border: 1px solid #d8dee8;
   border-radius: 8px;
   outline: 0;
+}
+
+.file-upload-box {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(240px, 1fr) auto;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.file-upload-box input {
+  height: 44px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  outline: 0;
+}
+
+.file-list {
+  display: grid;
+  gap: 10px;
+}
+
+.file-row {
+  min-height: 76px;
+  padding: 12px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #ffffff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(190px, auto);
+  gap: 10px;
+  align-items: center;
+}
+
+.file-row.archived {
+  background: #f8fafc;
+}
+
+.file-row strong {
+  display: block;
+  color: #17202a;
+}
+
+.file-row small {
+  display: block;
+  margin-top: 4px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.file-preview {
+  grid-column: 1 / -1;
+  padding: 12px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.file-preview p {
+  margin-top: 6px;
+  color: #344054;
+  overflow-wrap: anywhere;
 }
 
 .inline-error {
@@ -1007,6 +1082,8 @@ div.record-row {
   .workbench-row,
   .notification-item,
   .inline-form,
+  .file-upload-box,
+  .file-row,
   .detail-grid {
     grid-template-columns: 1fr;
     gap: 6px;

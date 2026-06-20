@@ -147,7 +147,7 @@ describe("access control", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().permissions).toEqual(
       expect.objectContaining({
-        policyVersion: "seed-dev-010",
+        policyVersion: "seed-dev-012",
         role: "admin",
         data: expect.objectContaining({
           scope: "assigned_organizations",
@@ -174,7 +174,7 @@ describe("access control", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(
       expect.objectContaining({
-        policyVersion: "seed-dev-010",
+        policyVersion: "seed-dev-012",
         policies: expect.arrayContaining([
           expect.objectContaining({
             role: "legal_approver",
@@ -203,7 +203,7 @@ describe("access control", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(
       expect.objectContaining({
-        policyVersion: "seed-dev-010",
+        policyVersion: "seed-dev-012",
         dimension: "approval",
         approval: expect.arrayContaining([
           expect.objectContaining({
@@ -396,8 +396,9 @@ describe("access control", () => {
       }
     });
 
-    expect(guessedFile.statusCode).toBe(403);
-    expect(guessedFile.json()).toEqual({ error: "forbidden" });
+    expect(guessedFile.statusCode).toBe(404);
+    expect(guessedFile.json()).toEqual({ error: "not_found" });
+    expect(JSON.stringify(guessedFile.json())).not.toContain("secret-contract-name");
     expect(emptyAiQuery.statusCode).toBe(400);
     expect(emptyAiQuery.json()).toEqual({ error: "query_required" });
     expect(superAiQuery.statusCode).toBe(200);

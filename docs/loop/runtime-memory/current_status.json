@@ -1,14 +1,14 @@
 {
-  "updated_at": "2026-06-20T04:20:00+00:00",
-  "active_task_id": "TASK-XTGZPT-DEV-011-CODEX-1",
-  "active_goal": "Complete DEV-011 for xtgzpt: my workbench, in-app notifications, page states, and responsive acceptance in the current working tree.",
+  "updated_at": "2026-06-20T05:02:00+00:00",
+  "active_task_id": "TASK-XTGZPT-DEV-012-CODEX-1",
+  "active_goal": "Complete DEV-012 for xtgzpt: production file storage in the current working tree.",
   "status": "completed",
   "current_stage": "completed",
-  "last_summary": "DEV-011 implementation and local code gates passed; online audit and browser screenshot validation require a network/browser-capable environment.",
+  "last_summary": "DEV-012 file metadata, versions, object bindings, permissions, audit and AI file-reference checks implemented; local code gates passed, online audit requires network environment.",
   "gate_status": {
     "npm_ci": {
       "status": "passed",
-      "summary": "lint, typecheck, test, build and smoke:api passed; Vitest reported 9 files / 43 tests."
+      "summary": "lint, typecheck, test, build and smoke:api passed; Vitest reported 10 files / 46 tests."
     },
     "npm_audit_offline": {
       "status": "passed",
@@ -22,20 +22,15 @@
     "git_diff_check": {
       "status": "passed",
       "summary": "No whitespace errors."
-    },
-    "browser_verification": {
-      "status": "blocked",
-      "failure_type": "tool_environment",
-      "summary": "Browser plugin iab is unavailable and local port binding fails with listen EPERM."
     }
   },
   "issue_count": 0,
-  "failure_count": 2,
+  "failure_count": 1,
   "intent_debt": {
-    "goal": "Complete DEV-011 responsive browser acceptance and online audit.",
+    "goal": "Complete DEV-012 online audit.",
     "failure_type": "external_environment",
-    "reason": "Online npm audit requires DNS/network access; browser validation requires Browser iab or local port binding, both unavailable in this sandbox.",
-    "next_step": "Run online npm audit and 1440/1280/960 browser screenshots in a network/browser-capable PR environment.",
-    "created_at": "2026-06-20T04:20:00+00:00"
+    "reason": "Online npm audit requires DNS/network access; current sandbox cannot resolve registry.npmjs.org.",
+    "next_step": "Run online npm audit in a network-capable PR environment.",
+    "created_at": "2026-06-20T05:02:00+00:00"
   }
 }

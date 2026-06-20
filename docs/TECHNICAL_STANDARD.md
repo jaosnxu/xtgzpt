@@ -70,7 +70,11 @@ API 必须遵守：
 - `/knowledge/query`
 - `/modules/:module`
 - `/settings/approval-permission-policies`
-- 文件权限占位接口
+- `/files`
+- `/files/:id`
+- `/files/:id/preview`
+- `/files/:id/download`
+- `/files/:id/archive`
 
 ## 4. 前端标准
 
@@ -94,8 +98,9 @@ API 必须遵守：
 当前状态：
 
 - 已有迁移目录。
-- 核心业务数据仍大量使用内存数组。
-- 不满足生产持久化标准。
+- 已有运行时持久化边界覆盖项目、任务、聊天、AI 草稿、知识、项目记忆、审计和文件元数据。
+- PostgreSQL 兼容 migration 资产已覆盖当前运行时对象和文件元数据/版本/对象绑定/归档事件。
+- 仍未接入真实 PostgreSQL adapter、连接池、事务和备份恢复。
 
 生产目标：
 
@@ -132,6 +137,7 @@ API 必须遵守：
 
 - 11 类 Phase 1 角色已进入共享模型、seed 账号和权限策略。
 - `approval` 已成为独立权限维度，审批权限不再混在操作权限中。
+- 文件权限已继承项目、任务、聊天、知识和项目记忆等来源对象权限，并覆盖上传、预览、下载、归档和 AI 引用。
 - 权限还没有生产数据库配置表完整落地。
 
 ## 7. AI 技术标准
