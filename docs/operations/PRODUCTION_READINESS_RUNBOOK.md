@@ -79,13 +79,15 @@ printenv LOG_LEVEL
 
 不得在终端、CI log 或 issue 中打印 secret 值。需要确认 secret 是否存在时，只记录“已配置 / 未配置”。
 
-当前 DEV-020 代码边界：
+当前 DEV-021 代码边界：
 
 - API 运行时持久化通过 `createRuntimeStore(resolveRuntimeStoreOptions(...))` 选择 `memory`、`file` 或 `postgres`。
 - 测试默认 `memory`，避免测试污染本地文件或数据库。
 - 本地和非测试默认 `file`；`XTGZPT_RUNTIME_DATA_FILE` 可指定持久化 JSON 文件，未设置时使用应用目录下默认 JSON 文件。
 - `XTGZPT_RUNTIME_STORE_MODE=postgres` 会校验 `XTGZPT_RUNTIME_DATABASE_URL` 或 `DATABASE_URL`、PostgreSQL URL scheme、非 placeholder 值、schema/table identifier 和 document id。
-- DEV-020 PostgreSQL adapter/cutover boundary 不执行 live database writes；真实 driver-backed writes、连接池、事务、备份恢复和生产 cutover 仍需后续 release gate。
+- DEV-021 PostgreSQL adapter 使用 `pg` driver 连接池读取/初始化 `runtime_data_documents` document，并通过 checksum 条件更新写回 RuntimeData。
+- PostgreSQL read/write 失败或 checksum 冲突会显式失败，不静默回退到 file 或 memory。
+- DEV-021 仍未执行真实生产切流；真实生产 secrets、备份恢复演练、production smoke 和 release signoff 仍需后续 release gate。
 - API 当前不读取 `JWT_SECRET`；登录 token 为 `dev-session` 前缀并存放在进程内 `Map`，进程重启后 session 失效。
 - 不得把数据库 migration、数据库备份或 JWT rotation 作为当前 API runtime production signoff，除非代码和测试已经证明 API 消费相应配置。
 
@@ -138,7 +140,7 @@ Repository 或 Environment 级配置：
 - `0010_ai_framework_run_productionization.sql`
 - `0011_runtime_store_cutover_boundary.sql`
 
-注意：DEV-020 允许通过 `XTGZPT_RUNTIME_STORE_MODE=postgres` 选择 PostgreSQL runtime boundary，并校验 `XTGZPT_RUNTIME_DATABASE_URL` 或 `DATABASE_URL`。当前 adapter boundary 不执行 live database writes；以下 migration 步骤只适用于“本次 release 明确包含 PostgreSQL 数据库资产上线或演练”的场景，不能替代 file mode 的 `XTGZPT_RUNTIME_DATA_FILE` 备份，也不能证明已经完成 driver-backed PostgreSQL cutover。
+注意：DEV-021 允许通过 `XTGZPT_RUNTIME_STORE_MODE=postgres` 选择 driver-backed PostgreSQL runtime adapter，并校验 `XTGZPT_RUNTIME_DATABASE_URL` 或 `DATABASE_URL`。以下 migration 步骤只适用于“本次 release 明确包含 PostgreSQL 数据库资产上线或演练”的场景，不能替代 file mode 的 `XTGZPT_RUNTIME_DATA_FILE` 备份，也不能证明已经完成真实生产 cutover。
 
 上线前确认：
 
@@ -146,7 +148,7 @@ Repository 或 Environment 级配置：
 - migration 在当前生产快照副本执行通过。
 - 破坏性变更有明确补偿方案；没有补偿方案不得上线。
 - 审计日志表、文件元数据表、AI Run 表、合同表和审批表存在。
-- 如启用 PostgreSQL runtime boundary，`runtime_data_documents` 表存在，且不得预置真实生产业务数据。
+- 如启用 PostgreSQL runtime adapter，`runtime_data_documents` 表存在，且真实生产切流前必须先完成备份、回填、恢复演练和 release signoff。
 - migration 执行人、时间、commit SHA、数据库快照编号写入 release checklist。
 
 生产执行模板：
@@ -263,6 +265,56 @@ psql "$RESTORE_DATABASE_URL" --set ON_ERROR_STOP=on --command "select count(*) f
 - 如本次 release 执行 PostgreSQL migration，关键表存在，行数检查与备份时间点预期一致，审计日志未丢失。
 - 如本次 release 选择 PostgreSQL runtime boundary，`runtime_data_documents` 存在，且真实 cutover 前不得写入未经审批的生产业务数据。
 - 恢复演练结果写入 release checklist。
+
+### 6.3 file runtime 到 PostgreSQL runtime 回填
+
+真实生产切流前必须先在隔离环境完成回填演练。仓库不提供真实生产 URL 或 secret；以下命令只使用占位符。
+
+前置条件：
+
+- 当前 file mode runtime data file 已完成备份和 checksum。
+- PostgreSQL restore target 已完成 migration，包含 `runtime_data_documents`。
+- `XTGZPT_RUNTIME_DATABASE_URL` 或 `DATABASE_URL` 仅通过 secret store 注入。
+
+回填模板：
+
+默认模板使用 `runtime_data_documents`。如果 release 使用自定义 schema/table，必须由 release operator 生成并复核 identifier-safe SQL，不得把未校验的 schema/table 字符串直接拼进生产 SQL。
+
+```bash
+export RUNTIME_BACKUP_FILE="<RUNTIME_BACKUP_FILE>"
+export DATABASE_URL="<RESTORE_OR_CUTOVER_DATABASE_URL>"
+export XTGZPT_RUNTIME_POSTGRES_SCHEMA="public"
+export XTGZPT_RUNTIME_POSTGRES_TABLE="runtime_data_documents"
+export XTGZPT_RUNTIME_POSTGRES_DOCUMENT_ID="runtime-data-v1"
+
+node -e 'JSON.parse(require("node:fs").readFileSync(process.env.RUNTIME_BACKUP_FILE, "utf8")); console.log("runtime data json ok")'
+
+export RUNTIME_DATA_JSON="$(node -e 'const fs=require("node:fs"); const data=JSON.parse(fs.readFileSync(process.env.RUNTIME_BACKUP_FILE,"utf8")); process.stdout.write(JSON.stringify(data));')"
+export RUNTIME_DATA_SHA256="$(shasum -a 256 "$RUNTIME_BACKUP_FILE" | awk '{print $1}')"
+
+psql "$DATABASE_URL" \
+  --set ON_ERROR_STOP=on \
+  --set runtime_document_id="$XTGZPT_RUNTIME_POSTGRES_DOCUMENT_ID" \
+  --set runtime_data="$RUNTIME_DATA_JSON" \
+  --set runtime_checksum="$RUNTIME_DATA_SHA256" <<'SQL'
+INSERT INTO runtime_data_documents
+  (document_id, runtime_data, runtime_schema_version, checksum)
+VALUES
+  (:'runtime_document_id', :'runtime_data'::jsonb, 1, :'runtime_checksum')
+ON CONFLICT (document_id) DO UPDATE
+SET runtime_data = EXCLUDED.runtime_data,
+    runtime_schema_version = runtime_data_documents.runtime_schema_version + 1,
+    checksum = EXCLUDED.checksum,
+    updated_at = now();
+SQL
+```
+
+回填后必须检查：
+
+- `runtime_data_documents` 只有预期 document id。
+- RuntimeData JSON object parse 通过。
+- API 在隔离环境以 `XTGZPT_RUNTIME_STORE_MODE=postgres` 启动后，smoke 通过。
+- 回滚时可恢复到 file mode，并使用 deploy 前的 runtime data backup。
 
 ## 7. 日志和审计
 

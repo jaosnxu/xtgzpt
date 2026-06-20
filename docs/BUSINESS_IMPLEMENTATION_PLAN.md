@@ -43,6 +43,7 @@
 | DEV-020 | API runtime PostgreSQL adapter/cutover boundary | 已完成 runtime store mode selection、PostgreSQL config validation、adapter boundary 和 migration boundary；真实 driver-backed writes / cutover 仍未执行 |
 | AUDIT-020 | DEV-020 审计 | 已完成，本地 gate 全部通过 |
 | AUDIT-021 | 项目状态和生产准备审计 | 已完成，确认下一阶段应进入 DEV-021 真实 PostgreSQL runtime adapter |
+| DEV-021 | 真实 PostgreSQL runtime adapter | 已完成 driver-backed RuntimeData read/write、checksum 条件更新、pg 连接池入口、mocked PostgreSQL adapter 测试和 runbook 更新；真实生产切流仍未执行 |
 
 ## 2. 总体阶段顺序
 
@@ -63,6 +64,7 @@
 13. DEV-020 API runtime PostgreSQL adapter/cutover boundary
 14. AUDIT-021 项目状态和生产准备审计
 15. DEV-021 真实 PostgreSQL runtime adapter
+16. DEV-022 release gate / production cutover audit
 
 ## 3. GOV-001 项目宪法和标准收口
 
@@ -527,6 +529,8 @@
 
 ## 17. DEV-021 真实 PostgreSQL runtime adapter
 
+状态：已完成。
+
 目标：
 
 - 将 DEV-020 的 PostgreSQL boundary 升级为真实 driver-backed runtime persistence，但仍不执行真实生产切流。
@@ -535,9 +539,40 @@
 
 - PostgreSQL driver 和连接池。
 - `RuntimeData` 从 PostgreSQL 读取和写入。
-- 事务、checksum 或版本条件更新，避免并发覆盖。
+- checksum 条件更新，避免并发覆盖。
 - file runtime 到 PostgreSQL runtime 的迁移/回填和回滚策略。
 - 单元测试、API smoke、migration/restore runbook 更新。
+
+已实现：
+
+- API runtime store 支持 async `ready` / `save` / `close` 生命周期。
+- PostgreSQL mode 通过 `pg` driver 连接池进入 `runtime_data_documents` document。
+- PostgreSQL adapter 会在 document 缺失时初始化空 RuntimeData document。
+- PostgreSQL adapter 会读取 RuntimeData 并原地替换数组内容，避免 API 启动时的数组引用失效。
+- PostgreSQL adapter 写入时使用 checksum 条件更新；并发冲突会显式失败。
+- 读写失败会显式失败，不静默回退到 file 或 memory。
+- mocked PostgreSQL client 覆盖初始化、保存、加载、并发冲突和读写失败。
+
+仍未完成：
+
+- 真实生产数据库切流。
+- 真实生产备份恢复演练。
+- 真实生产 smoke signoff。
+- release window 签字。
+
+## 18. DEV-022 release gate / production cutover audit
+
+目标：
+
+- 在任何真实生产切流前完成 release gate 审计。
+
+范围：
+
+- GitHub required checks 和 review gate。
+- PostgreSQL runtime secrets 和 environment protection。
+- file runtime 到 PostgreSQL runtime 的回填计划。
+- 生产备份、恢复演练、rollback 计划和 smoke 账号。
+- 是否允许生产切流的明确结论。
 
 不做：
 

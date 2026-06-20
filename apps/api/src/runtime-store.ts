@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -75,7 +76,9 @@ export interface RuntimeData {
 
 export interface RuntimeStore {
   state: RuntimeData;
-  save: () => void;
+  ready: Promise<void>;
+  save: () => void | Promise<void>;
+  close: () => void | Promise<void>;
 }
 
 export type RuntimeStoreMode = "memory" | "file" | "postgres";
@@ -85,6 +88,24 @@ export interface PostgresRuntimeStoreConfig {
   schema: string;
   table: string;
   documentId: string;
+  client?: PostgresRuntimeClient;
+  clientFactory?: (config: PostgresRuntimeStoreConfig) => PostgresRuntimeClient | Promise<PostgresRuntimeClient>;
+}
+
+export interface PostgresRuntimeQueryResult {
+  rows: Array<Record<string, unknown>>;
+  rowCount?: number | null;
+}
+
+export interface PostgresRuntimeConnectedClient {
+  query: (sql: string, params?: unknown[]) => Promise<PostgresRuntimeQueryResult>;
+  release?: () => void;
+}
+
+export interface PostgresRuntimeClient {
+  query: (sql: string, params?: unknown[]) => Promise<PostgresRuntimeQueryResult>;
+  connect?: () => Promise<PostgresRuntimeConnectedClient>;
+  end?: () => void | Promise<void>;
 }
 
 export interface RuntimeStoreOptions {
@@ -131,6 +152,8 @@ function emptyRuntimeData(): RuntimeData {
     fileObjectBindings: []
   };
 }
+
+const runtimeDataKeys = Object.keys(emptyRuntimeData()) as Array<keyof RuntimeData>;
 
 function arrayOrEmpty<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
@@ -202,6 +225,22 @@ function normalizeRuntimeData(value: unknown): RuntimeData {
     fileVersions: arrayOrEmpty<FileVersionRecord>(source.fileVersions),
     fileObjectBindings: arrayOrEmpty<FileObjectBindingRecord>(source.fileObjectBindings)
   };
+}
+
+function replaceRuntimeState(target: RuntimeData, source: RuntimeData) {
+  for (const key of runtimeDataKeys) {
+    const targetList = target[key] as unknown[];
+    const sourceList = source[key] as unknown[];
+    targetList.splice(0, targetList.length, ...sourceList);
+  }
+}
+
+function runtimeDataChecksum(value: RuntimeData) {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+function messageFromError(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function loadRuntimeData(dataFilePath?: string) {
@@ -296,7 +335,11 @@ export function resolvePostgresRuntimeStoreConfig(
 function createMemoryRuntimeStore(): RuntimeStore {
   return {
     state: emptyRuntimeData(),
+    ready: Promise.resolve(),
     save() {
+      return;
+    },
+    close() {
       return;
     }
   };
@@ -307,6 +350,7 @@ function createFileRuntimeStore(dataFilePath?: string): RuntimeStore {
 
   return {
     state,
+    ready: Promise.resolve(),
     save() {
       if (!dataFilePath) {
         return;
@@ -316,21 +360,168 @@ function createFileRuntimeStore(dataFilePath?: string): RuntimeStore {
       const tempPath = `${dataFilePath}.tmp`;
       writeFileSync(tempPath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
       renameSync(tempPath, dataFilePath);
+    },
+    close() {
+      return;
     }
   };
 }
 
+function quotePostgresIdentifier(identifier: string) {
+  assertPostgresIdentifier(identifier, "PostgreSQL identifier");
+  return `"${identifier.replaceAll("\"", "\"\"")}"`;
+}
+
+function postgresTableReference(config: PostgresRuntimeStoreConfig) {
+  return `${quotePostgresIdentifier(config.schema)}.${quotePostgresIdentifier(config.table)}`;
+}
+
+async function createDefaultPostgresClient(config: PostgresRuntimeStoreConfig): Promise<PostgresRuntimeClient> {
+  try {
+    const importPg = new Function("specifier", "return import(specifier)") as (
+      specifier: string
+    ) => Promise<{ Pool?: new (options: { connectionString: string }) => PostgresRuntimeClient }>;
+    const pg = await importPg("pg");
+    if (!pg.Pool) {
+      throw new Error("pg Pool export is unavailable.");
+    }
+
+    return new pg.Pool({
+      connectionString: config.databaseUrl
+    });
+  } catch (error) {
+    throw new Error(`PostgreSQL runtime store requires the pg driver dependency: ${messageFromError(error)}`);
+  }
+}
+
+async function withPostgresClient<T>(
+  client: PostgresRuntimeClient,
+  operation: (client: PostgresRuntimeConnectedClient) => Promise<T>
+) {
+  if (client.connect) {
+    const connected = await client.connect();
+    try {
+      return await operation(connected);
+    } finally {
+      connected.release?.();
+    }
+  }
+
+  return operation(client);
+}
+
+function parseRuntimeDataDocument(value: unknown) {
+  if (typeof value === "string") {
+    return normalizeRuntimeData(JSON.parse(value));
+  }
+
+  return normalizeRuntimeData(value);
+}
+
 export function createPostgresRuntimeStore(config: PostgresRuntimeStoreConfig): RuntimeStore {
   const state = emptyRuntimeData();
+  const tableReference = postgresTableReference(config);
+  const emptyState = emptyRuntimeData();
+  const emptyChecksum = runtimeDataChecksum(emptyState);
+  let persistedChecksum: string | null = null;
+  let clientInstance: PostgresRuntimeClient | null = config.client ?? null;
+
+  async function getClient() {
+    if (!clientInstance) {
+      clientInstance = config.clientFactory
+        ? await config.clientFactory(config)
+        : await createDefaultPostgresClient(config);
+    }
+
+    return clientInstance;
+  }
+
+  const ready = (async () => {
+    try {
+      const client = await getClient();
+      await withPostgresClient(client, async (connection) => {
+        await connection.query(
+          `INSERT INTO ${tableReference} (document_id, runtime_data, runtime_schema_version, checksum)
+           VALUES ($1, $2::jsonb, 1, $3)
+           ON CONFLICT (document_id) DO NOTHING`,
+          [config.documentId, JSON.stringify(emptyState), emptyChecksum]
+        );
+
+        const result = await connection.query(
+          `SELECT runtime_data, checksum
+           FROM ${tableReference}
+           WHERE document_id = $1`,
+          [config.documentId]
+        );
+        const row = result.rows[0];
+        if (!row) {
+          throw new Error(`RuntimeData document "${config.documentId}" was not found after initialization.`);
+        }
+
+        replaceRuntimeState(state, parseRuntimeDataDocument(row.runtime_data));
+        persistedChecksum = typeof row.checksum === "string" ? row.checksum : null;
+      });
+    } catch (error) {
+      throw new Error(`PostgreSQL runtime store failed to initialize/read RuntimeData: ${messageFromError(error)}`);
+    }
+  })();
 
   return {
     state,
-    save() {
-      throw new Error(
-        `PostgreSQL runtime adapter boundary is selected for ${config.schema}.${config.table}, but DEV-020 does not execute live database writes without a driver-backed cutover.`
-      );
+    ready,
+    async save() {
+      await ready;
+      const nextChecksum = runtimeDataChecksum(state);
+      const client = await getClient();
+
+      try {
+        await withPostgresClient(client, async (connection) => {
+          const result = await connection.query(
+            `UPDATE ${tableReference}
+             SET runtime_data = $2::jsonb,
+                 runtime_schema_version = runtime_schema_version + 1,
+                 checksum = $3,
+                 updated_at = now()
+             WHERE document_id = $1
+               AND checksum IS NOT DISTINCT FROM $4
+             RETURNING checksum`,
+            [config.documentId, JSON.stringify(state), nextChecksum, persistedChecksum]
+          );
+
+          if (result.rowCount !== 1) {
+            throw new Error(
+              `PostgreSQL runtime store concurrent update detected for document "${config.documentId}". Refusing to overwrite newer RuntimeData.`
+            );
+          }
+
+          persistedChecksum = nextChecksum;
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("concurrent update detected")) {
+          throw error;
+        }
+
+        throw new Error(`PostgreSQL runtime store failed to persist RuntimeData: ${messageFromError(error)}`);
+      }
+    },
+    async close() {
+      await clientInstance?.end?.();
     }
   };
+}
+
+export async function createPostgresRuntimeStoreForTest(
+  config: Omit<PostgresRuntimeStoreConfig, "databaseUrl"> & { databaseUrl?: string; client: PostgresRuntimeClient }
+): Promise<RuntimeStore> {
+  const store = createPostgresRuntimeStore({
+    databaseUrl: config.databaseUrl ?? "postgres://localhost:5432/xtgzpt_test",
+    schema: config.schema,
+    table: config.table,
+    documentId: config.documentId,
+    client: config.client
+  });
+  await store.ready;
+  return store;
 }
 
 export function resolveRuntimeStoreOptions(

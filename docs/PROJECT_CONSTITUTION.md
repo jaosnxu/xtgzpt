@@ -46,11 +46,12 @@
 
 - Phase 1 原型已冻结。
 - 已允许进入代码开发。
-- 已完成 `DEV-001` 到 `DEV-020`，并完成 `AUDIT-021`。
+- 已完成 `DEV-001` 到 `DEV-021`，并完成 `AUDIT-021`。
 - `DEV-018` 已补齐生产上线准备 runbook 和安全占位符模板，但仍未执行真实生产上线。
 - `DEV-019` 已完成 DEV-018 后的项目记忆和状态文档对齐。
 - `DEV-020` 已新增 API runtime store mode selection、PostgreSQL adapter/cutover boundary、配置校验和 migration 边界，但未执行真实 PostgreSQL 生产写入或切流。
 - `AUDIT-021` 已完成 DEV-020 后项目状态和生产准备审计，确认下一阶段应进入真实 PostgreSQL runtime adapter。
+- `DEV-021` 已新增 driver-backed PostgreSQL runtime adapter、连接池入口、RuntimeData document 初始化/读取/写入、checksum 条件更新和 mocked PostgreSQL adapter 测试；仍未执行真实生产切流。
 - 仍未达到“已经生产上线”状态。
 
 当前允许：

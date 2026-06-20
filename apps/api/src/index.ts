@@ -385,7 +385,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     backoffSeconds: 2
   };
 
-  function ensureAiFrameworkDefaults() {
+  async function ensureAiFrameworkDefaults() {
     const timestamp = new Date(0).toISOString();
     const defaults: Array<{
       id: string;
@@ -481,11 +481,18 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (changed) {
-      store.save();
+      await store.save();
     }
   }
 
-  ensureAiFrameworkDefaults();
+  server.addHook("onReady", async () => {
+    await store.ready;
+    await ensureAiFrameworkDefaults();
+  });
+
+  server.addHook("onClose", async () => {
+    await store.close();
+  });
 
   server.addHook("onRequest", async (request) => {
     if (
@@ -507,7 +514,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     return request.ip || "unknown";
   }
 
-  function recordAudit({
+  async function recordAudit({
     request,
     user,
     action,
@@ -541,7 +548,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     };
 
     auditLogs.push(entry);
-    store.save();
+    await store.save();
     return entry;
   }
 
@@ -609,7 +616,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     };
   }
 
-  function createAiRun({
+  async function createAiRun({
     request,
     user,
     scenario,
@@ -662,7 +669,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       completedAt: null
     };
     aiRuns.push(run);
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "ai.run_created",
@@ -690,7 +697,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     );
   }
 
-  function completeAiRun({
+  async function completeAiRun({
     request,
     user,
     run,
@@ -720,7 +727,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     run.completedAt = timestamp;
     run.frameworkVersion = frameworkVersion ?? run.frameworkVersion;
     run.contextSourceIds = contextSourceIds ?? run.contextSourceIds;
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: status === "succeeded" ? "ai.run_succeeded" : "ai.run_failed",
@@ -734,7 +741,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       aiInvolved: true,
       aiFrameworkVersion: run.frameworkVersion
     });
-    store.save();
+    await store.save();
     return run;
   }
 
@@ -755,7 +762,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       });
   }
 
-  function recordAiRunDecision({
+  async function recordAiRunDecision({
     request,
     user,
     run,
@@ -793,7 +800,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       createdAt: nowIso()
     };
     aiRunDecisions.push(decisionRecord);
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action:
@@ -810,11 +817,11 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       aiInvolved: true,
       aiFrameworkVersion: run.frameworkVersion
     });
-    store.save();
+    await store.save();
     return decisionRecord;
   }
 
-  function recordDeniedAccess({
+  async function recordDeniedAccess({
     request,
     user,
     dimension,
@@ -829,7 +836,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     resourceType: string;
     reason: DeniedAccessEvent["reason"];
   }) {
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: `access.${reason}`,
@@ -847,7 +854,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       requestId: requestId(request),
       createdAt: new Date().toISOString()
     });
-    store.save();
+    await store.save();
   }
 
   function canReadAuditEntry(user: UserAccount, entry: AuditLogEntry) {
@@ -1870,8 +1877,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     };
   }
 
-  function recordFileDenied(request: FastifyRequest, user: UserAccount | undefined, action: string) {
-    recordDeniedAccess({
+  async function recordFileDenied(request: FastifyRequest, user: UserAccount | undefined, action: string) {
+    await recordDeniedAccess({
       request,
       user,
       dimension: "file",
@@ -2365,7 +2372,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const user = getSessionUser(token);
 
     if (!user) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         dimension: "auth",
         action: "authenticate",
@@ -2387,7 +2394,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canAccessModule(user.role, module)) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "menu",
@@ -2410,7 +2417,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canManageSettings(user.role)) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "operation",
@@ -2438,7 +2445,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canPerformOperation(user, operation, resource)) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "operation",
@@ -2461,7 +2468,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canPerformApprovalAction(user, approval)) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "approval",
@@ -2491,7 +2498,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     );
 
     if (!user) {
-      recordAudit({
+      await recordAudit({
         request,
         action: "auth.login_failed",
         objectType: "session",
@@ -2503,7 +2510,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
 
     const token = createSessionToken(user);
     sessions.set(token, user.id);
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "auth.login_success",
@@ -2538,7 +2545,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       sessions.delete(normalizedToken);
     }
 
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "auth.logout",
@@ -2692,7 +2699,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canUseAiCapability(user, "configure_ai_frameworks")) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "ai",
@@ -2703,7 +2710,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       return reply.code(403).send({ error: "forbidden" });
     }
 
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "ai.framework_config_viewed",
@@ -2732,7 +2739,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canUseAiCapability(user, "configure_ai_frameworks")) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "ai",
@@ -2784,8 +2791,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     framework.status = request.body?.status ?? framework.status;
     framework.updatedAt = timestamp;
     aiFrameworkVersions.push(version);
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "ai.framework_version_created",
@@ -2814,7 +2821,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canUseAiCapability(user, "read_ai_runs", { ownerUserId: user.id, participantUserIds: [user.id] })) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "ai",
@@ -2840,7 +2847,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const run = aiRuns.find((candidate) => candidate.id === request.params.id);
 
     if (!run || !canReadAiRun(user, run)) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -2877,7 +2884,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       return;
     }
 
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "audit.query",
@@ -2898,7 +2905,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       return;
     }
 
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "audit.object_query",
@@ -2922,7 +2929,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       return;
     }
 
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "audit.user_query",
@@ -2982,7 +2989,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const organizationId = request.body?.organizationId ?? user.defaultOrganizationId;
 
     if (!canPerformOperation(user, "create_project", { organizationId })) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "operation",
@@ -2994,7 +3001,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!visibleOrganizationsForUser(user).some((organization) => organization.id === organizationId)) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "data",
@@ -3019,8 +3026,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     };
 
     projects.push(project);
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "project.created",
@@ -3046,7 +3053,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const project = findVisibleProject(user, request.params.id);
 
     if (!project) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -3073,7 +3080,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const project = findVisibleProject(user, request.params.id);
 
     if (!project || !canManageProject(user, project)) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -3093,10 +3100,10 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     if (!project.memberUserIds.includes(member.id)) {
       project.memberUserIds.push(member.id);
       project.updatedAt = nowIso();
-      store.save();
+      await store.save();
     }
 
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "project.member_added",
@@ -3122,7 +3129,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const project = findVisibleProject(user, request.params.id);
 
     if (!project || !canManageProject(user, project)) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -3141,8 +3148,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
 
     project.status = nextStatus;
     project.updatedAt = nowIso();
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "project.status_changed",
@@ -3181,7 +3188,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const project = projectId ? findVisibleProject(user, projectId) : undefined;
 
     if (!project) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -3197,7 +3204,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       ownerUserId: user.id,
       participantUserIds: project.memberUserIds
     })) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "operation",
@@ -3232,8 +3239,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     };
 
     tasks.push(task);
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "task.created",
@@ -3259,7 +3266,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const visibleTask = findVisibleTask(user, request.params.id);
 
     if (!visibleTask) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -3286,7 +3293,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const visibleTask = findVisibleTask(user, request.params.id);
 
     if (!visibleTask) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -3315,8 +3322,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     task.status = nextStatus;
     task.cancelReason = nextStatus === "cancelled" ? request.body.reason?.trim() ?? null : task.cancelReason;
     task.updatedAt = nowIso();
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "task.status_changed",
@@ -3354,7 +3361,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const organizationId = request.body?.organizationId ?? user.defaultOrganizationId;
 
     if (!canUseOrganizationScope(user, organizationId)) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "data",
@@ -3379,7 +3386,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       const relatedProject = findVisibleProject(user, request.body.relatedObjectId);
 
       if (!relatedProject) {
-        recordAudit({
+        await recordAudit({
           request,
           user,
           action: "access.forbidden",
@@ -3406,8 +3413,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     };
 
     chatThreads.push(thread);
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "chat.thread_created",
@@ -3433,7 +3440,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const thread = findVisibleChatThread(user, request.params.id);
 
     if (!thread) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -3459,7 +3466,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const thread = findVisibleChatThread(user, request.params.id);
 
     if (!thread) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -3485,7 +3492,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const thread = findVisibleChatThread(user, request.params.id);
 
     if (!thread) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -3515,8 +3522,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
 
     chatMessages.push(message);
     thread.updatedAt = timestamp;
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "chat.message_sent",
@@ -3547,7 +3554,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const thread = findVisibleChatThread(user, request.params.id);
 
     if (!thread) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -3565,7 +3572,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       organizationId: thread.organizationId,
       participantUserIds: thread.memberUserIds
     })) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "ai",
@@ -3592,7 +3599,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       limit: 5
     });
     const requestedFileIds = request.body?.fileIds ?? [];
-    const aiRun = createAiRun({
+    const aiRun = await createAiRun({
       request,
       user,
       scenario: kind,
@@ -3632,7 +3639,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     ]);
 
     if (sourceMessageIds.length === 0) {
-      completeAiRun({
+      await completeAiRun({
         request,
         user,
         run: aiRun,
@@ -3659,7 +3666,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
           excerpt: "file_reference_permission_checked",
           accessResult: accessibleFiles.some((item) => item?.file.id === fileId) ? "allowed" : "denied"
         })));
-        completeAiRun({
+        await completeAiRun({
           request,
           user,
           run: aiRun,
@@ -3668,8 +3675,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
           failureClass: "permission_denied",
           failureMessage: "ai_file_reference_blocked_by_permission"
         });
-        recordFileDenied(request, user, "reference_ai");
-        recordAudit({
+        await recordFileDenied(request, user, "reference_ai");
+        await recordAudit({
           request,
           user,
           action: "file.ai_reference_denied",
@@ -3694,7 +3701,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
             excerpt: accessibleFile.version.contentText.slice(0, 240),
             accessResult: "allowed"
           }]);
-          recordAudit({
+          await recordAudit({
             request,
             user,
             action: "file.ai_referenced",
@@ -3728,7 +3735,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     });
 
     if (aiResult instanceof AiProviderError) {
-      completeAiRun({
+      await completeAiRun({
         request,
         user,
         run: aiRun,
@@ -3767,7 +3774,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     };
 
     aiDrafts.push(draft);
-    completeAiRun({
+    await completeAiRun({
       request,
       user,
       run: aiRun,
@@ -3782,8 +3789,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       frameworkVersion: draft.frameworkVersion,
       contextSourceIds: draft.contextSourceIds
     });
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action:
@@ -3829,7 +3836,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const thread = findVisibleChatThread(user, request.params.id);
 
     if (!thread) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -3855,7 +3862,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const visibleDraft = findVisibleAiDraft(user, request.params.id);
 
     if (!visibleDraft) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -3895,7 +3902,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         ownerUserId: user.id,
         participantUserIds: project.memberUserIds
       })) {
-        recordDeniedAccess({
+        await recordDeniedAccess({
           request,
           user,
           dimension: "operation",
@@ -3934,8 +3941,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       draft.confirmedAt = timestamp;
       draft.promotedObjectType = "task";
       draft.promotedObjectId = task.id;
-      store.save();
-      recordAudit({
+      await store.save();
+      await recordAudit({
         request,
         user,
         action: "task.created_from_ai_draft",
@@ -3948,7 +3955,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         aiInvolved: true,
         aiFrameworkVersion: draft.frameworkVersion
       });
-      recordAiRunDecision({
+      await recordAiRunDecision({
         request,
         user,
         run: linkedAiRun,
@@ -4015,8 +4022,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       draft.confirmedAt = timestamp;
       draft.promotedObjectType = "knowledge_item";
       draft.promotedObjectId = item.id;
-      store.save();
-      recordAudit({
+      await store.save();
+      await recordAudit({
         request,
         user,
         action: "knowledge.submitted_for_review_from_ai_draft",
@@ -4030,7 +4037,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         aiInvolved: true,
         aiFrameworkVersion: draft.frameworkVersion
       });
-      recordAiRunDecision({
+      await recordAiRunDecision({
         request,
         user,
         run: linkedAiRun,
@@ -4075,8 +4082,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     draft.confirmedAt = timestamp;
     draft.promotedObjectType = "project_memory";
     draft.promotedObjectId = memory.id;
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "memory.created_from_ai_summary",
@@ -4089,7 +4096,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       aiInvolved: true,
       aiFrameworkVersion: draft.frameworkVersion
     });
-    recordAiRunDecision({
+    await recordAiRunDecision({
       request,
       user,
       run: linkedAiRun,
@@ -4117,7 +4124,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const visibleDraft = findVisibleAiDraft(user, request.params.id);
 
     if (!visibleDraft) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -4141,7 +4148,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     draft.status = "rejected";
     draft.confirmedByUserId = user.id;
     draft.confirmedAt = timestamp;
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "ai_draft.rejected",
@@ -4153,7 +4160,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       aiInvolved: true,
       aiFrameworkVersion: draft.frameworkVersion
     });
-    recordAiRunDecision({
+    await recordAiRunDecision({
       request,
       user,
       run: aiRunForDraft(draft),
@@ -4164,7 +4171,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       changeSummary: null,
       reason
     });
-    store.save();
+    await store.save();
 
     return {
       draft
@@ -4242,8 +4249,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
 
     knowledgeItems.push(item);
     knowledgeVersions.push(version);
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "knowledge.draft_created",
@@ -4288,7 +4295,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const item = knowledgeItems.find((candidate) => candidate.id === request.params.id);
 
     if (!item || !visibleKnowledgeItemsForUser(user).some((candidate) => candidate.id === item.id)) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -4317,7 +4324,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const item = knowledgeItems.find((candidate) => candidate.id === request.params.id);
 
     if (!item || !canReadKnowledgeItem(user, item)) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -4343,8 +4350,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       version.submittedAt = timestamp;
     }
 
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "knowledge.submitted_for_review",
@@ -4377,7 +4384,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const item = knowledgeItems.find((candidate) => candidate.id === request.params.id);
 
     if (!item || !canReviewKnowledgeItem(user, item)) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "operation",
@@ -4438,8 +4445,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       }
     }
 
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action:
@@ -4485,7 +4492,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const item = knowledgeItems.find((candidate) => candidate.id === request.params.id);
 
     if (!item || !canReadKnowledgeItem(user, item)) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -4558,8 +4565,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     item.archivedAt = null;
 
     knowledgeVersions.push(version);
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "knowledge.version_created",
@@ -4612,7 +4619,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canPerformOperation(user, "create_contract", { organizationId, ownerUserId: user.id })) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "operation",
@@ -4663,8 +4670,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
 
     contracts.push(contract);
     contractVersions.push(version);
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: entryMethod === "upload" ? "contract.uploaded" : "contract.pasted",
@@ -4675,7 +4682,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       reason: `contract_entry:${entryMethod}`,
       result: "success"
     });
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "contract.version_created",
@@ -4722,7 +4729,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const contract = findVisibleContract(user, request.params.id);
 
     if (!contract) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -4752,7 +4759,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const contract = findVisibleContract(user, request.params.id);
 
     if (!contract) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -4766,7 +4773,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canUseAiCapability(user, "contract_review", contractResource(contract))) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "ai",
@@ -4778,7 +4785,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     const versionForRun = currentContractVersion(contract);
-    const contractAiRun = createAiRun({
+    const contractAiRun = await createAiRun({
       request,
       user,
       scenario: "contract_review",
@@ -4808,7 +4815,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (reviewType === "initial" && !["draft", "revision_required"].includes(contract.status)) {
-      completeAiRun({
+      await completeAiRun({
         request,
         user,
         run: contractAiRun,
@@ -4817,7 +4824,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         failureClass: "validation_error",
         failureMessage: "invalid_contract_status"
       });
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "contract.ai_review_failed",
@@ -4833,7 +4840,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (reviewType === "second" && (contract.currentVersion < 2 || contract.status !== "revision_required")) {
-      completeAiRun({
+      await completeAiRun({
         request,
         user,
         run: contractAiRun,
@@ -4842,7 +4849,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         failureClass: "validation_error",
         failureMessage: "revision_required_before_second_review"
       });
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "contract.second_review_failed",
@@ -4860,7 +4867,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const version = versionForRun;
 
     if (!version) {
-      completeAiRun({
+      await completeAiRun({
         request,
         user,
         run: contractAiRun,
@@ -4876,7 +4883,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const previousStatus = contract.status;
     contract.status = reviewType === "second" ? "second_reviewing" : "ai_reviewing";
     contract.updatedAt = timestamp;
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: reviewType === "second" ? "contract.second_review_started" : "contract.ai_review_started",
@@ -4902,7 +4909,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     contractReviews.push(review);
     contract.status = "risk_pending_confirm";
     contract.updatedAt = timestamp;
-    completeAiRun({
+    await completeAiRun({
       request,
       user,
       run: contractAiRun,
@@ -4918,8 +4925,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       frameworkVersion: review.frameworkVersion,
       contextSourceIds: version.sourceEvidence.map((source) => source.sourceId)
     });
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: reviewType === "second" ? "contract.second_review_completed" : "contract.ai_review_completed",
@@ -4958,7 +4965,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const contract = findVisibleContract(user, request.params.id);
 
     if (!contract) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -4970,7 +4977,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canPerformOperation(user, "confirm_contract_risk", contractResource(contract))) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "operation",
@@ -5027,8 +5034,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     contractRiskConfirmations.push(...createdConfirmations);
     contract.status = review.reviewType === "second" ? "risk_pending_confirm" : "revision_required";
     contract.updatedAt = timestamp;
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "contract.risk_confirmed",
@@ -5059,7 +5066,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const contract = findVisibleContract(user, request.params.id);
 
     if (!contract) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -5071,7 +5078,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canPerformOperation(user, "revise_contract", contractResource(contract))) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "operation",
@@ -5119,8 +5126,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     contract.status = "revision_required";
     contract.updatedAt = timestamp;
     contractVersions.push(version);
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "contract.revised",
@@ -5131,7 +5138,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       reason: request.body?.reason?.trim() || "contract_revision_submitted",
       result: "success"
     });
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "contract.version_created",
@@ -5159,7 +5166,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const contract = findVisibleContract(user, request.params.id);
 
     if (!contract) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -5171,7 +5178,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canPerformApprovalAction(user, "initiate_approval", contractResource(contract))) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "approval",
@@ -5187,7 +5194,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const allRisksConfirmed = Boolean(review && review.risks.every((risk) => risk.humanConfirmed && risk.selectedOption));
 
     if (!version || contract.currentVersion < 2 || review?.reviewType !== "second" || review.version !== contract.currentVersion || !allRisksConfirmed) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "contract.approval_submission_blocked",
@@ -5222,8 +5229,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     });
 
     contractApprovalHandoffs.push(handoff);
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "contract.approval_submitted",
@@ -5235,7 +5242,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       reason: "approval_instance_created:human_only",
       result: "success"
     });
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "approval.initiated",
@@ -5247,7 +5254,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       reason: handoff.reason,
       result: "success"
     });
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "approval.node_entered",
@@ -5276,7 +5283,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const contract = findVisibleContract(user, request.params.id);
 
     if (!contract) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -5288,7 +5295,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canPerformOperation(user, "track_contract_execution", contractResource(contract))) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "operation",
@@ -5326,8 +5333,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     contract.executionStatus = "tracking";
     contract.status = "execution_tracking";
     contract.updatedAt = timestamp;
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "contract.execution_event_recorded",
@@ -5371,7 +5378,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const contract = findVisibleContract(user, request.body.sourceObjectId);
 
     if (!contract) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -5383,7 +5390,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canPerformApprovalAction(user, "initiate_approval", contractResource(contract))) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "approval",
@@ -5424,8 +5431,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     });
 
     contractApprovalHandoffs.push(handoff);
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "approval.initiated",
@@ -5453,7 +5460,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const approval = findVisibleApproval(user, request.params.id);
 
     if (!approval) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -5483,7 +5490,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const approval = findVisibleApproval(user, request.params.id);
 
     if (!approval) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -5517,7 +5524,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       ...approvalResource(approval),
       currentNodeApproverUserIds: [node.approverUserId]
     })) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "approval",
@@ -5565,7 +5572,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
 
       if (nextNode) {
         setApprovalCurrentNode(approval, nextNode, timestamp);
-        recordAudit({
+        await recordAudit({
           request,
           user,
           action: "approval.approved",
@@ -5577,7 +5584,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
           reason,
           result: "success"
         });
-        recordAudit({
+        await recordAudit({
           request,
           user,
           action: "approval.node_entered",
@@ -5594,7 +5601,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         approval.completedAt = timestamp;
         setApprovalCurrentNode(approval, null, timestamp);
         writeBackApprovalResult(approval, "approved", timestamp);
-        recordAudit({
+        await recordAudit({
           request,
           user,
           action: "approval.approved",
@@ -5606,7 +5613,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
           reason,
           result: "success"
         });
-        recordAudit({
+        await recordAudit({
           request,
           user,
           action: "approval.completed",
@@ -5617,7 +5624,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
           reason: "approval_result_writeback_completed",
           result: "success"
         });
-        recordAudit({
+        await recordAudit({
           request,
           user,
           action: "contract.approval_result_written_back",
@@ -5642,7 +5649,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       approval.completedAt = timestamp;
       setApprovalCurrentNode(approval, null, timestamp);
       writeBackApprovalResult(approval, nextStatus, timestamp);
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: action === "reject" ? "approval.rejected" : "approval.returned",
@@ -5654,7 +5661,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         reason,
         result: "success"
       });
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "contract.approval_result_written_back",
@@ -5694,7 +5701,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       approval.status = "transferred";
       setApprovalCurrentNode(approval, transferNode, timestamp);
       approval.status = "processing";
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "approval.transferred",
@@ -5731,7 +5738,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       };
       approvalNodes.push(addSignNode);
       setApprovalCurrentNode(approval, addSignNode, timestamp);
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "approval.add_signed",
@@ -5745,7 +5752,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       });
     }
 
-    store.save();
+    await store.save();
 
     return {
       approval: approvalWithDetails(approval),
@@ -5803,7 +5810,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const visibleFiles = visibleFilesForObject(user, objectType, objectId);
 
     if (!visibleFiles) {
-      recordFileDenied(request, user, "view");
+      await recordFileDenied(request, user, "view");
       return reply.code(404).send({ error: "not_found" });
     }
 
@@ -5829,7 +5836,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const sourceResource = sourceResourceForUser(user, sourceObjectType, sourceObjectId);
 
     if (!sourceResource) {
-      recordFileDenied(request, user, "upload");
+      await recordFileDenied(request, user, "upload");
       return reply.code(404).send({ error: "not_found" });
     }
 
@@ -5837,7 +5844,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       !canPerformOperation(user, "upload_file", sourceResource) ||
       !canAccessFileAction(user, "upload", sourceResource)
     ) {
-      recordFileDenied(request, user, "upload");
+      await recordFileDenied(request, user, "upload");
       return reply.code(403).send({ error: "forbidden" });
     }
 
@@ -5893,8 +5900,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     files.push(file);
     fileVersions.push(version);
     fileObjectBindings.push(binding);
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: "file.uploaded",
@@ -5904,7 +5911,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       reason: `file_uploaded:${sourceObjectType}`,
       result: "success"
     });
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "file.bound_to_object",
@@ -5933,7 +5940,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const accessibleFile = findAccessibleFile(user, request.params.id, "view");
 
     if (!accessibleFile) {
-      recordFileDenied(request, user, "view");
+      await recordFileDenied(request, user, "view");
       return reply.code(404).send({ error: "not_found" });
     }
 
@@ -5953,11 +5960,11 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const accessibleFile = findAccessibleFile(user, request.params.id, "preview");
 
     if (!accessibleFile) {
-      recordFileDenied(request, user, "preview");
+      await recordFileDenied(request, user, "preview");
       return reply.code(404).send({ error: "not_found" });
     }
 
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "file.previewed",
@@ -5986,11 +5993,11 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const accessibleFile = findAccessibleFile(user, request.params.id, "download");
 
     if (!accessibleFile) {
-      recordFileDenied(request, user, "download");
+      await recordFileDenied(request, user, "download");
       return reply.code(404).send({ error: "not_found" });
     }
 
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "file.downloaded",
@@ -6018,7 +6025,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const accessibleFile = findAccessibleFile(user, request.params.id, "archive");
 
     if (!accessibleFile) {
-      recordFileDenied(request, user, "archive");
+      await recordFileDenied(request, user, "archive");
       return reply.code(404).send({ error: "not_found" });
     }
 
@@ -6031,8 +6038,8 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       accessibleFile.file.formalProcess ? "formal_process_file_voided" : "file_archived"
     );
     accessibleFile.file.updatedAt = timestamp;
-    store.save();
-    recordAudit({
+    await store.save();
+    await recordAudit({
       request,
       user,
       action: accessibleFile.file.formalProcess ? "file.voided" : "file.archived",
@@ -6056,7 +6063,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canUseAiCapability(user, "knowledge_query", { participantUserIds: [user.id] })) {
-      recordDeniedAccess({
+      await recordDeniedAccess({
         request,
         user,
         dimension: "ai",
@@ -6076,7 +6083,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const project = request.body?.projectId ? findVisibleProject(user, request.body.projectId) : undefined;
 
     if (request.body?.projectId && !project) {
-      recordAudit({
+      await recordAudit({
         request,
         user,
         action: "access.forbidden",
@@ -6101,7 +6108,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       limit: request.body?.limit
     });
     const queryOrganizationId = request.body?.organizationId ?? project?.organizationId ?? user.defaultOrganizationId;
-    const queryRun = createAiRun({
+    const queryRun = await createAiRun({
       request,
       user,
       scenario: "knowledge_query",
@@ -6127,7 +6134,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         accessResult: "allowed" as const
       }))
     ));
-    completeAiRun({
+    await completeAiRun({
       request,
       user,
       run: queryRun,
@@ -6140,7 +6147,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       contextSourceIds: results.map((result) => result.sourceId)
     });
 
-    recordAudit({
+    await recordAudit({
       request,
       user,
       action: "ai.knowledge_query_requested",
