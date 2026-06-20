@@ -409,6 +409,34 @@
 - `[DEV-013] 知识库生产化`
 - `[DEV-014] 合同闭环`
 - `[DEV-015] 审批闭环`
+- `[DEV-016] AI 框架中心和 AI Run 生产化`
+
+### DEV-016 AI 框架中心和 AI Run 生产化
+
+状态：已完成。本阶段将 AI Framework、Framework Version、AI Run、快照、来源证据、人工采纳/驳回/修改、失败分类和重试策略 metadata 接入生产化边界；前端只在既有系统设置、聊天、知识、合同等菜单内展示证据和配置，不新增 AI 一级菜单。
+
+范围：
+
+- AI Framework / Framework Version 共享模型、API 和运行时持久化边界
+- AI Run、输入/输出快照、来源证据链接和人工决策记录
+- 聊天 AI 草稿、知识问答、合同 AI 审查接入 AI Run
+- AI Framework 配置权限和 AI Run 读取权限
+- PostgreSQL 兼容迁移资产 `0010_ai_framework_run_productionization.sql`
+- API 回归测试 `apps/api/src/ai-run-production.test.ts`
+
+不做：
+
+- 不接外部 agent、外部向量数据库或外部通知
+- 不做财务、采购、库存、ERP、移动 App、部署、生产写入或 secrets
+- 不允许 AI 自动审批、驳回、退回、转交、加签、发布知识、创建正式任务、签署、付款或确认执行
+
+验收：
+
+- AI Framework 配置只允许系统管理员或超级管理员
+- AI Run 读取按 `read_ai_runs` 和来源对象权限过滤
+- AI Run 有 framework、version、scenario、actor、organization、source ids、snapshot refs、context ids、status、failure class、retry policy metadata
+- AI 输出人工确认、驳回、修改均有记录和审计
+- 无权限读取 AI Run 不泄露输入、输出、来源证据或对象内容
 
 ### DEV-014 合同闭环
 

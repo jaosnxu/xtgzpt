@@ -33,7 +33,10 @@ import {
   seedOrganizations,
   seedUsers,
   platformModules,
+  type AiFrameworkRecord,
+  type AiFrameworkVersionRecord,
   type AiDraftRecord,
+  type AiRunWithDetails,
   type ApprovalWithDetails,
   type ChatMessageRecord,
   type ChatThreadRecord,
@@ -99,6 +102,10 @@ interface ContractWithDetails extends ContractRecord {
   executionEvents: ContractExecutionEventRecord[];
 }
 
+interface AiFrameworkWithVersions extends AiFrameworkRecord {
+  versions: AiFrameworkVersionRecord[];
+}
+
 const menuIcon = {
   dashboard: Home,
   workbench: LayoutDashboard,
@@ -129,24 +136,24 @@ const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
     summary: "任务列表、创建、负责人提交和人工确认已进入真实接口；文件附件通过所属项目权限继承。"
   },
   chat: {
-    stage: "DEV-012 AI 文件引用已接入",
-    summary: "聊天、AI 草稿、人工确认入库、记忆上下文回用和 AI 文件引用权限检查已进入真实接口。"
+    stage: "DEV-016 AI Run 已接入",
+    summary: "聊天、AI 草稿、人工确认、人工驳回、记忆上下文回用、AI 文件引用和 AI Run 证据已进入真实接口。"
   },
   knowledge: {
-    stage: "DEV-013 审核已接入",
-    summary: "知识草稿、提交审核、发布、驳回、归档、版本历史和来源证据进入真实接口；AI 不能自动发布。"
+    stage: "DEV-016 AI Run 已接入",
+    summary: "知识草稿、提交审核、发布、驳回、归档、版本历史、来源证据和知识问答 AI Run 进入真实接口；AI 不能自动发布。"
   },
   contracts: {
-    stage: "DEV-014 已接入",
-    summary: "合同入口只支持上传或粘贴；版本、原文证据、AI 风险审查、人工确认、二次审查、审批边界和执行跟踪已接入。"
+    stage: "DEV-016 AI Run 已接入",
+    summary: "合同入口只支持上传或粘贴；版本、原文证据、AI 风险审查 AI Run、人工确认、二次审查、审批边界和执行跟踪已接入。"
   },
   approvals: {
     stage: "DEV-015 已接入",
     summary: "审批实例、当前节点、同意、驳回、退回、转交、加签和合同结果写回已接入；AI 不能执行审批动作。"
   },
   settings: {
-    stage: "DEV-012 状态已接入",
-    summary: "权限摘要、组织、角色、审批、文件和 AI 权限维度按角色展示。"
+    stage: "DEV-016 AI 框架已接入",
+    summary: "权限摘要、组织、角色、审批、文件、AI 权限、AI Framework 和 AI Run 证据按角色展示。"
   }
 };
 
@@ -165,6 +172,8 @@ export function App() {
   const [chatThreads, setChatThreads] = useState<ChatThreadSummary[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessageRecord[]>([]);
   const [aiDrafts, setAiDrafts] = useState<AiDraftRecord[]>([]);
+  const [aiFrameworks, setAiFrameworks] = useState<AiFrameworkWithVersions[]>([]);
+  const [aiRuns, setAiRuns] = useState<AiRunWithDetails[]>([]);
   const [workbench, setWorkbench] = useState<WorkbenchResponse | null>(null);
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItemWithVersions[]>([]);
   const [projectMemories, setProjectMemories] = useState<ProjectMemoryRecord[]>([]);
@@ -206,6 +215,7 @@ export function App() {
   const [knowledgeError, setKnowledgeError] = useState<string | null>(null);
   const [contractError, setContractError] = useState<string | null>(null);
   const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [aiGovernanceError, setAiGovernanceError] = useState<string | null>(null);
   const [approvalTargetUserId, setApprovalTargetUserId] = useState("user-approver");
   const activeUser = session?.user ?? null;
 
@@ -314,6 +324,24 @@ export function App() {
     setSelectedApprovalId((current) => current ?? result.approvals[0]?.id ?? null);
   }
 
+  async function refreshAiGovernanceData() {
+    if (!session || !session.permissions.ai.includes("read_ai_runs")) {
+      setAiRuns([]);
+      setAiFrameworks([]);
+      return;
+    }
+
+    const runResult = await authorizedRequest<{ runs: AiRunWithDetails[] }>("/ai/runs");
+    setAiRuns(runResult.runs);
+
+    if (session.visibleModules.includes("settings") && session.permissions.ai.includes("configure_ai_frameworks")) {
+      const frameworkResult = await authorizedRequest<{ frameworks: AiFrameworkWithVersions[] }>("/settings/ai-frameworks");
+      setAiFrameworks(frameworkResult.frameworks);
+    } else {
+      setAiFrameworks([]);
+    }
+  }
+
   async function refreshProjectFiles(projectId = selectedProjectId) {
     if (!session || !projectId) {
       setProjectFiles([]);
@@ -334,6 +362,8 @@ export function App() {
       setChatThreads([]);
       setChatMessages([]);
       setAiDrafts([]);
+      setAiFrameworks([]);
+      setAiRuns([]);
       setKnowledgeItems([]);
       setProjectMemories([]);
       setContracts([]);
@@ -353,6 +383,7 @@ export function App() {
       setIsApprovalLoading(false);
       setIsFileLoading(false);
       setShowNotifications(false);
+      setAiGovernanceError(null);
       return;
     }
 
@@ -367,10 +398,19 @@ export function App() {
     setKnowledgeError(null);
     setContractError(null);
     setApprovalError(null);
+    setAiGovernanceError(null);
     setFileError(null);
 
-    void Promise.allSettled([refreshWorkbenchData(), refreshWorkData(), refreshChatData(), refreshKnowledgeData(), refreshContractData(), refreshApprovalData()]).then((results) => {
-      const [workbenchResult, workResult, chatResult, knowledgeResult, contractResult, approvalResult] = results;
+    void Promise.allSettled([
+      refreshWorkbenchData(),
+      refreshWorkData(),
+      refreshChatData(),
+      refreshKnowledgeData(),
+      refreshContractData(),
+      refreshApprovalData(),
+      refreshAiGovernanceData()
+    ]).then((results) => {
+      const [workbenchResult, workResult, chatResult, knowledgeResult, contractResult, approvalResult, aiGovernanceResult] = results;
 
       if (workbenchResult.status === "rejected") {
         const message = workbenchResult.reason instanceof Error ? workbenchResult.reason.message : "工作台加载失败";
@@ -400,6 +440,11 @@ export function App() {
       if (approvalResult.status === "rejected") {
         const message = approvalResult.reason instanceof Error ? approvalResult.reason.message : "审批加载失败";
         setApprovalError(message);
+      }
+
+      if (aiGovernanceResult.status === "rejected") {
+        const message = aiGovernanceResult.reason instanceof Error ? aiGovernanceResult.reason.message : "AI 治理加载失败";
+        setAiGovernanceError(message);
       }
 
       setIsWorkbenchLoading(false);
@@ -631,7 +676,7 @@ export function App() {
         method: "POST",
         body: JSON.stringify({})
       });
-      await Promise.all([refreshChatData(selectedThreadId), refreshWorkbenchData()]);
+      await Promise.all([refreshChatData(selectedThreadId), refreshWorkbenchData(), refreshAiGovernanceData()]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "AI 草稿生成失败";
       setAiFailure(message);
@@ -652,7 +697,18 @@ export function App() {
         confirmerUserId: projects.find((project) => project.id === (selectedProjectId ?? projects[0]?.id))?.ownerUserId ?? activeUser?.id
       })
     });
-    await Promise.all([refreshWorkData(), refreshChatData(selectedThreadId), refreshKnowledgeData(), refreshWorkbenchData()]);
+    await Promise.all([refreshWorkData(), refreshChatData(selectedThreadId), refreshKnowledgeData(), refreshWorkbenchData(), refreshAiGovernanceData()]);
+  }
+
+  async function rejectAiDraft(draft: AiDraftRecord) {
+    setChatError(null);
+    await authorizedRequest(`/ai/drafts/${draft.id}/reject`, {
+      method: "POST",
+      body: JSON.stringify({
+        reason: "front_end_human_rejected_ai_output"
+      })
+    });
+    await Promise.all([refreshChatData(selectedThreadId), refreshWorkbenchData(), refreshAiGovernanceData()]);
   }
 
   async function publishKnowledgeItem(item: KnowledgeItemWithVersions) {
@@ -699,6 +755,7 @@ export function App() {
       })
     });
     setKnowledgeResults(result.results);
+    await refreshAiGovernanceData();
   }
 
   async function createContract() {
@@ -739,7 +796,7 @@ export function App() {
       await authorizedRequest(`/contracts/${contract.id}/ai-review`, {
         method: "POST"
       });
-      await Promise.all([refreshContractData(), refreshWorkbenchData()]);
+      await Promise.all([refreshContractData(), refreshWorkbenchData(), refreshAiGovernanceData()]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "合同 AI 审查失败";
       setAiFailure(message);
@@ -793,7 +850,7 @@ export function App() {
       await authorizedRequest(`/contracts/${contract.id}/second-review`, {
         method: "POST"
       });
-      await Promise.all([refreshContractData(), refreshWorkbenchData()]);
+      await Promise.all([refreshContractData(), refreshWorkbenchData(), refreshAiGovernanceData()]);
     } finally {
       setIsAiGenerating(false);
     }
@@ -890,7 +947,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">DEV-015：审批闭环</p>
+            <p className="eyebrow">DEV-016：AI 框架与 AI Run</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
@@ -1027,6 +1084,11 @@ export function App() {
             onConfirmDraft={(draft) => {
               void confirmAiDraft(draft).catch((error) => {
                 setChatError(error instanceof Error ? error.message : "AI 草稿确认失败");
+              });
+            }}
+            onRejectDraft={(draft) => {
+              void rejectAiDraft(draft).catch((error) => {
+                setChatError(error instanceof Error ? error.message : "AI 草稿驳回失败");
               });
             }}
             onCreateThread={() => {
@@ -1168,6 +1230,9 @@ export function App() {
         ) : currentModule === "settings" && canOpenSettings ? (
           <SettingsView
             activeUser={activeUser}
+            aiError={aiGovernanceError}
+            aiFrameworks={aiFrameworks}
+            aiRuns={aiRuns}
             pageStates={workbench?.pageStates ?? []}
             permissions={session.permissions}
             visibleModuleCount={visibleModules.length}
@@ -1255,6 +1320,9 @@ function DashboardView({
         {canOpenSettings ? (
           <SettingsView
             activeUser={activeUser}
+            aiError={null}
+            aiFrameworks={[]}
+            aiRuns={[]}
             pageStates={workbench?.pageStates ?? []}
             permissions={permissions}
             visibleModuleCount={visibleModuleCount}
@@ -1589,11 +1657,17 @@ function AuditPreviewPanel() {
 
 function SettingsView({
   activeUser,
+  aiError,
+  aiFrameworks,
+  aiRuns,
   pageStates,
   permissions,
   visibleModuleCount
 }: {
   activeUser: PublicUser;
+  aiError: string | null;
+  aiFrameworks: AiFrameworkWithVersions[];
+  aiRuns: AiRunWithDetails[];
   pageStates: PageStateDescriptor[];
   permissions: PermissionSummary;
   visibleModuleCount: number;
@@ -1618,7 +1692,95 @@ function SettingsView({
         <SettingsItem title="数据范围" value={permissions.data.scope} enabled />
         <SettingsItem title="策略版本" value={permissions.policyVersion} enabled />
       </div>
+      <AiGovernancePanel
+        aiError={aiError}
+        frameworks={aiFrameworks}
+        runs={aiRuns}
+        canConfigure={permissions.ai.includes("configure_ai_frameworks")}
+        canReadRuns={permissions.ai.includes("read_ai_runs")}
+      />
       <PageStateGrid states={pageStates} />
+    </div>
+  );
+}
+
+function AiGovernancePanel({
+  aiError,
+  canConfigure,
+  canReadRuns,
+  frameworks,
+  runs
+}: {
+  aiError: string | null;
+  canConfigure: boolean;
+  canReadRuns: boolean;
+  frameworks: AiFrameworkWithVersions[];
+  runs: AiRunWithDetails[];
+}) {
+  const recentRuns = runs.slice(0, 6);
+
+  return (
+    <div className="ai-governance">
+      <div className="panel-header compact">
+        <div>
+          <h2>AI 框架与运行证据</h2>
+          <p>配置只对管理员开放；运行记录按来源对象权限读取。</p>
+        </div>
+        <Brain size={22} />
+      </div>
+      <PageStateNotice active={Boolean(aiError)} state="error" title="AI 治理数据加载失败" body={aiError ?? ""} />
+      <PageStateNotice
+        active={!canReadRuns}
+        state="no-permission"
+        title="无 AI Run 读取权限"
+        body="当前账号不能读取 AI Run 证据；后端仍会按权限记录运行审计。"
+      />
+      {canConfigure ? (
+        <div className="ai-framework-list">
+          {frameworks.length > 0 ? (
+            frameworks.map((framework) => {
+              const activeVersion = framework.versions.find((version) => version.id === framework.activeVersionId) ?? framework.versions[0];
+              return (
+                <article className="ai-framework-row" key={framework.id}>
+                  <div>
+                    <strong>{framework.name}</strong>
+                    <small>{framework.scenario} · {framework.status}</small>
+                    <small>{activeVersion?.boundaryPolicy ?? "AI 只能输出建议、提醒和草稿。"}</small>
+                  </div>
+                  <span className="status-pill">{activeVersion?.version ?? "未配置"}</span>
+                  <span className="count-pill">重试 {activeVersion?.retryPolicy.maxRetries ?? 0}</span>
+                </article>
+              );
+            })
+          ) : (
+            <div className="empty-state">暂无可配置 AI 框架或当前账号无配置权限。</div>
+          )}
+        </div>
+      ) : null}
+      <div className="ai-run-list">
+        {recentRuns.length > 0 ? (
+          recentRuns.map((run) => (
+            <article className="ai-run-row" key={run.id}>
+              <div>
+                <strong>{run.scenario}</strong>
+                <small>{run.frameworkVersion} · {run.sourceObjectType}:{run.sourceObjectId}</small>
+                <small>
+                  证据 {run.sourceEvidence.length} · 决策 {run.decisions.map((decision) => decision.decision).join(" / ") || "未处理"}
+                </small>
+              </div>
+              <span className="status-pill">{run.status}</span>
+              <span className="count-pill">{run.failureClass ?? "ok"}</span>
+            </article>
+          ))
+        ) : (
+          <PageStateNotice
+            active={canReadRuns}
+            state="empty"
+            title="暂无 AI Run"
+            body="生成草稿、知识问答或合同审查后会显示输入/输出快照、来源证据和人工决策。"
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -2000,6 +2162,7 @@ function ChatView({
   onCreateDraft,
   onConfirmDraft,
   onCreateThread,
+  onRejectDraft,
   onSelectThread,
   onSendMessage,
   selectedThreadId,
@@ -2021,6 +2184,7 @@ function ChatView({
   onCreateDraft: (kind: AiDraftRecord["kind"]) => void;
   onConfirmDraft: (draft: AiDraftRecord) => void;
   onCreateThread: () => void;
+  onRejectDraft: (draft: AiDraftRecord) => void;
   onSelectThread: (threadId: string) => void;
   onSendMessage: () => void;
   selectedThreadId: string | null;
@@ -2162,6 +2326,9 @@ function ChatView({
                 <span className="count-pill">{draft.sourceMessageIds.length} 来源</span>
                 <button className="secondary-button compact-button" disabled={!canConfirmDraft(draft)} onClick={() => onConfirmDraft(draft)}>
                   确认入库
+                </button>
+                <button className="secondary-button compact-button" disabled={draft.status !== "draft"} onClick={() => onRejectDraft(draft)}>
+                  驳回
                 </button>
               </div>
             ))

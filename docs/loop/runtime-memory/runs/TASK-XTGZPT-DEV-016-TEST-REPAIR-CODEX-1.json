@@ -1,0 +1,618 @@
+{
+  "schema_version": "loop.run_summary.v1",
+  "task_id": "TASK-XTGZPT-DEV-016-TEST-REPAIR-CODEX-1",
+  "goal": "Use Loop to repair the DEV-016 verifier test failure in the existing DEV-016 worktree without changing the business scope. The known failure is npm run test: apps/api/src/access.test.ts still expects seed-dev-015 while DEV-016 correctly updates permission policy output to seed-dev-016 and adds AI permissions. Repair only what is needed, keep DEV-016 AI Framework Center and AI Run productionization behavior intact, update DEV-016/AUDIT-016 verification status if needed, and rerun gates.",
+  "scope": {
+    "include": [
+      "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-016-CODEX-1/WT-7F6D22F9"
+    ],
+    "exclude": [
+      "new business features",
+      "finance system behavior",
+      "procurement system",
+      "inventory system",
+      "ERP expansion",
+      "external agents",
+      "external vector database",
+      "external notifications",
+      "mobile app",
+      "new top-level menu",
+      "production writes",
+      "deployment",
+      "secrets"
+    ]
+  },
+  "acceptance": [
+    "Repair is executed through the codex_executor connector in the existing DEV-016 isolated worktree, not by manual chat edits.",
+    "The repair is limited to the known access.test.ts expectation mismatch unless verification exposes a directly related regression.",
+    "DEV-016 behavior remains intact: AI Framework, Framework Version, AI Run, input/output snapshots, source evidence, adoption/rejection/change records, failure classification, retry policy metadata, permissions, audit records, migrations, frontend evidence/config surfaces, and project memory.",
+    "AI remains unable to approve, reject, return, transfer, add-sign, publish knowledge, create official tasks, sign, pay, or confirm execution without human confirmation.",
+    "Frontend remains inside existing menus only and keeps the single 1440 desktop workspace target.",
+    "Run and pass git diff --check, npm run lint, npm run typecheck, npm run test, npm run build, npm run smoke:api, and npm audit --audit-level=low.",
+    "If any gate fails, classify the failure, repair up to Loop retry limits, or write intent debt/repair queue if unresolved."
+  ],
+  "status": "completed",
+  "current_stage": "completed",
+  "created_at": "2026-06-20T07:34:53.581581+00:00",
+  "updated_at": "2026-06-20T08:24:02.601182+00:00",
+  "heartbeat_at": "2026-06-20T08:24:02.601182+00:00",
+  "attempt_count": 8,
+  "retry_count": 0,
+  "repair_count": 1,
+  "workflow": {
+    "architecture": "graph_runtime",
+    "type": "durable_workflow",
+    "writer": "writer",
+    "reviewer": "reviewer",
+    "verifier": "verifier"
+  },
+  "project_memory_index": {
+    "root": "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-016-CODEX-1/WT-7F6D22F9",
+    "index_path": "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-016-CODEX-1/WT-7F6D22F9/docs/loop/00_MEMORY_INDEX.md",
+    "status": "available",
+    "loaded_files": [
+      "PROJECT_INTAKE.md",
+      "README.md",
+      "docs/BUSINESS_IMPLEMENTATION_PLAN.md",
+      "docs/PROJECT_CONSTITUTION.md",
+      "docs/TECHNICAL_STANDARD.md",
+      "docs/TEST_ACCEPTANCE_STANDARD.md",
+      "docs/dev-log/AUDIT-004.md",
+      "docs/dev-log/AUDIT-005.md",
+      "docs/dev-log/AUDIT-008.md",
+      "docs/dev-log/AUDIT-009.md",
+      "docs/dev-log/AUDIT-010.md",
+      "docs/dev-log/AUDIT-011.md",
+      "docs/dev-log/AUDIT-012.md",
+      "docs/dev-log/AUDIT-013.md",
+      "docs/dev-log/AUDIT-014.md",
+      "docs/dev-log/AUDIT-015.md",
+      "docs/dev-log/AUDIT-016.md",
+      "docs/dev-log/AUDIT-LOOP-001.md",
+      "docs/dev-log/DEV-005.md",
+      "docs/dev-log/DEV-006.md",
+      "docs/dev-log/DEV-007.md",
+      "docs/dev-log/DEV-008.md",
+      "docs/dev-log/DEV-009.md",
+      "docs/dev-log/DEV-010.md",
+      "docs/dev-log/DEV-011.md",
+      "docs/dev-log/DEV-012.md",
+      "docs/dev-log/DEV-013.md",
+      "docs/dev-log/DEV-014.md",
+      "docs/dev-log/DEV-015.md",
+      "docs/dev-log/DEV-016.md",
+      "docs/dev-readiness/00_DEV_READINESS_OVERVIEW.md",
+      "docs/dev-readiness/01_DEVELOPMENT_PRD.md",
+      "docs/dev-readiness/02_PERMISSION_MATRIX.md",
+      "docs/dev-readiness/03_OBJECTS_AND_STATE_MACHINES.md",
+      "docs/dev-readiness/04_API_DRAFT.md",
+      "docs/dev-readiness/06_AUDIT_LOG_MATRIX.md",
+      "docs/dev-readiness/08_TEST_CASES_AND_ACCEPTANCE.md",
+      "docs/dev-readiness/10_DEVELOPMENT_BACKLOG.md",
+      "docs/loop/00_MEMORY_INDEX.md",
+      "docs/loop/01_OPERATING_RULES.md",
+      "docs/loop/02_INTENT_DEBT.md",
+      "docs/loop/04_GITHUB_BRANCH_PROTECTION.md",
+      "docs/loop/05_EXTERNAL_LOOP_SYSTEM.md"
+    ],
+    "missing_files": [],
+    "rejected_files": []
+  },
+  "stages": [
+    {
+      "stage": "intake",
+      "status": "done",
+      "summary": "Accepted goal and initialized task context.",
+      "failure_type": null,
+      "next_state": "understanding",
+      "timestamp": "2026-06-20T07:34:53.586046+00:00"
+    },
+    {
+      "stage": "understanding",
+      "status": "done",
+      "summary": "Parsed task scope, acceptance, available resources, and repository memory.",
+      "failure_type": null,
+      "next_state": "planning",
+      "timestamp": "2026-06-20T07:34:53.588158+00:00"
+    },
+    {
+      "stage": "planning",
+      "status": "done",
+      "summary": "Built minimal execution plan from current goal.",
+      "failure_type": null,
+      "next_state": "routing",
+      "timestamp": "2026-06-20T07:34:53.590342+00:00"
+    },
+    {
+      "stage": "routing",
+      "status": "done",
+      "summary": "Selected candidate skills and connectors for the task.",
+      "failure_type": null,
+      "next_state": "preflight",
+      "timestamp": "2026-06-20T07:34:53.592513+00:00"
+    },
+    {
+      "stage": "preflight",
+      "status": "done",
+      "summary": "Preflight gate passed.",
+      "failure_type": null,
+      "next_state": "executing",
+      "timestamp": "2026-06-20T07:34:53.594351+00:00"
+    },
+    {
+      "stage": "executing",
+      "status": "failed",
+      "summary": "CI suite failed: test.",
+      "failure_type": "code_error",
+      "next_state": "repairing",
+      "timestamp": "2026-06-20T07:37:01.398021+00:00"
+    },
+    {
+      "stage": "repairing",
+      "status": "repairing",
+      "summary": "Starting self-repair cycle after code_error; cycle 1 of 3.",
+      "failure_type": "code_error",
+      "next_state": "planning",
+      "timestamp": "2026-06-20T07:37:01.403414+00:00"
+    },
+    {
+      "stage": "planning",
+      "status": "done",
+      "summary": "Built minimal execution plan from current goal.",
+      "failure_type": null,
+      "next_state": "routing",
+      "timestamp": "2026-06-20T07:37:01.406846+00:00"
+    },
+    {
+      "stage": "completed",
+      "status": "done",
+      "summary": "External verifier reran and passed git diff --check, npm lint/typecheck/test/build/smoke, npm audit, and Browser DOM verification; screenshot capture timed out in Browser CDP.",
+      "failure_type": null,
+      "next_state": "completed",
+      "timestamp": "2026-06-20T08:24:02.601182+00:00"
+    }
+  ],
+  "gates": {
+    "preflight_gate": {
+      "status": "passed",
+      "reason": "preflight checks passed",
+      "contracts": [
+        {
+          "name": "git",
+          "standard_name": "vcs_adapter",
+          "target": "git",
+          "mode": "read_write",
+          "risk_level": "medium",
+          "auth_requirements": [],
+          "capabilities": [
+            "status",
+            "diff",
+            "branch",
+            "commit_context"
+          ]
+        },
+        {
+          "name": "test",
+          "standard_name": "ci_test_runner",
+          "target": "test",
+          "mode": "read_only",
+          "risk_level": "low",
+          "auth_requirements": [],
+          "capabilities": [
+            "unit",
+            "integration",
+            "verification"
+          ]
+        },
+        {
+          "name": "codex_executor",
+          "standard_name": "codex_writer_executor",
+          "target": "codex",
+          "mode": "read_write",
+          "risk_level": "high",
+          "auth_requirements": [
+            "codex_login"
+          ],
+          "capabilities": [
+            "non_interactive_code_writer",
+            "local_diff_generation",
+            "self_contained_task_execution"
+          ]
+        }
+      ],
+      "auth_resolution": {
+        "git": [],
+        "test": [],
+        "codex_executor": [
+          {
+            "requirement": "codex_login",
+            "source": "missing",
+            "env": null,
+            "available": false
+          }
+        ]
+      },
+      "missing_auth": [
+        {
+          "connector": "codex_executor",
+          "requirement": "codex_login",
+          "source": "missing",
+          "env": null,
+          "available": false
+        }
+      ],
+      "tool_policy": {
+        "status": "passed",
+        "reason": "tool policy passed",
+        "decisions": [
+          {
+            "connector": "git",
+            "target": "git",
+            "mode": "read_write",
+            "risk_level": "medium",
+            "decision": "allowed",
+            "reason": "connector is allowed by policy",
+            "failure_type": null
+          },
+          {
+            "connector": "test",
+            "target": "test",
+            "mode": "read_only",
+            "risk_level": "low",
+            "decision": "allowed",
+            "reason": "connector is allowed by policy",
+            "failure_type": null
+          },
+          {
+            "connector": "codex_executor",
+            "target": "codex",
+            "mode": "read_write",
+            "risk_level": "high",
+            "decision": "allowed",
+            "reason": "connector is explicitly approved",
+            "failure_type": null
+          }
+        ],
+        "failure_type": null
+      },
+      "failure_type": null
+    }
+  },
+  "issues": {
+    "count": 7,
+    "items": [
+      {
+        "id": "ISSUE-001",
+        "title": "Repair is executed through the codex_executor connector in the existing DEV-...",
+        "status": "ready",
+        "priority": 1,
+        "goal": "Use Loop to repair the DEV-016 verifier test failure in the existing DEV-016 worktree without changing the business scope. The known failure is npm run test: apps/api/src/access.test.ts still expects seed-dev-015 while DEV-016 correctly updates permission policy output to seed-dev-016 and adds AI permissions. Repair only what is needed, keep DEV-016 AI Framework Center and AI Run productionization behavior intact, update DEV-016/AUDIT-016 verification status if needed, and rerun gates.",
+        "acceptance": [
+          "Repair is executed through the codex_executor connector in the existing DEV-016 isolated worktree, not by manual chat edits."
+        ],
+        "scope": {
+          "include": [
+            "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-016-CODEX-1/WT-7F6D22F9"
+          ],
+          "exclude": [
+            "new business features",
+            "finance system behavior",
+            "procurement system",
+            "inventory system",
+            "ERP expansion",
+            "external agents",
+            "external vector database",
+            "external notifications",
+            "mobile app",
+            "new top-level menu",
+            "production writes",
+            "deployment",
+            "secrets"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-002",
+        "title": "The repair is limited to the known access.test.ts expectation mismatch unles...",
+        "status": "ready",
+        "priority": 2,
+        "goal": "Use Loop to repair the DEV-016 verifier test failure in the existing DEV-016 worktree without changing the business scope. The known failure is npm run test: apps/api/src/access.test.ts still expects seed-dev-015 while DEV-016 correctly updates permission policy output to seed-dev-016 and adds AI permissions. Repair only what is needed, keep DEV-016 AI Framework Center and AI Run productionization behavior intact, update DEV-016/AUDIT-016 verification status if needed, and rerun gates.",
+        "acceptance": [
+          "The repair is limited to the known access.test.ts expectation mismatch unless verification exposes a directly related regression."
+        ],
+        "scope": {
+          "include": [
+            "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-016-CODEX-1/WT-7F6D22F9"
+          ],
+          "exclude": [
+            "new business features",
+            "finance system behavior",
+            "procurement system",
+            "inventory system",
+            "ERP expansion",
+            "external agents",
+            "external vector database",
+            "external notifications",
+            "mobile app",
+            "new top-level menu",
+            "production writes",
+            "deployment",
+            "secrets"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-003",
+        "title": "DEV-016 behavior remains intact: AI Framework, Framework Version, AI Run, in...",
+        "status": "ready",
+        "priority": 3,
+        "goal": "Use Loop to repair the DEV-016 verifier test failure in the existing DEV-016 worktree without changing the business scope. The known failure is npm run test: apps/api/src/access.test.ts still expects seed-dev-015 while DEV-016 correctly updates permission policy output to seed-dev-016 and adds AI permissions. Repair only what is needed, keep DEV-016 AI Framework Center and AI Run productionization behavior intact, update DEV-016/AUDIT-016 verification status if needed, and rerun gates.",
+        "acceptance": [
+          "DEV-016 behavior remains intact: AI Framework, Framework Version, AI Run, input/output snapshots, source evidence, adoption/rejection/change records, failure classification, retry policy metadata, permissions, audit records, migrations, frontend evidence/config surfaces, and project memory."
+        ],
+        "scope": {
+          "include": [
+            "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-016-CODEX-1/WT-7F6D22F9"
+          ],
+          "exclude": [
+            "new business features",
+            "finance system behavior",
+            "procurement system",
+            "inventory system",
+            "ERP expansion",
+            "external agents",
+            "external vector database",
+            "external notifications",
+            "mobile app",
+            "new top-level menu",
+            "production writes",
+            "deployment",
+            "secrets"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-004",
+        "title": "AI remains unable to approve, reject, return, transfer, add-sign, publish kn...",
+        "status": "ready",
+        "priority": 4,
+        "goal": "Use Loop to repair the DEV-016 verifier test failure in the existing DEV-016 worktree without changing the business scope. The known failure is npm run test: apps/api/src/access.test.ts still expects seed-dev-015 while DEV-016 correctly updates permission policy output to seed-dev-016 and adds AI permissions. Repair only what is needed, keep DEV-016 AI Framework Center and AI Run productionization behavior intact, update DEV-016/AUDIT-016 verification status if needed, and rerun gates.",
+        "acceptance": [
+          "AI remains unable to approve, reject, return, transfer, add-sign, publish knowledge, create official tasks, sign, pay, or confirm execution without human confirmation."
+        ],
+        "scope": {
+          "include": [
+            "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-016-CODEX-1/WT-7F6D22F9"
+          ],
+          "exclude": [
+            "new business features",
+            "finance system behavior",
+            "procurement system",
+            "inventory system",
+            "ERP expansion",
+            "external agents",
+            "external vector database",
+            "external notifications",
+            "mobile app",
+            "new top-level menu",
+            "production writes",
+            "deployment",
+            "secrets"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-005",
+        "title": "Frontend remains inside existing menus only and keeps the single 1440 deskto...",
+        "status": "ready",
+        "priority": 5,
+        "goal": "Use Loop to repair the DEV-016 verifier test failure in the existing DEV-016 worktree without changing the business scope. The known failure is npm run test: apps/api/src/access.test.ts still expects seed-dev-015 while DEV-016 correctly updates permission policy output to seed-dev-016 and adds AI permissions. Repair only what is needed, keep DEV-016 AI Framework Center and AI Run productionization behavior intact, update DEV-016/AUDIT-016 verification status if needed, and rerun gates.",
+        "acceptance": [
+          "Frontend remains inside existing menus only and keeps the single 1440 desktop workspace target."
+        ],
+        "scope": {
+          "include": [
+            "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-016-CODEX-1/WT-7F6D22F9"
+          ],
+          "exclude": [
+            "new business features",
+            "finance system behavior",
+            "procurement system",
+            "inventory system",
+            "ERP expansion",
+            "external agents",
+            "external vector database",
+            "external notifications",
+            "mobile app",
+            "new top-level menu",
+            "production writes",
+            "deployment",
+            "secrets"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-006",
+        "title": "Run and pass git diff --check, npm run lint, npm run typecheck, npm run test...",
+        "status": "ready",
+        "priority": 6,
+        "goal": "Use Loop to repair the DEV-016 verifier test failure in the existing DEV-016 worktree without changing the business scope. The known failure is npm run test: apps/api/src/access.test.ts still expects seed-dev-015 while DEV-016 correctly updates permission policy output to seed-dev-016 and adds AI permissions. Repair only what is needed, keep DEV-016 AI Framework Center and AI Run productionization behavior intact, update DEV-016/AUDIT-016 verification status if needed, and rerun gates.",
+        "acceptance": [
+          "Run and pass git diff --check, npm run lint, npm run typecheck, npm run test, npm run build, npm run smoke:api, and npm audit --audit-level=low."
+        ],
+        "scope": {
+          "include": [
+            "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-016-CODEX-1/WT-7F6D22F9"
+          ],
+          "exclude": [
+            "new business features",
+            "finance system behavior",
+            "procurement system",
+            "inventory system",
+            "ERP expansion",
+            "external agents",
+            "external vector database",
+            "external notifications",
+            "mobile app",
+            "new top-level menu",
+            "production writes",
+            "deployment",
+            "secrets"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-007",
+        "title": "If any gate fails, classify the failure, repair up to Loop retry limits, or ...",
+        "status": "ready",
+        "priority": 7,
+        "goal": "Use Loop to repair the DEV-016 verifier test failure in the existing DEV-016 worktree without changing the business scope. The known failure is npm run test: apps/api/src/access.test.ts still expects seed-dev-015 while DEV-016 correctly updates permission policy output to seed-dev-016 and adds AI permissions. Repair only what is needed, keep DEV-016 AI Framework Center and AI Run productionization behavior intact, update DEV-016/AUDIT-016 verification status if needed, and rerun gates.",
+        "acceptance": [
+          "If any gate fails, classify the failure, repair up to Loop retry limits, or write intent debt/repair queue if unresolved."
+        ],
+        "scope": {
+          "include": [
+            "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-016-CODEX-1/WT-7F6D22F9"
+          ],
+          "exclude": [
+            "new business features",
+            "finance system behavior",
+            "procurement system",
+            "inventory system",
+            "ERP expansion",
+            "external agents",
+            "external vector database",
+            "external notifications",
+            "mobile app",
+            "new top-level menu",
+            "production writes",
+            "deployment",
+            "secrets"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      }
+    ]
+  },
+  "failures": [
+    {
+      "stage": "executing",
+      "failure_type": "code_error",
+      "summary": "CI suite failed: test.",
+      "at": "2026-06-20T07:37:01.398021+00:00"
+    },
+    {
+      "stage": "repairing",
+      "failure_type": "code_error",
+      "summary": "Starting self-repair cycle after code_error; cycle 1 of 3.",
+      "at": "2026-06-20T07:37:01.403414+00:00"
+    }
+  ],
+  "intent_debt": null,
+  "repair_queue": {
+    "queued": false
+  },
+  "verification": {
+    "ci_setup": {
+      "name": "setup",
+      "command": [
+        "/Users/jason/.local/nodejs/node-v24.17.0-darwin-arm64/bin/npm",
+        "ci"
+      ],
+      "cwd": "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-016-CODEX-1/WT-7F6D22F9",
+      "exit_code": 0,
+      "stdout": "added 263 packages, and audited 268 packages in 3s\n\n73 packages are looking for funding\n  run `npm fund` for details\n\nfound 0 vulnerabilities",
+      "stderr": "",
+      "status": "passed"
+    },
+    "ci_summary": {
+      "total": 7,
+      "passed": 7,
+      "failed": 0,
+      "stopped_on_first_failure": false,
+      "commands": [
+        "git diff --check",
+        "npm run lint",
+        "npm run typecheck",
+        "npm run test",
+        "npm run build",
+        "npm run smoke:api",
+        "npm audit --audit-level=low"
+      ],
+      "test_result": "14 test files and 56 tests passed",
+      "audit_result": "0 vulnerabilities"
+    },
+    "eval_summary": {
+      "browser_dom": "Passed on http://127.0.0.1:3014 with 1440 viewport: admin/113113 login succeeded, System Settings displayed policy seed-dev-016 and AI Framework list, AI Frameworks stayed inside existing System Settings menu, and no new top-level AI menu appeared.",
+      "screenshot_capture": "Browser CDP screenshot capture timed out; DOM verification success recorded and screenshot artifact success is not claimed."
+    },
+    "artifact_types": {
+      "repository_memory_context": 1,
+      "project_memory_index_context": 1,
+      "issue_backlog": 2,
+      "tool_contracts": 1,
+      "missing_auth": 1,
+      "tool_policy": 1,
+      "execution_log": 1,
+      "ci_setup_result": 1,
+      "ci_suite_summary": 1,
+      "ci_suite_results": 1,
+      "self_repair_plan": 1
+    },
+    "reports_count": 8,
+    "trace_count": 31
+  },
+  "worktrees": [
+    "WT-2A36D8B1"
+  ],
+  "subagents": [],
+  "next_action": "No further repair action required. If a screenshot artifact is mandatory, rerun Browser screenshot capture; DOM verification has already passed."
+}

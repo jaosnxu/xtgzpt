@@ -431,6 +431,46 @@ h2 {
   gap: 12px;
 }
 
+.ai-governance {
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.ai-framework-list,
+.ai-run-list {
+  display: grid;
+  gap: 10px;
+}
+
+.ai-framework-row,
+.ai-run-row {
+  min-height: 76px;
+  padding: 12px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #fbfcfe;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.ai-framework-row strong,
+.ai-framework-row small,
+.ai-run-row strong,
+.ai-run-row small {
+  display: block;
+}
+
+.ai-framework-row small,
+.ai-run-row small {
+  margin-top: 4px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .settings-item {
   min-height: 82px;
   padding: 14px;

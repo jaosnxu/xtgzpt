@@ -176,6 +176,23 @@ DEV-015 当前实现要求：
 - 同意最终节点后合同写回 `approved`；驳回写回 `rejected`；退回写回 `revision_required`。
 - 转交和加签只改变人工节点处理链路并写审计，不代表审批通过。
 
+## 10.1 AI Framework / AI Run
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| GET | `/settings/ai-frameworks` | 在系统设置内查看 AI 框架和版本 |
+| PUT | `/settings/ai-frameworks/{id}` | 由人类管理员创建新的 AI 框架版本 |
+| GET | `/ai/runs` | 按权限查看 AI Run 列表 |
+| GET | `/ai/runs/{id}` | 按权限查看 AI Run 输入/输出快照、来源证据和人工决策 |
+
+DEV-016 当前实现要求：
+
+- AI Framework 配置必须具备 `configure_ai_frameworks` 权限，且入口只在既有系统设置中。
+- AI Run 读取必须具备 `read_ai_runs` 权限，并继承来源对象权限。
+- AI Run 必须记录框架、版本、场景、操作者、组织、来源对象、来源 id、输入/输出快照、上下文来源、状态、失败分类、重试策略和完成时间。
+- AI 输出的采纳、驳回和修改必须由人类账号记录。
+- 不提供 AI 自动审批、自动发布知识、自动创建正式任务、自动签署、自动付款或自动确认执行接口。
+
 ## 11. 文件
 
 | 方法 | 路径 | 用途 |

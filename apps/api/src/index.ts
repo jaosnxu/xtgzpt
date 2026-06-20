@@ -29,6 +29,19 @@ import {
   seedUsers,
   visibleOrganizationsForUser,
   type AiDraftRecord,
+  type AiFrameworkRecord,
+  type AiFrameworkVersionRecord,
+  type AiRetryPolicy,
+  type AiRunDecisionRecord,
+  type AiRunFailureClass,
+  type AiRunRecord,
+  type AiRunSourceEvidenceRecord,
+  type AiRunSourceObjectType,
+  type AiRunStatus,
+  type AiRunWithDetails,
+  type AiScenario,
+  type AiSnapshotKind,
+  type AiSnapshotRecord,
   type ApprovalActionRecord,
   type ApprovalActionType,
   type ApprovalNodeRecord,
@@ -173,6 +186,18 @@ interface ArchiveFileBody {
 
 interface AiFileReferenceBody {
   fileIds?: string[];
+}
+
+interface UpdateAiFrameworkBody {
+  status?: AiFrameworkRecord["status"];
+  version?: string;
+  provider?: AiFrameworkVersionRecord["provider"];
+  model?: string;
+  promptTemplate?: string;
+  boundaryPolicy?: string;
+  sourceEvidenceRequired?: boolean;
+  retryPolicy?: Partial<AiRetryPolicy>;
+  changeReason?: string;
 }
 
 interface ContractUploadBody {
@@ -328,6 +353,12 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     chatThreads,
     chatMessages,
     aiDrafts,
+    aiFrameworks,
+    aiFrameworkVersions,
+    aiRuns,
+    aiSnapshots,
+    aiRunSourceEvidence,
+    aiRunDecisions,
     knowledgeItems,
     knowledgeVersions,
     projectMemories,
@@ -347,6 +378,114 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
   const server = Fastify({
     logger: true
   });
+
+  const defaultRetryPolicy: AiRetryPolicy = {
+    maxRetries: 1,
+    retryableFailureClasses: ["provider_error", "timeout", "rate_limited"],
+    backoffSeconds: 2
+  };
+
+  function ensureAiFrameworkDefaults() {
+    const timestamp = new Date(0).toISOString();
+    const defaults: Array<{
+      id: string;
+      name: string;
+      scenario: AiScenario;
+      version: string;
+      provider: AiFrameworkVersionRecord["provider"];
+      model: string;
+      promptTemplate: string;
+    }> = [
+      {
+        id: "chat_summary_v1",
+        name: "聊天整理框架",
+        scenario: "chat_summary",
+        version: fallbackAiFrameworkVersion,
+        provider: "template",
+        model: "template",
+        promptTemplate: "基于授权聊天消息生成摘要草稿，不能创建正式对象。"
+      },
+      {
+        id: "task_draft_v1",
+        name: "任务草稿框架",
+        scenario: "task_draft",
+        version: fallbackAiFrameworkVersion,
+        provider: "template",
+        model: "template",
+        promptTemplate: "基于授权聊天消息生成任务草稿，必须等待人工确认。"
+      },
+      {
+        id: "knowledge_draft_v1",
+        name: "知识草稿框架",
+        scenario: "knowledge_draft",
+        version: fallbackAiFrameworkVersion,
+        provider: "template",
+        model: "template",
+        promptTemplate: "基于授权聊天消息生成知识草稿，确认后只能提交审核。"
+      },
+      {
+        id: "knowledge_query_v1",
+        name: "知识问答框架",
+        scenario: "knowledge_query",
+        version: fallbackAiFrameworkVersion,
+        provider: "template",
+        model: "local-fulltext",
+        promptTemplate: "只检索当前用户有权读取的已发布知识和项目记忆。"
+      },
+      {
+        id: "contract_review_v1",
+        name: "合同审查框架",
+        scenario: "contract_review",
+        version: contractFrameworkVersion,
+        provider: "local_structured",
+        model: "local-contract-review",
+        promptTemplate: "基于授权合同版本输出风险、原文标注和 A/B/C 方案，不确认风险。"
+      }
+    ];
+
+    let changed = false;
+
+    for (const item of defaults) {
+      if (aiFrameworks.some((framework) => framework.id === item.id)) {
+        continue;
+      }
+
+      const versionId = `${item.id}:${item.version}`;
+      aiFrameworks.push({
+        id: item.id,
+        name: item.name,
+        scenario: item.scenario,
+        organizationId: null,
+        status: "active",
+        activeVersionId: versionId,
+        createdByUserId: "system",
+        createdAt: timestamp,
+        updatedAt: timestamp
+      });
+      aiFrameworkVersions.push({
+        id: versionId,
+        frameworkId: item.id,
+        version: item.version,
+        provider: item.provider,
+        model: item.model,
+        promptTemplate: item.promptTemplate,
+        boundaryPolicy:
+          "AI can analyze, summarize, remind, suggest, and draft only; human confirmation is required for formal business actions.",
+        sourceEvidenceRequired: true,
+        retryPolicy: defaultRetryPolicy,
+        createdByUserId: "system",
+        changeReason: "DEV-016 default framework seed",
+        createdAt: timestamp
+      });
+      changed = true;
+    }
+
+    if (changed) {
+      store.save();
+    }
+  }
+
+  ensureAiFrameworkDefaults();
 
   server.addHook("onRequest", async (request) => {
     if (
@@ -404,6 +543,275 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     auditLogs.push(entry);
     store.save();
     return entry;
+  }
+
+  function activeAiFrameworkForScenario(scenario: AiScenario) {
+    const framework = aiFrameworks.find((item) => item.scenario === scenario && item.status === "active") ??
+      aiFrameworks.find((item) => item.scenario === scenario);
+    const version = framework ? aiFrameworkVersions.find((item) => item.id === framework.activeVersionId) ?? null : null;
+
+    return {
+      framework: framework ?? null,
+      version
+    };
+  }
+
+  function classifyAiFailure(message: string): AiRunFailureClass {
+    if (/permission|forbidden|unauthorized/i.test(message)) {
+      return "permission_denied";
+    }
+
+    if (/timeout/i.test(message)) {
+      return "timeout";
+    }
+
+    if (/429|rate/i.test(message)) {
+      return "rate_limited";
+    }
+
+    if (/validation|required|invalid/i.test(message)) {
+      return "validation_error";
+    }
+
+    if (/ark|provider|chat_failed|empty_content/i.test(message)) {
+      return "provider_error";
+    }
+
+    return "unknown";
+  }
+
+  function createAiSnapshot(runId: string, kind: AiSnapshotKind, payload: unknown, timestamp: string) {
+    const serialized = JSON.stringify(payload);
+    const snapshot: AiSnapshotRecord = {
+      id: `ai-snapshot-${randomUUID()}`,
+      runId,
+      kind,
+      checksum: checksumForContent(serialized),
+      payload,
+      createdAt: timestamp
+    };
+    aiSnapshots.push(snapshot);
+    return snapshot;
+  }
+
+  function aiRunWithDetails(run: AiRunRecord): AiRunWithDetails {
+    return {
+      ...run,
+      framework: aiFrameworks.find((framework) => framework.id === run.frameworkId) ?? null,
+      frameworkVersionRecord:
+        aiFrameworkVersions.find((version) => version.id === run.frameworkVersionId) ?? null,
+      inputSnapshot: aiSnapshots.find((snapshot) => snapshot.id === run.inputSnapshotRef) ?? null,
+      outputSnapshot: run.outputSnapshotRef
+        ? aiSnapshots.find((snapshot) => snapshot.id === run.outputSnapshotRef) ?? null
+        : null,
+      sourceEvidence: aiRunSourceEvidence.filter((evidence) => evidence.runId === run.id),
+      decisions: aiRunDecisions.filter((decision) => decision.runId === run.id)
+    };
+  }
+
+  function createAiRun({
+    request,
+    user,
+    scenario,
+    organizationId,
+    sourceObjectType,
+    sourceObjectId,
+    sourceIds,
+    contextSourceIds,
+    inputPayload
+  }: {
+    request: FastifyRequest;
+    user: UserAccount;
+    scenario: AiScenario;
+    organizationId: string;
+    sourceObjectType: AiRunSourceObjectType;
+    sourceObjectId: string;
+    sourceIds: string[];
+    contextSourceIds: string[];
+    inputPayload: unknown;
+  }) {
+    const selected = activeAiFrameworkForScenario(scenario);
+    const timestamp = nowIso();
+    const runId = `ai-run-${randomUUID()}`;
+    const frameworkId = selected.framework?.id ?? `${scenario}_unconfigured`;
+    const frameworkVersionId = selected.version?.id ?? `${frameworkId}:unconfigured`;
+    const frameworkVersion = selected.version?.version ?? fallbackAiFrameworkVersion;
+    const retryPolicy = selected.version?.retryPolicy ?? defaultRetryPolicy;
+    const inputSnapshot = createAiSnapshot(runId, "input", inputPayload, timestamp);
+    const run: AiRunRecord = {
+      id: runId,
+      frameworkId,
+      frameworkVersionId,
+      frameworkVersion,
+      scenario,
+      actorUserId: user.id,
+      organizationId,
+      sourceObjectType,
+      sourceObjectId,
+      sourceIds,
+      inputSnapshotRef: inputSnapshot.id,
+      outputSnapshotRef: null,
+      contextSourceIds,
+      status: "running",
+      failureClass: null,
+      failureMessage: null,
+      retryPolicy,
+      retryAttempt: 0,
+      maxRetries: retryPolicy.maxRetries,
+      createdAt: timestamp,
+      completedAt: null
+    };
+    aiRuns.push(run);
+    recordAudit({
+      request,
+      user,
+      action: "ai.run_created",
+      objectType: "ai_run",
+      objectId: run.id,
+      organizationId,
+      afterSnapshotRef: inputSnapshot.id,
+      reason: `ai_run_created:${scenario}`,
+      result: "success",
+      aiInvolved: true,
+      aiFrameworkVersion: run.frameworkVersion
+    });
+    return run;
+  }
+
+  function appendAiRunEvidence(run: AiRunRecord, evidence: Omit<AiRunSourceEvidenceRecord, "id" | "runId" | "createdAt">[]) {
+    const timestamp = nowIso();
+    aiRunSourceEvidence.push(
+      ...evidence.map((item) => ({
+        id: `ai-evidence-${randomUUID()}`,
+        runId: run.id,
+        createdAt: timestamp,
+        ...item
+      }))
+    );
+  }
+
+  function completeAiRun({
+    request,
+    user,
+    run,
+    status,
+    outputPayload,
+    failureClass = null,
+    failureMessage = null,
+    frameworkVersion,
+    contextSourceIds
+  }: {
+    request: FastifyRequest;
+    user: UserAccount;
+    run: AiRunRecord;
+    status: Exclude<AiRunStatus, "created" | "running">;
+    outputPayload: unknown;
+    failureClass?: AiRunFailureClass | null;
+    failureMessage?: string | null;
+    frameworkVersion?: string;
+    contextSourceIds?: string[];
+  }) {
+    const timestamp = nowIso();
+    const outputSnapshot = createAiSnapshot(run.id, "output", outputPayload, timestamp);
+    run.status = status;
+    run.outputSnapshotRef = outputSnapshot.id;
+    run.failureClass = failureClass;
+    run.failureMessage = failureMessage;
+    run.completedAt = timestamp;
+    run.frameworkVersion = frameworkVersion ?? run.frameworkVersion;
+    run.contextSourceIds = contextSourceIds ?? run.contextSourceIds;
+    recordAudit({
+      request,
+      user,
+      action: status === "succeeded" ? "ai.run_succeeded" : "ai.run_failed",
+      objectType: "ai_run",
+      objectId: run.id,
+      organizationId: run.organizationId,
+      beforeSnapshotRef: run.inputSnapshotRef,
+      afterSnapshotRef: outputSnapshot.id,
+      reason: status === "succeeded" ? `ai_run_succeeded:${run.scenario}` : failureMessage ?? "ai_run_failed",
+      result: status === "succeeded" ? "success" : "failure",
+      aiInvolved: true,
+      aiFrameworkVersion: run.frameworkVersion
+    });
+    store.save();
+    return run;
+  }
+
+  function aiRunForDraft(draft: AiDraftRecord) {
+    return aiRuns
+      .filter((run) => run.sourceObjectType === "chat_thread" && run.sourceObjectId === draft.threadId)
+      .find((run) => {
+        if (run.status !== "succeeded" || !run.outputSnapshotRef) {
+          return false;
+        }
+
+        const output = aiSnapshots.find((snapshot) => snapshot.id === run.outputSnapshotRef);
+        if (!output || typeof output.payload !== "object" || output.payload === null || !("draftId" in output.payload)) {
+          return false;
+        }
+
+        return (output.payload as { draftId?: unknown }).draftId === draft.id;
+      });
+  }
+
+  function recordAiRunDecision({
+    request,
+    user,
+    run,
+    draftId,
+    decision,
+    targetObjectType,
+    targetObjectId,
+    changeSummary,
+    reason
+  }: {
+    request: FastifyRequest;
+    user: UserAccount;
+    run: AiRunRecord | undefined;
+    draftId: string | null;
+    decision: AiRunDecisionRecord["decision"];
+    targetObjectType: string | null;
+    targetObjectId: string | null;
+    changeSummary: string | null;
+    reason: string;
+  }) {
+    if (!run) {
+      return undefined;
+    }
+
+    const decisionRecord: AiRunDecisionRecord = {
+      id: `ai-decision-${randomUUID()}`,
+      runId: run.id,
+      draftId,
+      decision,
+      actorUserId: user.id,
+      targetObjectType,
+      targetObjectId,
+      changeSummary,
+      reason,
+      createdAt: nowIso()
+    };
+    aiRunDecisions.push(decisionRecord);
+    recordAudit({
+      request,
+      user,
+      action:
+        decision === "adopted"
+          ? "ai.output_adopted"
+          : decision === "changed"
+            ? "ai.output_changed"
+            : "ai.output_rejected",
+      objectType: "ai_run",
+      objectId: run.id,
+      organizationId: run.organizationId,
+      reason,
+      result: "success",
+      aiInvolved: true,
+      aiFrameworkVersion: run.frameworkVersion
+    });
+    store.save();
+    return decisionRecord;
   }
 
   function recordDeniedAccess({
@@ -714,6 +1122,45 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
 
   function visibleApprovalsForUser(user: UserAccount) {
     return approvals.filter((approval) => canReadApproval(user, approval));
+  }
+
+  function canReadAiRun(user: UserAccount, run: AiRunRecord) {
+    if (!canUseAiCapability(user, "read_ai_runs", {
+      organizationId: run.organizationId,
+      ownerUserId: run.actorUserId,
+      participantUserIds: [run.actorUserId]
+    })) {
+      return false;
+    }
+
+    if (user.role === "super_admin" || run.actorUserId === user.id) {
+      return true;
+    }
+
+    if (run.sourceObjectType === "chat_thread") {
+      const thread = chatThreads.find((candidate) => candidate.id === run.sourceObjectId);
+      return Boolean(thread && canReadChatThread(user, thread));
+    }
+
+    if (run.sourceObjectType === "contract") {
+      const contract = contracts.find((candidate) => candidate.id === run.sourceObjectId);
+      return Boolean(contract && canReadContract(user, contract));
+    }
+
+    if (run.sourceObjectType === "approval") {
+      const approval = approvals.find((candidate) => candidate.id === run.sourceObjectId);
+      return Boolean(approval && canReadApproval(user, approval));
+    }
+
+    return canAccessResourceData(user, {
+      organizationId: run.organizationId,
+      ownerUserId: run.actorUserId,
+      participantUserIds: [run.actorUserId]
+    });
+  }
+
+  function visibleAiRunsForUser(user: UserAccount) {
+    return aiRuns.filter((run) => canReadAiRun(user, run)).map(aiRunWithDetails);
   }
 
   function findVisibleApproval(user: UserAccount, approvalId: string) {
@@ -2237,6 +2684,180 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     };
   });
 
+  server.get("/settings/ai-frameworks", async (request, reply) => {
+    const user = await requireSettingsAccess(request, reply);
+
+    if (!user) {
+      return;
+    }
+
+    if (!canUseAiCapability(user, "configure_ai_frameworks")) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "ai",
+        action: "configure_ai_frameworks",
+        resourceType: "ai_framework",
+        reason: "forbidden"
+      });
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    recordAudit({
+      request,
+      user,
+      action: "ai.framework_config_viewed",
+      objectType: "ai_framework",
+      reason: "settings_ai_frameworks",
+      result: "success",
+      aiInvolved: true,
+      aiFrameworkVersion: null
+    });
+
+    return {
+      frameworks: aiFrameworks.map((framework) => ({
+        ...framework,
+        versions: aiFrameworkVersions
+          .filter((version) => version.frameworkId === framework.id)
+          .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      }))
+    };
+  });
+
+  server.put<{ Body: UpdateAiFrameworkBody; Params: { id: string } }>("/settings/ai-frameworks/:id", async (request, reply) => {
+    const user = await requireSettingsAccess(request, reply);
+
+    if (!user) {
+      return;
+    }
+
+    if (!canUseAiCapability(user, "configure_ai_frameworks")) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "ai",
+        action: "configure_ai_frameworks",
+        resourceType: "ai_framework",
+        reason: "forbidden"
+      });
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    const framework = aiFrameworks.find((item) => item.id === request.params.id);
+
+    if (!framework) {
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    const currentVersion = aiFrameworkVersions.find((version) => version.id === framework.activeVersionId);
+    const timestamp = nowIso();
+    const normalizedRetryPolicy: AiRetryPolicy = {
+      maxRetries: Math.max(0, Math.min(request.body?.retryPolicy?.maxRetries ?? currentVersion?.retryPolicy.maxRetries ?? 1, 3)),
+      retryableFailureClasses:
+        request.body?.retryPolicy?.retryableFailureClasses ?? currentVersion?.retryPolicy.retryableFailureClasses ?? defaultRetryPolicy.retryableFailureClasses,
+      backoffSeconds: Math.max(0, Math.min(request.body?.retryPolicy?.backoffSeconds ?? currentVersion?.retryPolicy.backoffSeconds ?? 2, 60))
+    };
+    const versionLabel = textOrDefault(
+      request.body?.version,
+      `${currentVersion?.version ?? framework.scenario}-cfg-${aiFrameworkVersions.filter((version) => version.frameworkId === framework.id).length + 1}`
+    );
+    const version: AiFrameworkVersionRecord = {
+      id: `${framework.id}:${versionLabel}:${randomUUID()}`,
+      frameworkId: framework.id,
+      version: versionLabel,
+      provider: request.body?.provider ?? currentVersion?.provider ?? "template",
+      model: textOrDefault(request.body?.model, currentVersion?.model ?? "template"),
+      promptTemplate: textOrDefault(request.body?.promptTemplate, currentVersion?.promptTemplate ?? "AI draft only."),
+      boundaryPolicy: textOrDefault(
+        request.body?.boundaryPolicy,
+        currentVersion?.boundaryPolicy ??
+          "AI can analyze, summarize, remind, suggest, and draft only; human confirmation is required."
+      ),
+      sourceEvidenceRequired: request.body?.sourceEvidenceRequired ?? currentVersion?.sourceEvidenceRequired ?? true,
+      retryPolicy: normalizedRetryPolicy,
+      createdByUserId: user.id,
+      changeReason: textOrDefault(request.body?.changeReason, "AI framework configuration changed by human administrator"),
+      createdAt: timestamp
+    };
+    const beforeSnapshotRef = framework.activeVersionId;
+    framework.activeVersionId = version.id;
+    framework.status = request.body?.status ?? framework.status;
+    framework.updatedAt = timestamp;
+    aiFrameworkVersions.push(version);
+    store.save();
+    recordAudit({
+      request,
+      user,
+      action: "ai.framework_version_created",
+      objectType: "ai_framework",
+      objectId: framework.id,
+      organizationId: framework.organizationId,
+      beforeSnapshotRef,
+      afterSnapshotRef: version.id,
+      reason: version.changeReason,
+      result: "success",
+      aiInvolved: true,
+      aiFrameworkVersion: version.version
+    });
+
+    return {
+      framework,
+      version
+    };
+  });
+
+  server.get("/ai/runs", async (request, reply) => {
+    const user = await requireUser(request, reply);
+
+    if (!user) {
+      return;
+    }
+
+    if (!canUseAiCapability(user, "read_ai_runs", { ownerUserId: user.id, participantUserIds: [user.id] })) {
+      recordDeniedAccess({
+        request,
+        user,
+        dimension: "ai",
+        action: "read_ai_runs",
+        resourceType: "ai_run",
+        reason: "forbidden"
+      });
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    return {
+      runs: visibleAiRunsForUser(user).sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    };
+  });
+
+  server.get<{ Params: { id: string } }>("/ai/runs/:id", async (request, reply) => {
+    const user = await requireUser(request, reply);
+
+    if (!user) {
+      return;
+    }
+
+    const run = aiRuns.find((candidate) => candidate.id === request.params.id);
+
+    if (!run || !canReadAiRun(user, run)) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "ai_run",
+        reason: "ai_run:read",
+        result: "denied",
+        aiInvolved: true,
+        aiFrameworkVersion: run?.frameworkVersion ?? null
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    return {
+      run: aiRunWithDetails(run)
+    };
+  });
+
   server.get("/settings/access-denials", async (request, reply) => {
     const user = await requireOperationAccess(request, reply, "manage_permissions");
 
@@ -2970,13 +3591,59 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       projectId: thread.relatedObjectType === "project" ? thread.relatedObjectId : null,
       limit: 5
     });
+    const requestedFileIds = request.body?.fileIds ?? [];
+    const aiRun = createAiRun({
+      request,
+      user,
+      scenario: kind,
+      organizationId: thread.organizationId,
+      sourceObjectType: "chat_thread",
+      sourceObjectId: thread.id,
+      sourceIds: sourceMessageIds,
+      contextSourceIds: [...contextResults.map((item) => item.id), ...requestedFileIds],
+      inputPayload: {
+        kind,
+        threadId: thread.id,
+        sourceMessageIds,
+        contextSourceIds: contextResults.map((item) => item.id),
+        requestedFileIds
+      }
+    });
+    appendAiRunEvidence(aiRun, [
+      ...sourceMessageIds.map((messageId) => {
+        const message = chatMessages.find((candidate) => candidate.id === messageId);
+        return {
+          sourceObjectType: "chat_message",
+          sourceObjectId: thread.id,
+          sourceId: messageId,
+          title: thread.title,
+          excerpt: message?.content.slice(0, 240) ?? "chat_message",
+          accessResult: "allowed" as const
+        };
+      }),
+      ...contextResults.map((item) => ({
+        sourceObjectType: item.type,
+        sourceObjectId: item.id,
+        sourceId: item.sourceId,
+        title: item.title,
+        excerpt: item.content.slice(0, 240),
+        accessResult: "allowed" as const
+      }))
+    ]);
 
     if (sourceMessageIds.length === 0) {
+      completeAiRun({
+        request,
+        user,
+        run: aiRun,
+        status: "failed",
+        outputPayload: { error: "source_messages_required" },
+        failureClass: "validation_error",
+        failureMessage: "source_messages_required"
+      });
       reply.code(400).send({ error: "source_messages_required" });
       return undefined;
     }
-
-    const requestedFileIds = request.body?.fileIds ?? [];
 
     if (requestedFileIds.length > 0) {
       const accessibleFiles = requestedFileIds
@@ -2984,6 +3651,23 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         .filter(Boolean);
 
       if (accessibleFiles.length !== requestedFileIds.length) {
+        appendAiRunEvidence(aiRun, requestedFileIds.map((fileId) => ({
+          sourceObjectType: "file",
+          sourceObjectId: fileId,
+          sourceId: fileId,
+          title: "file",
+          excerpt: "file_reference_permission_checked",
+          accessResult: accessibleFiles.some((item) => item?.file.id === fileId) ? "allowed" : "denied"
+        })));
+        completeAiRun({
+          request,
+          user,
+          run: aiRun,
+          status: "failed",
+          outputPayload: { error: "ai_file_reference_blocked_by_permission" },
+          failureClass: "permission_denied",
+          failureMessage: "ai_file_reference_blocked_by_permission"
+        });
         recordFileDenied(request, user, "reference_ai");
         recordAudit({
           request,
@@ -3002,6 +3686,14 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
 
       for (const accessibleFile of accessibleFiles) {
         if (accessibleFile) {
+          appendAiRunEvidence(aiRun, [{
+            sourceObjectType: "file",
+            sourceObjectId: accessibleFile.file.id,
+            sourceId: accessibleFile.file.id,
+            title: accessibleFile.file.displayName,
+            excerpt: accessibleFile.version.contentText.slice(0, 240),
+            accessResult: "allowed"
+          }]);
           recordAudit({
             request,
             user,
@@ -3036,21 +3728,14 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     });
 
     if (aiResult instanceof AiProviderError) {
-      recordAudit({
+      completeAiRun({
         request,
         user,
-        action:
-          kind === "chat_summary"
-            ? "ai.chat_summarized"
-            : kind === "task_draft"
-              ? "ai.task_draft_created"
-              : "ai.knowledge_draft_created",
-        objectType: "ai_run",
-        organizationId: thread.organizationId,
-        reason: aiResult.message,
-        result: "failure",
-        aiInvolved: true,
-        aiFrameworkVersion: fallbackAiFrameworkVersion
+        run: aiRun,
+        status: "failed",
+        outputPayload: { error: aiResult.message },
+        failureClass: classifyAiFailure(aiResult.message),
+        failureMessage: aiResult.message
       });
       reply.code(502).send({ error: "ai_provider_failed" });
       return undefined;
@@ -3082,6 +3767,21 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     };
 
     aiDrafts.push(draft);
+    completeAiRun({
+      request,
+      user,
+      run: aiRun,
+      status: "succeeded",
+      outputPayload: {
+        draftId: draft.id,
+        title: draft.title,
+        content: draft.content,
+        isDraft: true,
+        humanConfirmationRequired: true
+      },
+      frameworkVersion: draft.frameworkVersion,
+      contextSourceIds: draft.contextSourceIds
+    });
     store.save();
     recordAudit({
       request,
@@ -3093,8 +3793,9 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
             ? "ai.task_draft_created"
             : "ai.knowledge_draft_created",
       objectType: "ai_run",
-      objectId: draft.id,
+      objectId: aiRun.id,
       organizationId: thread.organizationId,
+      afterSnapshotRef: draft.id,
       reason: `ai_draft:${kind}:memory_context:${contextResults.length}`,
       result: "success",
       aiInvolved: true,
@@ -3176,6 +3877,10 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const timestamp = nowIso();
     const title = textOrDefault(request.body?.title, draft.title);
     const content = textOrDefault(request.body?.content, draft.content);
+    const linkedAiRun = aiRunForDraft(draft);
+    const decisionType: AiRunDecisionRecord["decision"] =
+      title === draft.title && content === draft.content ? "adopted" : "changed";
+    const changeSummary = decisionType === "changed" ? "Human edited title or content before confirmation." : null;
 
     if (draft.kind === "task_draft") {
       const projectId = request.body?.projectId ?? (thread.relatedObjectType === "project" ? thread.relatedObjectId ?? undefined : undefined);
@@ -3242,6 +3947,17 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         result: "success",
         aiInvolved: true,
         aiFrameworkVersion: draft.frameworkVersion
+      });
+      recordAiRunDecision({
+        request,
+        user,
+        run: linkedAiRun,
+        draftId: draft.id,
+        decision: decisionType,
+        targetObjectType: "task",
+        targetObjectId: task.id,
+        changeSummary,
+        reason: "human_confirmed_ai_task_draft"
       });
 
       return reply.code(201).send({
@@ -3314,6 +4030,17 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         aiInvolved: true,
         aiFrameworkVersion: draft.frameworkVersion
       });
+      recordAiRunDecision({
+        request,
+        user,
+        run: linkedAiRun,
+        draftId: draft.id,
+        decision: decisionType,
+        targetObjectType: "knowledge_item",
+        targetObjectId: item.id,
+        changeSummary,
+        reason: "human_confirmed_ai_knowledge_draft_for_review"
+      });
 
       return reply.code(201).send({
         draft,
@@ -3362,11 +4089,86 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       aiInvolved: true,
       aiFrameworkVersion: draft.frameworkVersion
     });
+    recordAiRunDecision({
+      request,
+      user,
+      run: linkedAiRun,
+      draftId: draft.id,
+      decision: decisionType,
+      targetObjectType: "project_memory",
+      targetObjectId: memory.id,
+      changeSummary,
+      reason: "human_confirmed_ai_summary_to_memory"
+    });
 
     return reply.code(201).send({
       draft,
       memory
     });
+  });
+
+  server.post<{ Body: { reason?: string }; Params: { id: string } }>("/ai/drafts/:id/reject", async (request, reply) => {
+    const user = await requireUser(request, reply);
+
+    if (!user) {
+      return;
+    }
+
+    const visibleDraft = findVisibleAiDraft(user, request.params.id);
+
+    if (!visibleDraft) {
+      recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "ai_draft",
+        reason: "ai_draft:reject",
+        result: "denied",
+        aiInvolved: true,
+        aiFrameworkVersion: fallbackAiFrameworkVersion
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    const { draft, thread } = visibleDraft;
+
+    if (draft.status !== "draft") {
+      return reply.code(409).send({ error: "draft_already_closed" });
+    }
+
+    const reason = textOrDefault(request.body?.reason, "human_rejected_ai_output");
+    const timestamp = nowIso();
+    draft.status = "rejected";
+    draft.confirmedByUserId = user.id;
+    draft.confirmedAt = timestamp;
+    recordAudit({
+      request,
+      user,
+      action: "ai_draft.rejected",
+      objectType: "ai_draft",
+      objectId: draft.id,
+      organizationId: thread.organizationId,
+      reason,
+      result: "success",
+      aiInvolved: true,
+      aiFrameworkVersion: draft.frameworkVersion
+    });
+    recordAiRunDecision({
+      request,
+      user,
+      run: aiRunForDraft(draft),
+      draftId: draft.id,
+      decision: "rejected",
+      targetObjectType: null,
+      targetObjectId: null,
+      changeSummary: null,
+      reason
+    });
+    store.save();
+
+    return {
+      draft
+    };
   });
 
   server.post<{ Body: CreateKnowledgeItemBody }>("/knowledge/items", async (request, reply) => {
@@ -3975,7 +4777,46 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       return reply.code(403).send({ error: "forbidden" });
     }
 
+    const versionForRun = currentContractVersion(contract);
+    const contractAiRun = createAiRun({
+      request,
+      user,
+      scenario: "contract_review",
+      organizationId: contract.organizationId,
+      sourceObjectType: "contract",
+      sourceObjectId: contract.id,
+      sourceIds: versionForRun ? [versionForRun.id] : [],
+      contextSourceIds: versionForRun?.sourceEvidence.map((source) => source.sourceId) ?? [],
+      inputPayload: {
+        contractId: contract.id,
+        reviewType,
+        status: contract.status,
+        versionId: versionForRun?.id ?? null,
+        sourceEvidence: versionForRun?.sourceEvidence ?? []
+      }
+    });
+
+    if (versionForRun) {
+      appendAiRunEvidence(contractAiRun, versionForRun.sourceEvidence.map((source) => ({
+        sourceObjectType: "contract_version",
+        sourceObjectId: versionForRun.id,
+        sourceId: source.sourceId,
+        title: source.title,
+        excerpt: source.excerpt,
+        accessResult: "allowed" as const
+      })));
+    }
+
     if (reviewType === "initial" && !["draft", "revision_required"].includes(contract.status)) {
+      completeAiRun({
+        request,
+        user,
+        run: contractAiRun,
+        status: "failed",
+        outputPayload: { error: "invalid_contract_status" },
+        failureClass: "validation_error",
+        failureMessage: "invalid_contract_status"
+      });
       recordAudit({
         request,
         user,
@@ -3992,6 +4833,15 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (reviewType === "second" && (contract.currentVersion < 2 || contract.status !== "revision_required")) {
+      completeAiRun({
+        request,
+        user,
+        run: contractAiRun,
+        status: "failed",
+        outputPayload: { error: "revision_required_before_second_review" },
+        failureClass: "validation_error",
+        failureMessage: "revision_required_before_second_review"
+      });
       recordAudit({
         request,
         user,
@@ -4007,9 +4857,18 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       return reply.code(409).send({ error: "revision_required_before_second_review" });
     }
 
-    const version = currentContractVersion(contract);
+    const version = versionForRun;
 
     if (!version) {
+      completeAiRun({
+        request,
+        user,
+        run: contractAiRun,
+        status: "failed",
+        outputPayload: { error: "missing_contract_version" },
+        failureClass: "validation_error",
+        failureMessage: "missing_contract_version"
+      });
       return reply.code(409).send({ error: "missing_contract_version" });
     }
 
@@ -4043,6 +4902,22 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     contractReviews.push(review);
     contract.status = "risk_pending_confirm";
     contract.updatedAt = timestamp;
+    completeAiRun({
+      request,
+      user,
+      run: contractAiRun,
+      status: "succeeded",
+      outputPayload: {
+        reviewId: review.id,
+        summary: review.summary,
+        riskLevel: review.riskLevel,
+        riskCount: review.risks.length,
+        nextRequiredAction: review.nextRequiredAction,
+        humanConfirmationRequired: true
+      },
+      frameworkVersion: review.frameworkVersion,
+      contextSourceIds: version.sourceEvidence.map((source) => source.sourceId)
+    });
     store.save();
     recordAudit({
       request,
@@ -5225,18 +6100,57 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       projectId: project?.id ?? null,
       limit: request.body?.limit
     });
+    const queryOrganizationId = request.body?.organizationId ?? project?.organizationId ?? user.defaultOrganizationId;
+    const queryRun = createAiRun({
+      request,
+      user,
+      scenario: "knowledge_query",
+      organizationId: queryOrganizationId,
+      sourceObjectType: "knowledge_query",
+      sourceObjectId: `knowledge-query-${requestId(request)}`,
+      sourceIds: results.map((result) => result.id),
+      contextSourceIds: results.map((result) => result.sourceId),
+      inputPayload: {
+        query,
+        organizationId: queryOrganizationId,
+        projectId: project?.id ?? null,
+        permissionFiltered: true
+      }
+    });
+    appendAiRunEvidence(queryRun, results.flatMap((result) =>
+      result.sourceEvidence.map((evidence) => ({
+        sourceObjectType: result.type,
+        sourceObjectId: result.id,
+        sourceId: evidence.sourceId,
+        title: evidence.title,
+        excerpt: evidence.excerpt,
+        accessResult: "allowed" as const
+      }))
+    ));
+    completeAiRun({
+      request,
+      user,
+      run: queryRun,
+      status: "succeeded",
+      outputPayload: {
+        resultIds: results.map((result) => result.id),
+        resultCount: results.length,
+        permissionFiltered: true
+      },
+      contextSourceIds: results.map((result) => result.sourceId)
+    });
 
     recordAudit({
       request,
       user,
       action: "ai.knowledge_query_requested",
       objectType: "ai_run",
-      objectId: `knowledge-query-${requestId(request)}`,
-      organizationId: request.body?.organizationId ?? project?.organizationId ?? user.defaultOrganizationId,
+      objectId: queryRun.id,
+      organizationId: queryOrganizationId,
       reason: `knowledge_query:results:${results.length}`,
       result: "success",
       aiInvolved: true,
-      aiFrameworkVersion: fallbackAiFrameworkVersion
+      aiFrameworkVersion: queryRun.frameworkVersion
     });
     return {
       query,

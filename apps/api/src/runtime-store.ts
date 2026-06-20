@@ -3,6 +3,12 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   AiDraftRecord,
+  AiFrameworkRecord,
+  AiFrameworkVersionRecord,
+  AiRunDecisionRecord,
+  AiRunRecord,
+  AiRunSourceEvidenceRecord,
+  AiSnapshotRecord,
   ApprovalActionRecord,
   ApprovalNodeRecord,
   ApprovalRecord,
@@ -44,6 +50,12 @@ export interface RuntimeData {
   chatThreads: ChatThreadRecord[];
   chatMessages: ChatMessageRecord[];
   aiDrafts: AiDraftRecord[];
+  aiFrameworks: AiFrameworkRecord[];
+  aiFrameworkVersions: AiFrameworkVersionRecord[];
+  aiRuns: AiRunRecord[];
+  aiSnapshots: AiSnapshotRecord[];
+  aiRunSourceEvidence: AiRunSourceEvidenceRecord[];
+  aiRunDecisions: AiRunDecisionRecord[];
   knowledgeItems: KnowledgeItemRecord[];
   knowledgeVersions: KnowledgeVersionRecord[];
   projectMemories: ProjectMemoryRecord[];
@@ -81,6 +93,12 @@ function emptyRuntimeData(): RuntimeData {
     chatThreads: [],
     chatMessages: [],
     aiDrafts: [],
+    aiFrameworks: [],
+    aiFrameworkVersions: [],
+    aiRuns: [],
+    aiSnapshots: [],
+    aiRunSourceEvidence: [],
+    aiRunDecisions: [],
     knowledgeItems: [],
     knowledgeVersions: [],
     projectMemories: [],
@@ -147,6 +165,12 @@ function normalizeRuntimeData(value: unknown): RuntimeData {
     chatThreads: arrayOrEmpty<ChatThreadRecord>(source.chatThreads),
     chatMessages: arrayOrEmpty<ChatMessageRecord>(source.chatMessages),
     aiDrafts: arrayOrEmpty<AiDraftRecord>(source.aiDrafts),
+    aiFrameworks: arrayOrEmpty<AiFrameworkRecord>(source.aiFrameworks),
+    aiFrameworkVersions: arrayOrEmpty<AiFrameworkVersionRecord>(source.aiFrameworkVersions),
+    aiRuns: arrayOrEmpty<AiRunRecord>(source.aiRuns),
+    aiSnapshots: arrayOrEmpty<AiSnapshotRecord>(source.aiSnapshots),
+    aiRunSourceEvidence: arrayOrEmpty<AiRunSourceEvidenceRecord>(source.aiRunSourceEvidence),
+    aiRunDecisions: arrayOrEmpty<AiRunDecisionRecord>(source.aiRunDecisions),
     knowledgeItems: normalizeKnowledgeItems(source.knowledgeItems),
     knowledgeVersions: arrayOrEmpty<KnowledgeVersionRecord>(source.knowledgeVersions),
     projectMemories: arrayOrEmpty<ProjectMemoryRecord>(source.projectMemories),

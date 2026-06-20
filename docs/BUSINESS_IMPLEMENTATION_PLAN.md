@@ -32,6 +32,8 @@
 | AUDIT-014 | DEV-014 审计 | 已完成，本地代码审计通过；在线 audit / 浏览器验证需可用环境复核 |
 | DEV-015 | 审批闭环 | 已完成，当前沙箱无 Node/npm，需可用环境复核本地 gate |
 | AUDIT-015 | DEV-015 审计 | 已完成，当前沙箱无 Node/npm，需可用环境复核本地 gate |
+| DEV-016 | AI 框架中心和 AI Run 生产化 | 已完成，当前沙箱无 Node/npm，需可用环境复核本地 gate |
+| AUDIT-016 | DEV-016 审计 | 已完成，当前沙箱无 Node/npm，需可用环境复核本地 gate |
 
 ## 2. 总体阶段顺序
 
@@ -353,12 +355,28 @@
 - 失败分类
 - 重试策略
 - 框架配置权限
+- AI Run 读取权限
+- PostgreSQL 兼容迁移
+- 前端证据和配置展示只在既有菜单内
 
 验收：
 
 - 每次 AI 输出可追踪框架、版本、来源、结果。
 - 同一 framework version 输出结构稳定。
 - AI 失败有分类和审计。
+- AI Framework 配置只允许系统管理员或超级管理员。
+- AI Run 读取必须继承来源对象权限。
+- AI 输出采纳、驳回、修改必须由人类账号记录。
+
+当前状态：
+
+- 已完成。
+- 新增 AI Framework、Framework Version、AI Run、输入/输出快照、来源证据链接和人工采纳/驳回/修改记录。
+- 聊天 AI 草稿、知识问答和合同 AI 审查接入 AI Run。
+- AI Framework 配置只在既有“系统设置”内展示；AI Run 证据只在系统设置和既有业务页面中展示，未新增 AI 一级菜单。
+- 新增 PostgreSQL 兼容迁移资产 `0010_ai_framework_run_productionization.sql`。
+- 新增 `apps/api/src/ai-run-production.test.ts`。
+- 当前沙箱无 `node`/`npm`，本地 `npm run ci`、offline audit 和 smoke 需在 Node/npm 可用环境复核。
 
 ## 12. DEV-017 全链路响应式和页面状态验收
 
