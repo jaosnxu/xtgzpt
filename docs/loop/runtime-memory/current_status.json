@@ -1,10 +1,10 @@
 {
-  "updated_at": "2026-06-20T11:05:30.000000+00:00",
-  "active_task_id": "TASK-XTGZPT-DEV-018-CONTINUATION-2-CODEX-1",
-  "active_goal": "Finish xtgzpt DEV-018 production readiness docs in the existing DEV-018 worktree with a compact writer prompt.",
+  "updated_at": "2026-06-20T12:11:36.000000+00:00",
+  "active_task_id": "TASK-XTGZPT-DEV-019-CODEX-1",
+  "active_goal": "Reconcile stale project memory and status after DEV-018 without changing product source, API, UI, database schema, permissions, AI boundaries, secrets, deployments, production writes, or menus.",
   "status": "completed",
   "current_stage": "completed",
-  "last_summary": "DEV-018 production readiness docs and safe env placeholders completed through Loop fallback/verifier path. Local gates passed: diff check, secret scan, lint, typecheck, test, build, smoke:api, npm audit.",
+  "last_summary": "DEV-019 documentation/runtime-memory reconciliation completed. Project constitution, backlog current-stage lines, project_status, current_status, DEV-019/AUDIT-019, and action log now reflect DEV-018 completion while preserving external release limits: real deployment, production smoke, backup/restore drill, release signoff, and real env secrets.",
   "gate_status": {
     "preflight_gate": {
       "status": "passed",
