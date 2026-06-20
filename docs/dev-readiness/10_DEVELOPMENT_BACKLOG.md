@@ -109,7 +109,8 @@
 - 已完成 `AUDIT-021` 项目状态和生产准备审计
 - 已完成 `DEV-021` 真实 driver-backed PostgreSQL runtime adapter
 - 已完成 `DEV-022` release gate / production cutover audit
-- 下一阶段只能是外部 release gate 复核和签字；仍不允许在未签字 release window 内真实生产切流
+- 已完成 `DEV-023` 前端交互层产品化
+- 下一阶段只能是外部 release gate 复核和签字，或继续在既有 Phase 1 模块内做非生产切流的交互修复；仍不允许在未签字 release window 内真实生产切流
 
 ## 5. 第一阶段代码开发顺序和当前状态
 
@@ -419,6 +420,7 @@
 - `[DEV-020] API runtime PostgreSQL adapter/cutover boundary`
 - `[DEV-021] 真实 PostgreSQL runtime adapter`
 - `[DEV-022] release gate / production cutover audit`
+- `[DEV-023] 前端交互层产品化`
 
 ### DEV-016 AI 框架中心和 AI Run 生产化
 
@@ -675,6 +677,36 @@
 - 文档、runtime memory、structured-data 和本地 verifier gate 审计通过。
 - 允许进入 PR / release operator 外部门槛复核。
 - 不允许直接生产切流。生产 PostgreSQL cutover 必须先完成 branch protection、required checks、review approval、production environment approval、真实 secrets 注入审计、备份和隔离恢复演练、production smoke、rollback 目标确认和 release signoff。
+
+### DEV-023 前端交互层产品化
+
+状态：已完成。本阶段只产品化既有 Phase 1 前端交互层，补强跨模块对象跳转、详情页关系可见性、操作反馈、disabled/loading/error 状态和本地 LAN 验收交付；未新增一级菜单、未扩展产品范围、未部署或切流生产。
+
+范围：
+
+- dashboard / workbench 行和通知可跳转到相关项目、任务、合同、审批和 AI 草稿。
+- 项目详情可跳任务、项目文件、关联聊天和带项目上下文的知识检索。
+- 任务行可回到来源项目。
+- 聊天详情展示关联项目 / 任务 / 合同，可跳关联对象、带项目上下文检索，并可打开 AI 草稿确认后的正式对象。
+- 知识检索使用项目选择器控制上下文。
+- 合同 handoff 可跳审批实例；审批详情可回来源合同。
+- 系统设置可跳权限治理、AI 治理和页面状态治理面板。
+- 新增 LAN 脚本 `dev:api:lan`、`dev:web:lan` 和 README 指南。
+
+不做：
+
+- 不新增一级菜单。
+- 不新增 ERP、财务、采购、库存、销售、资产、报表或移动端。
+- 不连接生产系统、不提交 secret、不部署、不执行生产切流。
+- 不让 AI 自动审批、发布知识、创建正式任务、签署、付款或确认执行完成。
+
+验收：
+
+- Required cross-module paths 全部在既有模块内可达。
+- 登录页不展示高权限测试账号清单。
+- 关系控件在 1440 desktop-first 布局下稳定，1280/960 可压缩使用。
+- 另一台同 LAN 电脑可通过 `http://<Mac-LAN-IP>:3001` 访问本地 Web。
+- 本地命令和浏览器验证结果记录在 `docs/dev-log/DEV-023.md` 和 `docs/dev-log/AUDIT-023.md`。
 
 ## 7. 开发禁止事项
 

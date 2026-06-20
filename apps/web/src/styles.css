@@ -837,6 +837,21 @@ h2 {
   gap: 12px;
 }
 
+.scope-selector {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+}
+
+.scope-selector select {
+  height: 36px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  outline: 0;
+}
+
 .scope-note span {
   color: #667085;
   font-size: 12px;
@@ -874,7 +889,7 @@ h2 {
 }
 
 .ai-draft-row {
-  grid-template-columns: minmax(0, 1fr) auto auto auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto auto auto;
 }
 
 .record-row.active,
@@ -930,6 +945,22 @@ div.record-row {
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
+  color: #17202a;
+  text-align: left;
+}
+
+button.workbench-row {
+  cursor: pointer;
+}
+
+button.workbench-row:hover {
+  border-color: #1f7a8c;
+  background: #f3fbfb;
+}
+
+button.workbench-row:disabled {
+  cursor: default;
+  color: #17202a;
 }
 
 .status-pill.strong {
@@ -1010,6 +1041,30 @@ div.record-row {
 .muted-text {
   color: #667085;
   font-size: 13px;
+}
+
+.relationship-bar {
+  min-height: 44px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfcfe;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.relationship-bar span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
 }
 
 .empty-state {
@@ -1137,6 +1192,13 @@ div.record-row {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: start;
+  color: #17202a;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notification-item:hover {
+  border-color: #1f7a8c;
 }
 
 .notification-item.warning {

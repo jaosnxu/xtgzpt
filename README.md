@@ -13,7 +13,7 @@
 - G018 原型工具制作交付标准
 - G019 原型制作前最终冻结确认
 - Phase 1 原型冻结
-- DEV-001 到 DEV-022 代码、生产上线准备、API runtime PostgreSQL adapter 和 release gate audit 阶段
+- DEV-001 到 DEV-023 代码、生产上线准备、API runtime PostgreSQL adapter、release gate audit 和前端交互产品化阶段
 - AUDIT-021 项目状态和生产准备审计
 - 项目宪法、技术标准、业务实现阶段和测试标准收口
 
@@ -21,7 +21,7 @@
 
 - Phase 1 代码开发
 - 数据库生产持久化和 API runtime PostgreSQL cutover boundary
-- DEV-022 后续生产切流前置审计和 release gate 收口
+- DEV-023 后续前端交互产品化、跨模块对象跳转、本地 LAN 验收交付
 - API 生产实现
 - 完整权限、文件、知识、合同、审批开发
 - 本地质量门禁
@@ -34,6 +34,29 @@
 - 未经冻结确认的新一级菜单
 - 新增端形态
 - ERP 扩展
+
+## 本地 LAN 验收
+
+默认本机开发仍使用 `127.0.0.1`。需要让同一局域网另一台电脑打开前端时，在 Mac 上使用两个终端：
+
+```bash
+npm run dev:api:lan
+npm run dev:web:lan
+```
+
+查询 Mac 局域网 IP：
+
+```bash
+ipconfig getifaddr en0
+```
+
+另一台电脑打开：
+
+```text
+http://<Mac-LAN-IP>:3001
+```
+
+这是本地联调交付方式，不是生产部署、生产切流或外网发布。
 
 ## 文档入口
 

@@ -1,0 +1,92 @@
+{
+  "task_id": "TASK-XTGZPT-DEV-023-CODEX-1",
+  "goal": "Productize the existing Phase 1 frontend interaction layer without product-scope expansion, new top-level menus, production deployment, or production cutover.",
+  "status": "completed",
+  "current_stage": "completed",
+  "updated_at": "2026-06-20T18:00:30.000000+00:00",
+  "summary": "DEV-023 productized existing frontend interaction flows in the frozen Phase 1 modules. Dashboard/workbench rows and notifications now jump to related objects; project, task, chat, knowledge, contract, approval and settings views expose relationship navigation and selection-first context; LAN local delivery scripts and README instructions were added. The writer executor produced a diff but did not return a terminal report, so the verifier reran all local gates. npm ci, lint, typecheck, test, build, smoke:api and audit passed. Web/API LAN services were started and local HTTP checks passed.",
+  "changed_files": [
+    "apps/web/src/ui/App.tsx",
+    "apps/web/src/styles.css",
+    "apps/web/package.json",
+    "apps/web/tsconfig.json",
+    "apps/web/vite.config.ts",
+    "package.json",
+    ".gitignore",
+    "README.md",
+    "docs/PROJECT_CONSTITUTION.md",
+    "docs/BUSINESS_IMPLEMENTATION_PLAN.md",
+    "docs/dev-readiness/10_DEVELOPMENT_BACKLOG.md",
+    "docs/dev-log/DEV-023.md",
+    "docs/dev-log/AUDIT-023.md",
+    "docs/loop/runtime-memory/current_status.json",
+    "docs/loop/runtime-memory/project_status.md",
+    "docs/loop/runtime-memory/projects/default-project.md",
+    "docs/loop/runtime-memory/runs/TASK-XTGZPT-DEV-023-CODEX-1.json"
+  ],
+  "excluded": [
+    "new top-level menus",
+    "ERP or finance system expansion",
+    "mobile app or PWA",
+    "production system connection",
+    "real production secrets",
+    "production deployment",
+    "production cutover",
+    "AI automatic formal actions",
+    "permission or audit bypass"
+  ],
+  "gate_status": {
+    "git_diff_check": {
+      "status": "passed",
+      "command": "git diff --check"
+    },
+    "json_parse": {
+      "status": "passed",
+      "command": "JSON parse for current_status and DEV-023 run files"
+    },
+    "jsonl_parse": {
+      "status": "passed",
+      "command": "JSONL parse for runtime memory logs"
+    },
+    "npm_ci": {
+      "status": "passed",
+      "command": "npm ci",
+      "result": "276 packages installed, 0 vulnerabilities"
+    },
+    "lint": {
+      "status": "passed",
+      "command": "npm run lint"
+    },
+    "typecheck": {
+      "status": "passed",
+      "command": "npm run typecheck"
+    },
+    "test": {
+      "status": "passed",
+      "command": "npm run test",
+      "result": "14 test files, 64 tests"
+    },
+    "build": {
+      "status": "passed",
+      "command": "npm run build"
+    },
+    "smoke_api": {
+      "status": "passed",
+      "command": "npm run smoke:api",
+      "result": "ok true, 29 smoke checks"
+    },
+    "audit": {
+      "status": "passed",
+      "command": "npm audit --audit-level=low",
+      "result": "0 vulnerabilities"
+    },
+    "browser_verification": {
+      "status": "passed_with_tool_limitation",
+      "command": "browser verification against the web app",
+      "result": "Web opened at http://127.0.0.1:3011 and LAN service advertised http://192.168.2.90:3011; API health passed at http://127.0.0.1:3002. Browser plugin text input failed because virtual clipboard is unavailable; login/object flows are covered by API smoke."
+    }
+  },
+  "failure_count": 1,
+  "intent_debt": null,
+  "next_action": "Open PR for DEV-023, pass GitHub required checks and review gate, then keep LAN test server available for user acceptance; do not cut over production until signed release window."
+}
