@@ -3,6 +3,7 @@ import {
   canAccessModule,
   canAccessFileAction,
   canPerformOperation,
+  canPerformApprovalAction,
   canUseAiCapability,
   canQueryAuditLogs,
   getPermissionSummary,
@@ -10,6 +11,7 @@ import {
   permissionPolicyVersion,
   canViewOrganizationData,
   platformBoundary,
+  roles,
   seedUsers,
   visibleOrganizationsForUser
 } from "./platform";
@@ -23,6 +25,11 @@ describe("platform boundary", () => {
   it("hides system settings from normal members", () => {
     expect(canAccessModule("member", "settings")).toBe(false);
     expect(canAccessModule("admin", "settings")).toBe(true);
+  });
+
+  it("supports all 11 phase-1 roles", () => {
+    expect(Object.keys(roles)).toHaveLength(11);
+    expect(new Set(seedUsers.map((user) => user.role))).toEqual(new Set(Object.keys(roles)));
   });
 
   it("lets system admins configure settings without granting all business data", () => {
@@ -50,9 +57,29 @@ describe("platform boundary", () => {
     expect(admin).toBeDefined();
     expect(getPermissionSummary(admin!).policyVersion).toBe(permissionPolicyVersion);
     expect(getPermissionSummary(admin!).menu).toContain("settings");
-    expect(getPermissionSummary(admin!).operations).toContain("manage_permissions");
-    expect(getPermissionSummary(admin!).files).toContain("reference_ai");
+    expect(getPermissionSummary(admin!).data.scope).toBe("assigned_organizations");
+    expect(getPermissionSummary(admin!).operation).toContain("manage_permissions");
+    expect(getPermissionSummary(admin!).approval).toContain("configure_approval_policy");
+    expect(getPermissionSummary(admin!).file).toContain("reference_ai");
     expect(getPermissionSummary(admin!).ai).toContain("configure_ai_frameworks");
+  });
+
+  it("keeps approval permissions separate from operations and tied to current-node humans", () => {
+    const approver = seedUsers.find((user) => user.username === "approver");
+    const admin = seedUsers.find((user) => user.username === "admin");
+
+    expect(approver).toBeDefined();
+    expect(admin).toBeDefined();
+    expect(canPerformOperation(approver!, "manage_permissions")).toBe(false);
+    expect(canPerformApprovalAction(admin!, "configure_approval_policy")).toBe(true);
+    expect(canPerformApprovalAction(approver!, "approve_current_node", {
+      organizationId: "org-product",
+      currentNodeApproverUserIds: ["user-approver"]
+    })).toBe(true);
+    expect(canPerformApprovalAction(approver!, "approve_current_node", {
+      organizationId: "org-product",
+      currentNodeApproverUserIds: ["user-legal"]
+    })).toBe(false);
   });
 
   it("keeps operation permissions tied to role and resource scope", () => {

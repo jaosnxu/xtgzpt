@@ -69,6 +69,7 @@ API 必须遵守：
 - `/memory/items`
 - `/knowledge/query`
 - `/modules/:module`
+- `/settings/approval-permission-policies`
 - 文件权限占位接口
 
 ## 4. 前端标准
@@ -129,8 +130,8 @@ API 必须遵守：
 
 当前技术差距：
 
-- 代码只有 4 类基础角色。
-- `approval` 尚未成为独立权限维度。
+- 11 类 Phase 1 角色已进入共享模型、seed 账号和权限策略。
+- `approval` 已成为独立权限维度，审批权限不再混在操作权限中。
 - 权限还没有生产数据库配置表完整落地。
 
 ## 7. AI 技术标准
@@ -221,4 +222,3 @@ Loop 平台能力属于：
 - audit-log
 - intent debt
 - 项目代码
-

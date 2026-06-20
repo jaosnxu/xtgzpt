@@ -27,6 +27,28 @@ async function login(username: string) {
 }
 
 describe("access control", () => {
+  it("lets all 11 phase-1 seed roles log in", async () => {
+    const server = buildServer();
+    const usernames = [
+      "super",
+      "admin",
+      "knowledge",
+      "approver",
+      "finance",
+      "legal",
+      "contract",
+      "exec",
+      "dept",
+      "owner",
+      "member"
+    ];
+
+    for (const username of usernames) {
+      const token = await loginOnServer(server, username);
+      expect(token).toEqual(expect.any(String));
+    }
+  });
+
   it("blocks normal members from system settings", async () => {
     const { server, token } = await login("member");
     const response = await server.inject({
@@ -77,6 +99,7 @@ describe("access control", () => {
     expect(organizations.json().organizations.length).toBeGreaterThan(1);
     expect(roles.statusCode).toBe(200);
     expect(roles.json().roles.some((role: { role: string }) => role.role === "admin")).toBe(true);
+    expect(roles.json().roles).toHaveLength(11);
   });
 
   it("does not grant system admins all business data by default", async () => {
@@ -124,11 +147,70 @@ describe("access control", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().permissions).toEqual(
       expect.objectContaining({
-        policyVersion: "seed-dev-003",
+        policyVersion: "seed-dev-010",
         role: "admin",
-        dataScope: "assigned_organizations",
-        operations: expect.arrayContaining(["manage_permissions"]),
+        data: expect.objectContaining({
+          scope: "assigned_organizations",
+          organizationIds: ["org-group"]
+        }),
+        operation: expect.arrayContaining(["manage_permissions"]),
+        approval: expect.arrayContaining(["configure_approval_policy"]),
+        file: expect.arrayContaining(["reference_ai"]),
         ai: expect.arrayContaining(["configure_ai_frameworks"])
+      })
+    );
+  });
+
+  it("returns policy API output with six permission dimensions", async () => {
+    const { server, token } = await login("admin");
+    const response = await server.inject({
+      method: "GET",
+      url: "/settings/permission-policies",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(
+      expect.objectContaining({
+        policyVersion: "seed-dev-010",
+        policies: expect.arrayContaining([
+          expect.objectContaining({
+            role: "legal_approver",
+            menu: expect.any(Array),
+            data: expect.objectContaining({ scope: "assigned_organizations" }),
+            operation: expect.any(Array),
+            approval: expect.arrayContaining(["approve_current_node"]),
+            file: expect.any(Array),
+            ai: expect.any(Array)
+          })
+        ])
+      })
+    );
+  });
+
+  it("returns approval policy output through a separate approval permission API", async () => {
+    const { server, token } = await login("admin");
+    const response = await server.inject({
+      method: "GET",
+      url: "/settings/approval-permission-policies",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(
+      expect.objectContaining({
+        policyVersion: "seed-dev-010",
+        dimension: "approval",
+        approval: expect.arrayContaining([
+          expect.objectContaining({
+            role: "approver",
+            permissions: expect.arrayContaining(["approve_current_node", "reject_current_node"])
+          })
+        ])
       })
     );
   });
@@ -171,6 +253,56 @@ describe("access control", () => {
       ])
     );
     expect(denials.json().denials.some((event: { requestId: string }) => event.requestId === "secret-contract-name")).toBe(false);
+  });
+
+  it("audits normal-user denials for settings and approval permission APIs", async () => {
+    const server = buildServer();
+    const memberToken = await loginOnServer(server, "member");
+    const adminToken = await loginOnServer(server, "admin");
+
+    const settings = await server.inject({
+      method: "GET",
+      url: "/settings/organizations",
+      headers: {
+        authorization: `Bearer ${memberToken}`
+      }
+    });
+    const approvalPolicies = await server.inject({
+      method: "GET",
+      url: "/settings/approval-permission-policies",
+      headers: {
+        authorization: `Bearer ${memberToken}`
+      }
+    });
+    const denials = await server.inject({
+      method: "GET",
+      url: "/settings/access-denials",
+      headers: {
+        authorization: `Bearer ${adminToken}`
+      }
+    });
+
+    expect(settings.statusCode).toBe(403);
+    expect(approvalPolicies.statusCode).toBe(403);
+    expect(denials.statusCode).toBe(200);
+    expect(denials.json().denials).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actorUserId: "user-member",
+          dimension: "menu",
+          action: "open:settings",
+          resourceType: "module",
+          reason: "forbidden"
+        }),
+        expect.objectContaining({
+          actorUserId: "user-member",
+          dimension: "approval",
+          action: "configure_approval_policy",
+          resourceType: "approval_policy",
+          reason: "forbidden"
+        })
+      ])
+    );
   });
 
   it("keeps operation gates separate from unfinished business implementation", async () => {

@@ -1,43 +1,105 @@
 {
-  "updated_at": "2026-06-19T17:30:00+00:00",
-  "active_task_id": "TASK-XTGZPT-DEV-009-CODEX-4",
-  "active_goal": "Complete DEV-009 production persistence foundation in the current xtgzpt working tree.",
-  "status": "verified_with_environment_exceptions",
-  "current_stage": "verification",
-  "last_summary": "Runtime persistence foundation implemented and npm code gates pass; online npm audit and git diff gate require network and Git metadata not present in this managed worktree.",
+  "updated_at": "2026-06-20T00:17:45.950451+00:00",
+  "active_task_id": "TASK-XTGZPT-DEV-010-CODEX-2",
+  "active_goal": "Use Loop to execute DEV-010 for xtgzpt: role and permission productionization. Loop must delegate implementation to the Codex writer executor in the isolated Loop worktree, then inspect, run gates, review, verify, and record project memory.",
+  "status": "completed",
+  "current_stage": "completed",
+  "last_summary": "Review and verification gates passed.",
   "gate_status": {
-    "npm_ci": {
+    "preflight_gate": {
       "status": "passed",
-      "command": "PATH=/private/tmp/xtgzpt-tools/node-v24.17.0-darwin-arm64/bin:$PATH npm run ci",
-      "summary": "lint, typecheck, test, build and smoke:api passed; Vitest reported 8 files / 34 tests."
+      "reason": "preflight checks passed",
+      "contracts": [
+        {
+          "name": "test",
+          "standard_name": "ci_test_runner",
+          "target": "test",
+          "mode": "read_only",
+          "risk_level": "low",
+          "auth_requirements": [],
+          "capabilities": [
+            "unit",
+            "integration",
+            "verification"
+          ]
+        },
+        {
+          "name": "codex_executor",
+          "standard_name": "codex_writer_executor",
+          "target": "codex",
+          "mode": "read_write",
+          "risk_level": "high",
+          "auth_requirements": [
+            "codex_login"
+          ],
+          "capabilities": [
+            "non_interactive_code_writer",
+            "local_diff_generation",
+            "self_contained_task_execution"
+          ]
+        }
+      ],
+      "auth_resolution": {
+        "test": [],
+        "codex_executor": [
+          {
+            "requirement": "codex_login",
+            "source": "missing",
+            "env": null,
+            "available": false
+          }
+        ]
+      },
+      "missing_auth": [
+        {
+          "connector": "codex_executor",
+          "requirement": "codex_login",
+          "source": "missing",
+          "env": null,
+          "available": false
+        }
+      ],
+      "tool_policy": {
+        "status": "passed",
+        "reason": "tool policy passed",
+        "decisions": [
+          {
+            "connector": "test",
+            "target": "test",
+            "mode": "read_only",
+            "risk_level": "low",
+            "decision": "allowed",
+            "reason": "connector is allowed by policy",
+            "failure_type": null
+          },
+          {
+            "connector": "codex_executor",
+            "target": "codex",
+            "mode": "read_write",
+            "risk_level": "high",
+            "decision": "allowed",
+            "reason": "connector is explicitly approved",
+            "failure_type": null
+          }
+        ],
+        "failure_type": null
+      },
+      "failure_type": null
     },
-    "npm_audit_offline": {
+    "review_gate": {
+      "status": "approved",
+      "reason": "review checks passed"
+    },
+    "verification_gate": {
+      "status": "verified",
+      "reason": "verification checks passed"
+    },
+    "merge_gate": {
       "status": "passed",
-      "command": "PATH=/private/tmp/xtgzpt-tools/node-v24.17.0-darwin-arm64/bin:$PATH npm audit --audit-level=low --offline",
-      "summary": "0 vulnerabilities"
-    },
-    "npm_audit_online": {
-      "status": "blocked",
-      "failure_type": "network",
-      "summary": "Restricted environment cannot resolve registry.npmjs.org."
-    },
-    "git_diff_check": {
-      "status": "blocked",
-      "failure_type": "configuration",
-      "summary": "Current managed worktree has no .git metadata."
-    },
-    "touched_file_whitespace_scan": {
-      "status": "passed",
-      "summary": "No trailing whitespace or conflict markers found in touched files."
+      "reason": "merge gate not required"
     }
   },
-  "issue_count": 0,
-  "failure_count": 2,
-  "intent_debt": {
-    "goal": "Complete DEV-009 production persistence foundation.",
-    "failure_type": "external_environment",
-    "reason": "Online npm audit requires network access and git diff check requires .git metadata.",
-    "next_step": "Run online npm audit and git diff --check in the real Git worktree / PR environment.",
-    "created_at": "2026-06-19T17:30:00+00:00"
-  }
+  "issue_count": 12,
+  "failure_count": 0,
+  "intent_debt": null
 }

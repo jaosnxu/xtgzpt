@@ -23,8 +23,15 @@ export type ModuleKey = (typeof platformModules)[number]["key"];
 export const roles = {
   super_admin: "超级管理员",
   admin: "系统管理员",
+  knowledge_admin: "知识管理员",
+  approver: "审批人",
+  finance_approver: "财务审批人",
+  legal_approver: "法务审批人",
+  contract_initiator: "合同发起人",
+  executive: "管理层",
+  department_head: "部门负责人",
   project_owner: "项目负责人",
-  member: "普通成员"
+  member: "普通员工"
 } as const;
 
 export type RoleKey = keyof typeof roles;
@@ -42,10 +49,19 @@ export type OperationPermission =
   | "complete_task"
   | "upload_file"
   | "archive_file"
-  | "initiate_approval"
-  | "approval_decision"
   | "publish_knowledge"
   | "manage_permissions";
+
+export type ApprovalPermission =
+  | "initiate_approval"
+  | "approve_current_node"
+  | "reject_current_node"
+  | "return_for_revision"
+  | "transfer_approval"
+  | "add_sign"
+  | "delegate_approval"
+  | "write_back_approval_result"
+  | "configure_approval_policy";
 
 export type FilePermission = "view" | "preview" | "download" | "upload" | "archive" | "reference_ai";
 
@@ -58,9 +74,9 @@ export type AiCapability =
   | "risk_hint"
   | "configure_ai_frameworks";
 
-export type PermissionDimension = "menu" | "data" | "operation" | "file" | "ai";
+export type PermissionDimension = "menu" | "data" | "operation" | "approval" | "file" | "ai";
 
-export const permissionPolicyVersion = "seed-dev-003";
+export const permissionPolicyVersion = "seed-dev-010";
 
 export type AuditResult = "success" | "failure" | "denied";
 
@@ -244,6 +260,7 @@ export interface RolePolicy {
   canManageOrganizations: boolean;
   canManageRoles: boolean;
   operations: OperationPermission[];
+  approval: ApprovalPermission[];
   files: FilePermission[];
   ai: AiCapability[];
 }
@@ -254,15 +271,22 @@ export interface ResourceAccessContext {
   participantUserIds?: string[];
 }
 
+export interface ApprovalAccessContext extends ResourceAccessContext {
+  currentNodeApproverUserIds?: string[];
+}
+
 export interface PermissionSummary {
   policyVersion: typeof permissionPolicyVersion;
   role: RoleKey;
   menu: ModuleKey[];
-  dataScope: DataScope;
-  operations: OperationPermission[];
-  files: FilePermission[];
+  data: {
+    scope: DataScope;
+    organizationIds: string[];
+  };
+  operation: OperationPermission[];
+  approval: ApprovalPermission[];
+  file: FilePermission[];
   ai: AiCapability[];
-  organizationIds: string[];
 }
 
 const coreWorkModules: ModuleKey[] = [
@@ -294,10 +318,19 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
       "complete_task",
       "upload_file",
       "archive_file",
-      "initiate_approval",
-      "approval_decision",
       "publish_knowledge",
       "manage_permissions"
+    ],
+    approval: [
+      "initiate_approval",
+      "approve_current_node",
+      "reject_current_node",
+      "return_for_revision",
+      "transfer_approval",
+      "add_sign",
+      "delegate_approval",
+      "write_back_approval_result",
+      "configure_approval_policy"
     ],
     files: ["view", "preview", "download", "upload", "archive", "reference_ai"],
     ai: [
@@ -319,8 +352,113 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     canManageOrganizations: true,
     canManageRoles: true,
     operations: ["manage_permissions", "upload_file", "archive_file"],
+    approval: ["configure_approval_policy"],
     files: ["view", "preview", "download", "upload", "archive", "reference_ai"],
     ai: ["chat_summarize", "knowledge_query", "risk_hint", "configure_ai_frameworks"]
+  },
+  knowledge_admin: {
+    role: "knowledge_admin",
+    name: roles.knowledge_admin,
+    menu: coreWorkModules,
+    dataScope: "assigned_organizations",
+    canManageSettings: false,
+    canManageOrganizations: false,
+    canManageRoles: false,
+    operations: ["create_task", "complete_task", "upload_file", "archive_file", "publish_knowledge"],
+    approval: [],
+    files: ["view", "preview", "download", "upload", "archive", "reference_ai"],
+    ai: ["chat_summarize", "task_draft", "knowledge_query", "risk_hint"]
+  },
+  approver: {
+    role: "approver",
+    name: roles.approver,
+    menu: coreWorkModules,
+    dataScope: "assigned_organizations",
+    canManageSettings: false,
+    canManageOrganizations: false,
+    canManageRoles: false,
+    operations: ["create_task", "complete_task", "upload_file"],
+    approval: [
+      "approve_current_node",
+      "reject_current_node",
+      "return_for_revision",
+      "transfer_approval",
+      "add_sign"
+    ],
+    files: ["view", "preview", "download", "upload", "reference_ai"],
+    ai: ["chat_summarize", "knowledge_query", "approval_suggestion", "risk_hint"]
+  },
+  finance_approver: {
+    role: "finance_approver",
+    name: roles.finance_approver,
+    menu: coreWorkModules,
+    dataScope: "assigned_organizations",
+    canManageSettings: false,
+    canManageOrganizations: false,
+    canManageRoles: false,
+    operations: ["create_task", "complete_task", "upload_file"],
+    approval: ["approve_current_node", "reject_current_node", "return_for_revision", "transfer_approval"],
+    files: ["view", "preview", "download", "upload", "reference_ai"],
+    ai: ["chat_summarize", "knowledge_query", "approval_suggestion", "risk_hint"]
+  },
+  legal_approver: {
+    role: "legal_approver",
+    name: roles.legal_approver,
+    menu: coreWorkModules,
+    dataScope: "assigned_organizations",
+    canManageSettings: false,
+    canManageOrganizations: false,
+    canManageRoles: false,
+    operations: ["create_task", "complete_task", "upload_file"],
+    approval: [
+      "approve_current_node",
+      "reject_current_node",
+      "return_for_revision",
+      "transfer_approval",
+      "add_sign",
+      "write_back_approval_result"
+    ],
+    files: ["view", "preview", "download", "upload", "archive", "reference_ai"],
+    ai: ["chat_summarize", "knowledge_query", "contract_review", "approval_suggestion", "risk_hint"]
+  },
+  contract_initiator: {
+    role: "contract_initiator",
+    name: roles.contract_initiator,
+    menu: coreWorkModules,
+    dataScope: "own_records",
+    canManageSettings: false,
+    canManageOrganizations: false,
+    canManageRoles: false,
+    operations: ["create_task", "complete_task", "upload_file"],
+    approval: ["initiate_approval"],
+    files: ["view", "preview", "download", "upload", "reference_ai"],
+    ai: ["chat_summarize", "task_draft", "knowledge_query", "contract_review", "risk_hint"]
+  },
+  executive: {
+    role: "executive",
+    name: roles.executive,
+    menu: coreWorkModules,
+    dataScope: "assigned_organizations",
+    canManageSettings: false,
+    canManageOrganizations: false,
+    canManageRoles: false,
+    operations: ["create_task", "complete_task", "upload_file"],
+    approval: ["approve_current_node", "reject_current_node", "return_for_revision"],
+    files: ["view", "preview", "download", "reference_ai"],
+    ai: ["chat_summarize", "knowledge_query", "approval_suggestion", "risk_hint"]
+  },
+  department_head: {
+    role: "department_head",
+    name: roles.department_head,
+    menu: coreWorkModules,
+    dataScope: "assigned_organizations",
+    canManageSettings: false,
+    canManageOrganizations: false,
+    canManageRoles: false,
+    operations: ["edit_project", "close_project", "create_task", "assign_task", "complete_task", "upload_file"],
+    approval: ["approve_current_node", "reject_current_node", "return_for_revision", "transfer_approval"],
+    files: ["view", "preview", "download", "upload", "archive", "reference_ai"],
+    ai: ["chat_summarize", "task_draft", "knowledge_query", "approval_suggestion", "risk_hint"]
   },
   project_owner: {
     role: "project_owner",
@@ -338,9 +476,9 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
       "assign_task",
       "complete_task",
       "upload_file",
-      "archive_file",
-      "initiate_approval"
+      "archive_file"
     ],
+    approval: ["initiate_approval"],
     files: ["view", "preview", "download", "upload", "archive", "reference_ai"],
     ai: ["chat_summarize", "task_draft", "knowledge_query", "approval_suggestion", "risk_hint"]
   },
@@ -352,7 +490,8 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
     canManageSettings: false,
     canManageOrganizations: false,
     canManageRoles: false,
-    operations: ["create_task", "complete_task", "upload_file", "initiate_approval"],
+    operations: ["create_task", "complete_task", "upload_file"],
+    approval: ["initiate_approval"],
     files: ["view", "preview", "download", "upload", "reference_ai"],
     ai: ["chat_summarize", "task_draft", "knowledge_query", "approval_suggestion"]
   }
@@ -361,26 +500,15 @@ export const rolePolicies: Record<RoleKey, RolePolicy> = {
 export const ROLE_MENU: Record<RoleKey, ModuleKey[]> = {
   super_admin: rolePolicies.super_admin.menu,
   admin: rolePolicies.admin.menu,
-  project_owner: [
-    "dashboard",
-    "workbench",
-    "projects",
-    "tasks",
-    "chat",
-    "knowledge",
-    "contracts",
-    "approvals"
-  ],
-  member: [
-    "dashboard",
-    "workbench",
-    "projects",
-    "tasks",
-    "chat",
-    "knowledge",
-    "contracts",
-    "approvals"
-  ]
+  knowledge_admin: rolePolicies.knowledge_admin.menu,
+  approver: rolePolicies.approver.menu,
+  finance_approver: rolePolicies.finance_approver.menu,
+  legal_approver: rolePolicies.legal_approver.menu,
+  contract_initiator: rolePolicies.contract_initiator.menu,
+  executive: rolePolicies.executive.menu,
+  department_head: rolePolicies.department_head.menu,
+  project_owner: rolePolicies.project_owner.menu,
+  member: rolePolicies.member.menu
 };
 
 export const seedOrganizations: Organization[] = [
@@ -439,6 +567,69 @@ export const seedUsers: UserAccount[] = [
     displayName: "项目负责人",
     role: "project_owner",
     organizationIds: ["org-product", "org-operation"],
+    defaultOrganizationId: "org-product",
+    status: "active"
+  },
+  {
+    id: "user-department-head",
+    username: "dept",
+    displayName: "部门负责人",
+    role: "department_head",
+    organizationIds: ["org-product"],
+    defaultOrganizationId: "org-product",
+    status: "active"
+  },
+  {
+    id: "user-executive",
+    username: "exec",
+    displayName: "管理层",
+    role: "executive",
+    organizationIds: ["org-product", "org-operation"],
+    defaultOrganizationId: "org-product",
+    status: "active"
+  },
+  {
+    id: "user-contract",
+    username: "contract",
+    displayName: "合同发起人",
+    role: "contract_initiator",
+    organizationIds: ["org-product"],
+    defaultOrganizationId: "org-product",
+    status: "active"
+  },
+  {
+    id: "user-legal",
+    username: "legal",
+    displayName: "法务审批人",
+    role: "legal_approver",
+    organizationIds: ["org-group", "org-product"],
+    defaultOrganizationId: "org-group",
+    status: "active"
+  },
+  {
+    id: "user-finance",
+    username: "finance",
+    displayName: "财务审批人",
+    role: "finance_approver",
+    organizationIds: ["org-group", "org-product"],
+    defaultOrganizationId: "org-group",
+    status: "active"
+  },
+  {
+    id: "user-approver",
+    username: "approver",
+    displayName: "审批人",
+    role: "approver",
+    organizationIds: ["org-product"],
+    defaultOrganizationId: "org-product",
+    status: "active"
+  },
+  {
+    id: "user-knowledge",
+    username: "knowledge",
+    displayName: "知识管理员",
+    role: "knowledge_admin",
+    organizationIds: ["org-product"],
     defaultOrganizationId: "org-product",
     status: "active"
   },
@@ -525,6 +716,41 @@ export function canPerformOperation(user: UserAccount, operation: OperationPermi
   return canAccessResourceData(user, resource);
 }
 
+function isCurrentNodeApproval(permission: ApprovalPermission) {
+  return [
+    "approve_current_node",
+    "reject_current_node",
+    "return_for_revision",
+    "transfer_approval",
+    "add_sign",
+    "write_back_approval_result"
+  ].includes(permission);
+}
+
+export function canPerformApprovalAction(
+  user: UserAccount,
+  permission: ApprovalPermission,
+  resource?: ApprovalAccessContext
+) {
+  if (!rolePolicies[user.role].approval.includes(permission)) {
+    return false;
+  }
+
+  if (!resource) {
+    return permission === "configure_approval_policy";
+  }
+
+  if (!canAccessResourceData(user, resource)) {
+    return false;
+  }
+
+  if (isCurrentNodeApproval(permission)) {
+    return resource.currentNodeApproverUserIds?.includes(user.id) === true;
+  }
+
+  return true;
+}
+
 export function canAccessFileAction(user: UserAccount, action: FilePermission, resource: ResourceAccessContext) {
   return rolePolicies[user.role].files.includes(action) && canAccessResourceData(user, resource);
 }
@@ -548,11 +774,14 @@ export function getPermissionSummary(user: UserAccount): PermissionSummary {
     policyVersion: permissionPolicyVersion,
     role: user.role,
     menu: policy.menu,
-    dataScope: policy.dataScope,
-    operations: policy.operations,
-    files: policy.files,
+    data: {
+      scope: policy.dataScope,
+      organizationIds: visibleOrganizationsForUser(user).map((organization) => organization.id)
+    },
+    operation: policy.operations,
+    approval: policy.approval,
+    file: policy.files,
     ai: policy.ai,
-    organizationIds: visibleOrganizationsForUser(user).map((organization) => organization.id)
   };
 }
 
