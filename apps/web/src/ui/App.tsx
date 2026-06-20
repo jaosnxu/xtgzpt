@@ -34,6 +34,7 @@ import {
   seedUsers,
   platformModules,
   type AiDraftRecord,
+  type ApprovalWithDetails,
   type ChatMessageRecord,
   type ChatThreadRecord,
   type ContractApprovalHandoffRecord,
@@ -140,8 +141,8 @@ const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
     summary: "合同入口只支持上传或粘贴；版本、原文证据、AI 风险审查、人工确认、二次审查、审批边界和执行跟踪已接入。"
   },
   approvals: {
-    stage: "DEV-015 待开发",
-    summary: "当前仅展示权限、空状态和人工审批边界；审批实例、当前节点、退回、转交和加签不在 DEV-012 范围。"
+    stage: "DEV-015 已接入",
+    summary: "审批实例、当前节点、同意、驳回、退回、转交、加签和合同结果写回已接入；AI 不能执行审批动作。"
   },
   settings: {
     stage: "DEV-012 状态已接入",
@@ -168,6 +169,7 @@ export function App() {
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItemWithVersions[]>([]);
   const [projectMemories, setProjectMemories] = useState<ProjectMemoryRecord[]>([]);
   const [contracts, setContracts] = useState<ContractWithDetails[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalWithDetails[]>([]);
   const [projectFiles, setProjectFiles] = useState<FileAssetRecord[]>([]);
   const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
   const [knowledgeQuery, setKnowledgeQuery] = useState("");
@@ -181,11 +183,13 @@ export function App() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
+  const [selectedApprovalId, setSelectedApprovalId] = useState<string | null>(null);
   const [isWorkbenchLoading, setIsWorkbenchLoading] = useState(false);
   const [isWorkLoading, setIsWorkLoading] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isKnowledgeLoading, setIsKnowledgeLoading] = useState(false);
   const [isContractLoading, setIsContractLoading] = useState(false);
+  const [isApprovalLoading, setIsApprovalLoading] = useState(false);
   const [isFileLoading, setIsFileLoading] = useState(false);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiFailure, setAiFailure] = useState<string | null>(null);
@@ -201,6 +205,8 @@ export function App() {
   const [fileError, setFileError] = useState<string | null>(null);
   const [knowledgeError, setKnowledgeError] = useState<string | null>(null);
   const [contractError, setContractError] = useState<string | null>(null);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [approvalTargetUserId, setApprovalTargetUserId] = useState("user-approver");
   const activeUser = session?.user ?? null;
 
   async function authorizedRequest<T>(path: string, init: RequestInit = {}) {
@@ -298,6 +304,16 @@ export function App() {
     setSelectedContractId((current) => current ?? result.contracts[0]?.id ?? null);
   }
 
+  async function refreshApprovalData() {
+    if (!session) {
+      return;
+    }
+
+    const result = await authorizedRequest<{ approvals: ApprovalWithDetails[] }>("/approvals");
+    setApprovals(result.approvals);
+    setSelectedApprovalId((current) => current ?? result.approvals[0]?.id ?? null);
+  }
+
   async function refreshProjectFiles(projectId = selectedProjectId) {
     if (!session || !projectId) {
       setProjectFiles([]);
@@ -321,17 +337,20 @@ export function App() {
       setKnowledgeItems([]);
       setProjectMemories([]);
       setContracts([]);
+      setApprovals([]);
       setProjectFiles([]);
       setFilePreview(null);
       setKnowledgeResults([]);
       setSelectedProjectId(null);
       setSelectedThreadId(null);
       setSelectedContractId(null);
+      setSelectedApprovalId(null);
       setIsWorkbenchLoading(false);
       setIsWorkLoading(false);
       setIsChatLoading(false);
       setIsKnowledgeLoading(false);
       setIsContractLoading(false);
+      setIsApprovalLoading(false);
       setIsFileLoading(false);
       setShowNotifications(false);
       return;
@@ -342,14 +361,16 @@ export function App() {
     setIsChatLoading(true);
     setIsKnowledgeLoading(true);
     setIsContractLoading(true);
+    setIsApprovalLoading(true);
     setWorkError(null);
     setChatError(null);
     setKnowledgeError(null);
     setContractError(null);
+    setApprovalError(null);
     setFileError(null);
 
-    void Promise.allSettled([refreshWorkbenchData(), refreshWorkData(), refreshChatData(), refreshKnowledgeData(), refreshContractData()]).then((results) => {
-      const [workbenchResult, workResult, chatResult, knowledgeResult, contractResult] = results;
+    void Promise.allSettled([refreshWorkbenchData(), refreshWorkData(), refreshChatData(), refreshKnowledgeData(), refreshContractData(), refreshApprovalData()]).then((results) => {
+      const [workbenchResult, workResult, chatResult, knowledgeResult, contractResult, approvalResult] = results;
 
       if (workbenchResult.status === "rejected") {
         const message = workbenchResult.reason instanceof Error ? workbenchResult.reason.message : "工作台加载失败";
@@ -376,11 +397,17 @@ export function App() {
         setContractError(message);
       }
 
+      if (approvalResult.status === "rejected") {
+        const message = approvalResult.reason instanceof Error ? approvalResult.reason.message : "审批加载失败";
+        setApprovalError(message);
+      }
+
       setIsWorkbenchLoading(false);
       setIsWorkLoading(false);
       setIsChatLoading(false);
       setIsKnowledgeLoading(false);
       setIsContractLoading(false);
+      setIsApprovalLoading(false);
     });
   }, [session?.token]);
 
@@ -780,7 +807,7 @@ export function App() {
         reason: "contract_page_bounded_approval_handoff"
       })
     });
-    await Promise.all([refreshContractData(), refreshWorkbenchData()]);
+    await Promise.all([refreshContractData(), refreshApprovalData(), refreshWorkbenchData()]);
   }
 
   async function recordExecutionEvent(contract: ContractWithDetails) {
@@ -796,6 +823,28 @@ export function App() {
     });
     setExecutionTitle("");
     await Promise.all([refreshContractData(), refreshWorkbenchData()]);
+  }
+
+  async function actOnApproval(
+    approval: ApprovalWithDetails,
+    action: "approve" | "reject" | "return" | "transfer" | "add-sign"
+  ) {
+    setApprovalError(null);
+    const body =
+      action === "transfer" || action === "add-sign"
+        ? {
+            targetUserId: approvalTargetUserId,
+            reason: `approval_page_${action}_human_action`
+          }
+        : {
+            reason: `approval_page_${action}_human_action`
+          };
+
+    await authorizedRequest(`/approvals/${approval.id}/${action}`, {
+      method: "POST",
+      body: JSON.stringify(body)
+    });
+    await Promise.all([refreshApprovalData(), refreshContractData(), refreshWorkbenchData()]);
   }
 
   if (!session || !activeUser) {
@@ -841,7 +890,7 @@ export function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">DEV-014：合同闭环</p>
+            <p className="eyebrow">DEV-015：审批闭环</p>
             <h1>{currentModuleName}</h1>
           </div>
           <div className="top-actions">
@@ -1095,6 +1144,27 @@ export function App() {
             setContractTitle={setContractTitle}
             setExecutionTitle={setExecutionTitle}
           />
+        ) : currentModule === "approvals" ? (
+          <ApprovalView
+            activeUser={activeUser}
+            approvalError={approvalError}
+            approvals={approvals}
+            approvalTargetUserId={approvalTargetUserId}
+            canAddSign={session.permissions.approval.includes("add_sign")}
+            canApprove={session.permissions.approval.includes("approve_current_node")}
+            canReject={session.permissions.approval.includes("reject_current_node")}
+            canReturn={session.permissions.approval.includes("return_for_revision")}
+            canTransfer={session.permissions.approval.includes("transfer_approval")}
+            isLoading={isApprovalLoading}
+            onAction={(approval, action) => {
+              void actOnApproval(approval, action).catch((error) => {
+                setApprovalError(error instanceof Error ? error.message : "审批操作失败");
+              });
+            }}
+            onSelectApproval={setSelectedApprovalId}
+            selectedApprovalId={selectedApprovalId}
+            setApprovalTargetUserId={setApprovalTargetUserId}
+          />
         ) : currentModule === "settings" && canOpenSettings ? (
           <SettingsView
             activeUser={activeUser}
@@ -1214,7 +1284,7 @@ function WorkbenchView({
         <MetricCard title="我的待办" value={String(summary?.pendingWorkCount ?? 0)} helper="待提交 / 待确认" />
         <MetricCard title="我负责的任务" value={String(summary?.responsibleTaskCount ?? 0)} helper="未完成任务" />
         <MetricCard title="我参与的项目" value={String(summary?.participatingProjectCount ?? 0)} helper="未归档项目" />
-        <MetricCard title="待审批 / 合同" value={`${summary?.pendingApprovalCount ?? 0}/${summary?.contractConfirmationCount ?? 0}`} helper="后续阶段接入实例" />
+        <MetricCard title="待审批 / 合同" value={`${summary?.pendingApprovalCount ?? 0}/${summary?.contractConfirmationCount ?? 0}`} helper="当前节点 / 合同确认" />
       </section>
 
       <PageStateNotice state="loading" title="正在加载我的工作台" body="正在从 API 读取本人工作入口。" active={isLoading} />
@@ -2574,7 +2644,7 @@ function ContractView({
               <input value={executionTitle} onChange={(event) => setExecutionTitle(event.target.value)} placeholder="执行提醒标题" />
               <button
                 className="secondary-button"
-                disabled={!canTrackExecution || selectedContract.status !== "approval_pending"}
+                disabled={!canTrackExecution || !["approval_pending", "approved", "execution_tracking"].includes(selectedContract.status)}
                 onClick={() => onExecutionEvent(selectedContract)}
               >
                 记录执行提醒
@@ -2588,7 +2658,7 @@ function ContractView({
                     <small>{handoff.reason}</small>
                   </span>
                   <span className="status-pill">{handoff.status}</span>
-                  <span className="count-pill">非完整审批引擎</span>
+                  <span className="count-pill">{handoff.approvalEngineImplemented ? "已创建审批" : "边界记录"}</span>
                 </div>
               ))}
               {selectedContract.executionEvents.map((event) => (
@@ -2601,6 +2671,193 @@ function ContractView({
                   <span className="count-pill">{event.status}</span>
                 </div>
               ))}
+            </div>
+          </>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function ApprovalView({
+  activeUser,
+  approvalError,
+  approvals,
+  approvalTargetUserId,
+  canAddSign,
+  canApprove,
+  canReject,
+  canReturn,
+  canTransfer,
+  isLoading,
+  onAction,
+  onSelectApproval,
+  selectedApprovalId,
+  setApprovalTargetUserId
+}: {
+  activeUser: PublicUser;
+  approvalError: string | null;
+  approvals: ApprovalWithDetails[];
+  approvalTargetUserId: string;
+  canAddSign: boolean;
+  canApprove: boolean;
+  canReject: boolean;
+  canReturn: boolean;
+  canTransfer: boolean;
+  isLoading: boolean;
+  onAction: (approval: ApprovalWithDetails, action: "approve" | "reject" | "return" | "transfer" | "add-sign") => void;
+  onSelectApproval: (approvalId: string) => void;
+  selectedApprovalId: string | null;
+  setApprovalTargetUserId: (value: string) => void;
+}) {
+  const selectedApproval = approvals.find((approval) => approval.id === selectedApprovalId) ?? approvals[0] ?? null;
+  const currentNode = selectedApproval?.nodes.find((node) => node.id === selectedApproval.currentNodeId) ?? null;
+  const isCurrentHandler = selectedApproval?.currentApproverUserId === activeUser.id;
+  const humanApprovers = seedUsers.filter((user) =>
+    rolePolicies[user.role].approval.some((permission) =>
+      ["approve_current_node", "reject_current_node", "return_for_revision"].includes(permission)
+    )
+  );
+
+  return (
+    <section className="approval-workspace">
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">审批列表</p>
+            <h2>人工审批实例</h2>
+            <p>列表只返回当前账号有权限查看的审批；无权限详情不会泄露来源合同。</p>
+          </div>
+          <ClipboardList size={22} />
+        </div>
+        <PageStateNotice state="loading" title="正在加载审批" body="正在读取审批实例、节点和当前处理人。" active={isLoading} />
+        <PageStateNotice state="error" title="审批操作失败" body={approvalError ?? ""} active={Boolean(approvalError)} />
+        <div className="record-list">
+          {approvals.length > 0 ? (
+            approvals.map((approval) => (
+              <button
+                className={selectedApproval?.id === approval.id ? "record-row active" : "record-row"}
+                key={approval.id}
+                onClick={() => onSelectApproval(approval.id)}
+              >
+                <span>
+                  <strong>{approval.title}</strong>
+                  <small>{approval.sourceSummary.title} · 当前：{approval.currentApprover?.displayName ?? "无"}</small>
+                </span>
+                <span className="status-pill">{approval.status}</span>
+                <span className="count-pill">{approval.nodes.length} 节点</span>
+              </button>
+            ))
+          ) : (
+            <PageStateNotice active={!isLoading} state="empty" title="暂无可见审批" body="合同提交审批后会在当前处理人和授权人员列表中显示。" />
+          )}
+        </div>
+      </div>
+
+      <div className="panel approval-detail-panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">当前节点</p>
+            <h2>{selectedApproval?.title ?? "未选择审批"}</h2>
+            <p>同意、驳回、退回、转交和加签都必须由当前节点人类处理人执行。</p>
+          </div>
+          {selectedApproval ? <span className="status-pill strong">{selectedApproval.status}</span> : null}
+        </div>
+
+        {selectedApproval ? (
+          <>
+            <div className="detail-grid">
+              <SettingsItem title="来源对象" value={selectedApproval.sourceSummary.title} enabled />
+              <SettingsItem title="来源状态" value={selectedApproval.sourceSummary.status} enabled />
+              <SettingsItem title="当前处理人" value={selectedApproval.currentApprover?.displayName ?? "无"} enabled={Boolean(selectedApproval.currentApprover)} />
+              <SettingsItem title="结果写回" value={selectedApproval.resultWritebackStatus ?? "待处理"} enabled={Boolean(selectedApproval.resultWritebackStatus)} />
+            </div>
+
+            <PageStateNotice
+              active={selectedApproval.status === "processing" && !isCurrentHandler}
+              state="no-permission"
+              title="当前账号不是当前节点处理人"
+              body="你可以查看授权范围内的审批详情，但不能执行当前节点动作。"
+            />
+
+            <div className="approval-current-node">
+              <div>
+                <strong>{currentNode?.name ?? "无当前节点"}</strong>
+                <small>{currentNode ? `${userName(currentNode.approverUserId)} · ${currentNode.status}` : "审批已结束或无当前处理人"}</small>
+              </div>
+              <span className="status-pill">{currentNode?.status ?? selectedApproval.status}</span>
+            </div>
+
+            <div className="inline-form">
+              <select value={approvalTargetUserId} onChange={(event) => setApprovalTargetUserId(event.target.value)}>
+                {humanApprovers.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.displayName}
+                  </option>
+                ))}
+              </select>
+              <button className="secondary-button" disabled={!isCurrentHandler || !canTransfer} onClick={() => onAction(selectedApproval, "transfer")}>
+                转交
+              </button>
+              <button className="secondary-button" disabled={!isCurrentHandler || !canAddSign} onClick={() => onAction(selectedApproval, "add-sign")}>
+                加签
+              </button>
+            </div>
+
+            <div className="action-row">
+              <button className="primary-button" disabled={!isCurrentHandler || !canApprove} onClick={() => onAction(selectedApproval, "approve")}>
+                <CheckSquare size={16} />
+                同意
+              </button>
+              <button className="secondary-button" disabled={!isCurrentHandler || !canReject} onClick={() => onAction(selectedApproval, "reject")}>
+                <XCircle size={16} />
+                驳回
+              </button>
+              <button className="secondary-button" disabled={!isCurrentHandler || !canReturn} onClick={() => onAction(selectedApproval, "return")}>
+                <Clock size={16} />
+                退回
+              </button>
+            </div>
+          </>
+        ) : null}
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">节点轨迹</p>
+            <h2>处理记录</h2>
+            <p>每个节点和动作都进入审计；AI 只能提供建议，不能成为审批人或执行动作。</p>
+          </div>
+        </div>
+        {selectedApproval ? (
+          <>
+            <div className="record-list">
+              {selectedApproval.nodes.map((node) => (
+                <div className="record-row" key={node.id}>
+                  <span>
+                    <strong>{node.sequence}. {node.name}</strong>
+                    <small>{userName(node.approverUserId)} · {node.decisionReason ?? "等待处理"}</small>
+                  </span>
+                  <span className="status-pill">{node.status}</span>
+                  <span className="count-pill">{node.decidedAt ? "已处理" : "待处理"}</span>
+                </div>
+              ))}
+            </div>
+            <div className="record-list">
+              {selectedApproval.actions.length > 0 ? (
+                selectedApproval.actions.map((action) => (
+                  <div className="record-row" key={action.id}>
+                    <span>
+                      <strong>{action.action}</strong>
+                      <small>{userName(action.actorUserId)}{action.targetUserId ? ` -> ${userName(action.targetUserId)}` : ""} · {action.reason}</small>
+                    </span>
+                    <span className="status-pill">{action.action}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="empty-state">暂无审批动作记录。</div>
+              )}
             </div>
           </>
         ) : null}
@@ -2646,10 +2903,10 @@ function ModuleStatusView({
         />
         {moduleKey === "approvals" ? (
           <div className="stage-checklist">
-            <span>审批发起：未开发</span>
-            <span>当前节点审批人：未开发</span>
-            <span>同意 / 驳回 / 退回：未开发</span>
-            <span>AI 建议：未开发且不能自动审批</span>
+            <span>审批发起：已接入</span>
+            <span>当前节点审批人：已接入</span>
+            <span>同意 / 驳回 / 退回：已接入</span>
+            <span>转交 / 加签：已接入，AI 不能自动审批</span>
           </div>
         ) : null}
         <PageStateGrid states={pageStates} />

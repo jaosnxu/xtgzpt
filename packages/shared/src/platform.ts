@@ -80,7 +80,7 @@ export type AiCapability =
 
 export type PermissionDimension = "menu" | "data" | "operation" | "approval" | "file" | "ai";
 
-export const permissionPolicyVersion = "seed-dev-014";
+export const permissionPolicyVersion = "seed-dev-015";
 
 export type AuditResult = "success" | "failure" | "denied";
 
@@ -125,6 +125,29 @@ export type ContractRiskSeverity = "low" | "medium" | "high";
 export type ContractOptionKey = "A" | "B" | "C";
 
 export type ContractExecutionEventType = "reminder" | "record" | "status_update";
+
+export type ApprovalSourceObjectType = "contract";
+
+export type ApprovalStatus =
+  | "submitted"
+  | "processing"
+  | "approved"
+  | "rejected"
+  | "returned"
+  | "transferred"
+  | "cancelled"
+  | "expired";
+
+export type ApprovalNodeStatus =
+  | "pending"
+  | "processing"
+  | "approved"
+  | "rejected"
+  | "returned"
+  | "transferred"
+  | "add_signed";
+
+export type ApprovalActionType = "approve" | "reject" | "return" | "transfer" | "add_sign";
 
 export interface ContractSourceEvidence {
   sourceType: ContractEntryMethod | "revision";
@@ -227,7 +250,8 @@ export interface ContractApprovalHandoffRecord {
   versionId: string;
   submittedByUserId: string;
   status: "submitted_boundary";
-  approvalEngineImplemented: false;
+  approvalEngineImplemented: boolean;
+  approvalId: string | null;
   reason: string;
   createdAt: string;
 }
@@ -469,6 +493,63 @@ export interface AuditLogEntry {
   result: AuditResult;
   aiInvolved: boolean;
   aiFrameworkVersion: string | null;
+}
+
+export interface ApprovalRecord {
+  id: string;
+  title: string;
+  organizationId: string;
+  sourceObjectType: ApprovalSourceObjectType;
+  sourceObjectId: string;
+  sourceSnapshotRef: string;
+  initiatedByUserId: string;
+  status: ApprovalStatus;
+  currentNodeId: string | null;
+  currentApproverUserId: string | null;
+  resultWritebackStatus: string | null;
+  createdAt: string;
+  submittedAt: string;
+  completedAt: string | null;
+  updatedAt: string;
+}
+
+export interface ApprovalNodeRecord {
+  id: string;
+  approvalId: string;
+  sequence: number;
+  name: string;
+  approverUserId: string;
+  status: ApprovalNodeStatus;
+  enteredAt: string | null;
+  decidedAt: string | null;
+  decidedByUserId: string | null;
+  decisionReason: string | null;
+  fromNodeId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApprovalActionRecord {
+  id: string;
+  approvalId: string;
+  nodeId: string;
+  action: ApprovalActionType;
+  actorUserId: string;
+  targetUserId: string | null;
+  reason: string;
+  createdAt: string;
+}
+
+export interface ApprovalWithDetails extends ApprovalRecord {
+  nodes: ApprovalNodeRecord[];
+  actions: ApprovalActionRecord[];
+  currentApprover: PublicUser | null;
+  sourceSummary: {
+    objectType: ApprovalSourceObjectType;
+    objectId: string;
+    title: string;
+    status: string;
+  };
 }
 
 export interface AuditLogFilter {

@@ -48,6 +48,9 @@ try {
   const ownerToken = await login("owner");
   const memberToken = await login("member");
   const contractToken = await login("contract");
+  const legalToken = await login("legal");
+  const financeToken = await login("finance");
+  const approverToken = await login("approver");
   const superToken = await login("super");
 
   const createProject = await inject("POST", "/projects", ownerToken, {
@@ -280,10 +283,43 @@ try {
   assert(secondRiskConfirm.statusCode === 200, `contract second risk confirm failed with ${secondRiskConfirm.statusCode}`);
 
   const approvalHandoff = await inject("POST", `/contracts/${contractId}/submit-approval`, contractToken, {
-    reason: "smoke bounded handoff"
+    reason: "smoke human approval instance"
   });
   assert(approvalHandoff.statusCode === 200, `contract approval handoff failed with ${approvalHandoff.statusCode}`);
-  assert(approvalHandoff.body.handoff.approvalEngineImplemented === false, "smoke implemented a full approval engine");
+  assert(approvalHandoff.body.handoff.approvalEngineImplemented === true, "approval handoff did not create engine instance");
+  assert(typeof approvalHandoff.body.handoff.approvalId === "string", "approval handoff missing approval id");
+  const approvalId = approvalHandoff.body.approval.id;
+  assert(approvalHandoff.body.approval.currentApproverUserId === "user-legal", "approval did not enter legal node");
+
+  const approvalDetailDenied = await inject("GET", `/approvals/${approvalId}`, memberToken);
+  assert(approvalDetailDenied.statusCode === 404, "unauthorized member read approval detail");
+
+  const legalWorkbench = await inject("GET", "/workbench", legalToken);
+  assert(legalWorkbench.body.summary.pendingApprovalCount === 1, "legal workbench missing pending approval");
+
+  const wrongCurrentHandler = await inject("POST", `/approvals/${approvalId}/approve`, financeToken, {
+    reason: "not current handler"
+  });
+  assert(wrongCurrentHandler.statusCode === 403, "non-current approver handled approval");
+
+  const legalApprove = await inject("POST", `/approvals/${approvalId}/approve`, legalToken, {
+    reason: "smoke legal human approve"
+  });
+  assert(legalApprove.statusCode === 200, `legal approval failed with ${legalApprove.statusCode}`);
+  assert(legalApprove.body.approval.currentApproverUserId === "user-finance", "approval did not advance to finance");
+
+  const financeApprove = await inject("POST", `/approvals/${approvalId}/approve`, financeToken, {
+    reason: "smoke finance human approve"
+  });
+  assert(financeApprove.statusCode === 200, `finance approval failed with ${financeApprove.statusCode}`);
+  assert(financeApprove.body.approval.currentApproverUserId === "user-approver", "approval did not advance to business approver");
+
+  const finalApprove = await inject("POST", `/approvals/${approvalId}/approve`, approverToken, {
+    reason: "smoke final human approve"
+  });
+  assert(finalApprove.statusCode === 200, `final approval failed with ${finalApprove.statusCode}`);
+  assert(finalApprove.body.approval.status === "approved", "approval did not complete");
+  assert(finalApprove.body.contract.status === "approved", "contract approval result was not written back");
 
   const executionEvent = await inject("POST", `/contracts/${contractId}/execution-events`, contractToken, {
     eventType: "reminder",
@@ -321,9 +357,11 @@ try {
   const chatModule = await inject("GET", "/modules/chat", memberToken);
   const knowledgeModule = await inject("GET", "/modules/knowledge", superToken);
   const contractsModule = await inject("GET", "/modules/contracts", contractToken);
+  const approvalsModule = await inject("GET", "/modules/approvals", legalToken);
   assert(chatModule.body.status === "available", "chat module is not available");
   assert(knowledgeModule.body.status === "available", "knowledge module is not available");
   assert(contractsModule.body.status === "available", "contracts module is not available");
+  assert(approvalsModule.body.status === "available", "approvals module is not available");
 
   console.log(
     JSON.stringify(
@@ -349,7 +387,9 @@ try {
           "contract_ai_review",
           "contract_risk_confirmation",
           "contract_revision_second_review",
-          "contract_approval_handoff_boundary",
+          "approval_instance_created",
+          "approval_current_handler_gate",
+          "approval_result_writeback",
           "contract_execution_tracking",
           "contract_permission_filter",
           "memory_context_reuse",

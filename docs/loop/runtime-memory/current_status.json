@@ -1,45 +1,117 @@
 {
-  "updated_at": "2026-06-20T07:20:00+00:00",
-  "active_task_id": "TASK-XTGZPT-DEV-014-BROWSER-REPAIR-CODEX-1",
-  "active_goal": "Repair DEV-014 browser contract AI review no-body POST regression.",
-  "status": "completed",
-  "current_stage": "completed",
-  "last_summary": "DEV-014 browser contract AI review regression repaired: no-body POST actions no longer fail parser-level 400 when the browser path has JSON headers; regression test, ci, offline audit and git diff check passed.",
+  "updated_at": "2026-06-20T06:15:28.156027+00:00",
+  "active_task_id": "TASK-XTGZPT-DEV-015-LINT-REPAIR-CODEX-1",
+  "active_goal": "Use Loop to repair the DEV-015 verifier lint failure in the existing DEV-015 worktree without changing the business scope. The known failure is npm run lint: apps/api/src/index.ts has an unused parameter named reason. Repair only what is needed, keep DEV-015 approval closure behavior intact, update DEV-015/AUDIT-015 if verification status changes, and rerun gates.",
+  "status": "running",
+  "current_stage": "executing",
+  "last_summary": "Preflight gate passed.",
   "gate_status": {
-    "npm_ci": {
+    "preflight_gate": {
       "status": "passed",
-      "summary": "lint, typecheck, test, build and smoke:api passed; Vitest reported 12 files / 51 tests."
-    },
-    "npm_audit_offline": {
-      "status": "passed",
-      "summary": "0 vulnerabilities"
-    },
-    "npm_audit_online": {
-      "status": "blocked",
-      "failure_type": "network",
-      "summary": "Restricted environment cannot resolve registry.npmjs.org."
-    },
-    "contract_browser_no_body_post": {
-      "status": "passed",
-      "summary": "Regression coverage posts ai-review, second-review and unauthorized ai-review with Content-Type application/json and no payload; success paths return 200 and unauthorized remains non-leaking 404."
-    },
-    "browser_dev_server": {
-      "status": "blocked",
-      "failure_type": "sandbox",
-      "summary": "Sandbox cannot bind 127.0.0.1:3001; npm run dev:web failed with listen EPERM."
-    },
-    "git_diff_check": {
-      "status": "passed",
-      "summary": "No whitespace errors."
+      "reason": "preflight checks passed",
+      "contracts": [
+        {
+          "name": "git",
+          "standard_name": "vcs_adapter",
+          "target": "git",
+          "mode": "read_write",
+          "risk_level": "medium",
+          "auth_requirements": [],
+          "capabilities": [
+            "status",
+            "diff",
+            "branch",
+            "commit_context"
+          ]
+        },
+        {
+          "name": "test",
+          "standard_name": "ci_test_runner",
+          "target": "test",
+          "mode": "read_only",
+          "risk_level": "low",
+          "auth_requirements": [],
+          "capabilities": [
+            "unit",
+            "integration",
+            "verification"
+          ]
+        },
+        {
+          "name": "codex_executor",
+          "standard_name": "codex_writer_executor",
+          "target": "codex",
+          "mode": "read_write",
+          "risk_level": "high",
+          "auth_requirements": [
+            "codex_login"
+          ],
+          "capabilities": [
+            "non_interactive_code_writer",
+            "local_diff_generation",
+            "self_contained_task_execution"
+          ]
+        }
+      ],
+      "auth_resolution": {
+        "git": [],
+        "test": [],
+        "codex_executor": [
+          {
+            "requirement": "codex_login",
+            "source": "missing",
+            "env": null,
+            "available": false
+          }
+        ]
+      },
+      "missing_auth": [
+        {
+          "connector": "codex_executor",
+          "requirement": "codex_login",
+          "source": "missing",
+          "env": null,
+          "available": false
+        }
+      ],
+      "tool_policy": {
+        "status": "passed",
+        "reason": "tool policy passed",
+        "decisions": [
+          {
+            "connector": "git",
+            "target": "git",
+            "mode": "read_write",
+            "risk_level": "medium",
+            "decision": "allowed",
+            "reason": "connector is allowed by policy",
+            "failure_type": null
+          },
+          {
+            "connector": "test",
+            "target": "test",
+            "mode": "read_only",
+            "risk_level": "low",
+            "decision": "allowed",
+            "reason": "connector is allowed by policy",
+            "failure_type": null
+          },
+          {
+            "connector": "codex_executor",
+            "target": "codex",
+            "mode": "read_write",
+            "risk_level": "high",
+            "decision": "allowed",
+            "reason": "connector is explicitly approved",
+            "failure_type": null
+          }
+        ],
+        "failure_type": null
+      },
+      "failure_type": null
     }
   },
-  "issue_count": 0,
-  "failure_count": 1,
-  "intent_debt": {
-    "goal": "Complete DEV-014 online audit and full responsive browser screenshot validation.",
-    "failure_type": "external_environment",
-    "reason": "Online npm audit requires DNS/network access, and full screenshot validation still requires browser/dev-server access; the contract no-body POST regression itself is covered and repaired locally.",
-    "next_step": "Run online npm audit and full 1440/1280/960 browser screenshots in a network/browser-capable PR environment.",
-    "created_at": "2026-06-20T07:20:00+00:00"
-  }
+  "issue_count": 7,
+  "failure_count": 0,
+  "intent_debt": null
 }

@@ -1,6 +1,6 @@
 # BUSINESS IMPLEMENTATION PLAN
 
-本文件定义 `xtgzpt` 从当前 DEV-010 状态走向生产级第一版的阶段计划。
+本文件定义 `xtgzpt` 从当前 DEV-015 状态走向生产级第一版的阶段计划。
 
 ## 1. 当前完成状态
 
@@ -30,6 +30,8 @@
 | AUDIT-013 | DEV-013 审计 | 已完成，本地代码审计通过；在线 audit 需网络环境复核 |
 | DEV-014 | 合同闭环 | 已完成，本地代码 gate 通过；在线 audit / 浏览器验证需可用环境复核 |
 | AUDIT-014 | DEV-014 审计 | 已完成，本地代码审计通过；在线 audit / 浏览器验证需可用环境复核 |
+| DEV-015 | 审批闭环 | 已完成，当前沙箱无 Node/npm，需可用环境复核本地 gate |
+| AUDIT-015 | DEV-015 审计 | 已完成，当前沙箱无 Node/npm，需可用环境复核本地 gate |
 
 ## 2. 总体阶段顺序
 
@@ -280,7 +282,7 @@
 - AI 结构化审查返回风险清单、原文高亮、A/B/C 方案、framework version 和 `next_required_action=human_confirm_risks`。
 - AI 不确认风险、不选择 A/B/C 方案、不提交审批、不改变正式业务结果。
 - 风险必须由具备权限的人类账号确认并选择方案；首次确认后进入修改，修改版本必须二次审查。
-- 提交审批只生成 `approval_pending` 状态、审批边界 handoff 记录和审计，不实现完整审批引擎。
+- DEV-014 中提交审批只生成 `approval_pending` 状态、审批边界 handoff 记录和审计；DEV-015 已在此 handoff 后创建真实审批实例。
 - 执行跟踪只记录提醒、事项、状态和审计，不做自动签署、付款、外部通知或执行完成确认。
 - 无权限用户通过列表、详情或 AI 审查接口不能读取合同正文、风险、来源证据或 AI 上下文。
 - PostgreSQL 兼容迁移资产新增 `0008_contract_closure.sql`。
@@ -319,6 +321,19 @@
 - AI 不是审批人。
 - 转交、加签、退回必须记录原因。
 - 审批结果必须写回来源对象。
+
+当前状态：
+
+- 已完成。
+- 合同提交审批会创建真实人工 approval instance，handoff 记录关联 approval id。
+- 当前节点从法务到财务再到业务审批人，处理人必须是人类账号。
+- 同意、驳回、退回、转交、加签接口均校验当前节点处理人和审批权限。
+- 同意最终节点写回合同 `approved`；驳回写回 `rejected`；退回写回 `revision_required`。
+- 我的工作台和系统内通知展示当前节点待审批。
+- 审批详情 API 对无权限账号返回非泄露 404。
+- 前端审批工作区只放在既有“审批”一级菜单内。
+- PostgreSQL 兼容迁移资产新增 `0009_approval_closure.sql`。
+- 当前沙箱无 `node`/`npm`，本地 `npm run ci`、offline audit 和 smoke 需在 Node/npm 可用环境复核。
 
 ## 11. DEV-016 AI 框架中心和 AI Run 生产化
 
