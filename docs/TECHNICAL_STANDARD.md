@@ -128,8 +128,9 @@ API 必须遵守：
 - PostgreSQL 兼容 migration 资产已覆盖当前运行时对象、文件元数据/版本/对象绑定/归档事件、知识审核状态/版本历史/来源证据、合同、合同版本、AI 审查、风险确认、审批边界交接、执行跟踪事件，以及审批实例、节点、动作历史和合同审批结果写回字段。
 - DEV-016 已新增 AI Framework、Framework Version、AI Run、输入/输出快照、来源证据链接和人工采纳/驳回/修改记录的 PostgreSQL 兼容 migration 资产。
 - DEV-020 已新增 runtime store mode selection：`memory`、`file`、`postgres`。测试默认 `memory`；本地和非测试默认 `file`，并可用 `XTGZPT_RUNTIME_DATA_FILE` 指向持久化文件；生产可通过 `XTGZPT_RUNTIME_STORE_MODE=postgres` 进入 PostgreSQL adapter/cutover boundary。
-- DEV-020 已新增 PostgreSQL runtime config validation 和 `0011_runtime_store_cutover_boundary.sql`，用于当前 `RuntimeData` JSON shape 的 cutover document 边界。
-- 仍未完成 driver-backed PostgreSQL live writes、连接池、事务、生产数据切流和备份恢复演练。
+- DEV-021 已将 PostgreSQL runtime boundary 升级为 driver-backed adapter：通过 `pg` 连接池读取/初始化 `runtime_data_documents` 文档，通过 checksum 条件更新写回当前 `RuntimeData` JSON shape，并在并发覆盖或读写失败时显式失败，不静默回退到 file/memory。
+- `0011_runtime_store_cutover_boundary.sql` 仍是当前 RuntimeData document 边界；DEV-021 未执行生产切流、未提交生产 secrets、未演练生产备份恢复。
+- 仍未完成真实生产数据切流、生产备份恢复演练、真实生产 smoke signoff 和生产发布。
 
 生产目标：
 

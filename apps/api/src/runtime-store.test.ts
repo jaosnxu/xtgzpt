@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildServer } from "./index";
 import {
-  createRuntimeStore,
+  createPostgresRuntimeStoreForTest,
+  type PostgresRuntimeClient,
+  type PostgresRuntimeQueryResult,
   resolvePostgresRuntimeStoreConfig,
   resolveRuntimeStoreOptions
 } from "./runtime-store";
@@ -31,6 +33,59 @@ function createDataFilePath() {
   const root = mkdtempSync(join(tmpdir(), "xtgzpt-runtime-store-"));
   tempRoots.push(root);
   return join(root, "runtime-data.json");
+}
+
+function createMockPostgresClient(options: { failOnQuery?: string; staleOnUpdate?: boolean } = {}) {
+  const document = {
+    runtime_data: undefined as unknown,
+    checksum: null as string | null
+  };
+  const queries: Array<{ sql: string; params: unknown[] }> = [];
+  const client: PostgresRuntimeClient = {
+    async query(sql: string, params: unknown[] = []): Promise<PostgresRuntimeQueryResult> {
+      queries.push({ sql, params });
+      if (options.failOnQuery && sql.includes(options.failOnQuery)) {
+        throw new Error(`mock query failure:${options.failOnQuery}`);
+      }
+      if (sql.includes("INSERT INTO")) {
+        if (document.runtime_data === undefined) {
+          document.runtime_data = JSON.parse(params[1] as string);
+          document.checksum = params[2] as string;
+        }
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes("SELECT runtime_data")) {
+        if (document.runtime_data === undefined) {
+          return { rows: [], rowCount: 0 };
+        }
+        return {
+          rows: [
+            {
+              runtime_data: document.runtime_data,
+              checksum: document.checksum
+            }
+          ],
+          rowCount: 1
+        };
+      }
+      if (sql.includes("UPDATE")) {
+        if (options.staleOnUpdate || document.checksum !== params[3]) {
+          return { rows: [], rowCount: 0 };
+        }
+        document.runtime_data = JSON.parse(params[1] as string);
+        document.checksum = params[2] as string;
+        return { rows: [{ checksum: document.checksum }], rowCount: 1 };
+      }
+
+      throw new Error(`unexpected query:${sql}`);
+    }
+  };
+
+  return {
+    client,
+    document,
+    queries
+  };
 }
 
 afterEach(() => {
@@ -131,29 +186,136 @@ describe("runtime persistence store", () => {
     ).toThrow("safe PostgreSQL identifier");
   });
 
-  it("exposes a no-live-write PostgreSQL adapter boundary for the current RuntimeData shape", () => {
-    const store = createRuntimeStore({
-      mode: "postgres",
-      postgres: {
-        databaseUrl: "postgres://localhost:5432/xtgzpt",
-        schema: "runtime",
-        table: "runtime_documents",
-        documentId: "runtime-data-prod"
-      }
+  it("initializes a missing PostgreSQL runtime document and persists RuntimeData", async () => {
+    const postgres = createMockPostgresClient();
+    const store = await createPostgresRuntimeStoreForTest({
+      client: postgres.client,
+      schema: "runtime",
+      table: "runtime_documents",
+      documentId: "runtime-data-test"
     });
 
-    expect(store.state).toEqual(
+    expect(store.state.projects).toEqual([]);
+    store.state.projects.push({
+      id: "project-postgres",
+      title: "PostgreSQL runtime project",
+      summary: "persisted through mocked postgres",
+      status: "active",
+      organizationId: "org-product",
+      ownerUserId: "user-owner",
+      memberUserIds: ["user-owner"],
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString()
+    });
+    await store.save();
+
+    expect(postgres.document.runtime_data).toEqual(
       expect.objectContaining({
-        projects: [],
-        tasks: [],
-        chatThreads: [],
-        aiRuns: [],
-        approvals: [],
-        contracts: [],
-        files: []
+        projects: [
+          expect.objectContaining({
+            id: "project-postgres",
+            title: "PostgreSQL runtime project"
+          })
+        ]
       })
     );
-    expect(() => store.save()).toThrow("does not execute live database writes");
+    expect(postgres.queries.some((query) => query.sql.includes("INSERT INTO \"runtime\".\"runtime_documents\""))).toBe(true);
+    expect(postgres.queries.some((query) => query.sql.includes("UPDATE \"runtime\".\"runtime_documents\""))).toBe(true);
+  });
+
+  it("serializes concurrent PostgreSQL saves before computing checksums", async () => {
+    const postgres = createMockPostgresClient();
+    const store = await createPostgresRuntimeStoreForTest({
+      client: postgres.client,
+      schema: "runtime",
+      table: "runtime_documents",
+      documentId: "runtime-data-test"
+    });
+
+    store.state.projects.push({
+      id: "project-concurrent-save",
+      title: "Concurrent save project",
+      summary: "should not conflict with queued saves",
+      status: "active",
+      organizationId: "org-product",
+      ownerUserId: "user-owner",
+      memberUserIds: ["user-owner"],
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString()
+    });
+
+    await expect(Promise.all([store.save(), store.save()])).resolves.toEqual([undefined, undefined]);
+    expect(postgres.queries.filter((query) => query.sql.includes("UPDATE \"runtime\".\"runtime_documents\""))).toHaveLength(2);
+  });
+
+  it("loads existing PostgreSQL runtime data into the same state array references", async () => {
+    const postgres = createMockPostgresClient();
+    const firstStore = await createPostgresRuntimeStoreForTest({
+      client: postgres.client,
+      schema: "runtime",
+      table: "runtime_documents",
+      documentId: "runtime-data-test"
+    });
+    const projectsRef = firstStore.state.projects;
+    firstStore.state.projects.push({
+      id: "loaded-project",
+      title: "Loaded project",
+      summary: "Loaded from mocked postgres",
+      status: "active",
+      organizationId: "org-product",
+      ownerUserId: "user-owner",
+      memberUserIds: ["user-owner"],
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString()
+    });
+    await firstStore.save();
+
+    const secondStore = await createPostgresRuntimeStoreForTest({
+      client: postgres.client,
+      schema: "runtime",
+      table: "runtime_documents",
+      documentId: "runtime-data-test"
+    });
+
+    expect(firstStore.state.projects).toBe(projectsRef);
+    expect(secondStore.state.projects).toEqual([
+      expect.objectContaining({
+        id: "loaded-project"
+      })
+    ]);
+  });
+
+  it("fails safely on stale PostgreSQL checksum updates", async () => {
+    const postgres = createMockPostgresClient({ staleOnUpdate: true });
+    const store = await createPostgresRuntimeStoreForTest({
+      client: postgres.client,
+      schema: "runtime",
+      table: "runtime_documents",
+      documentId: "runtime-data-test"
+    });
+
+    await expect(store.save()).rejects.toThrow("concurrent update detected");
+  });
+
+  it("fails loudly on PostgreSQL read or write errors", async () => {
+    const readFailure = createMockPostgresClient({ failOnQuery: "SELECT runtime_data" });
+    await expect(
+      createPostgresRuntimeStoreForTest({
+        client: readFailure.client,
+        schema: "runtime",
+        table: "runtime_documents",
+        documentId: "runtime-data-test"
+      })
+    ).rejects.toThrow("failed to initialize/read RuntimeData");
+
+    const writeFailure = createMockPostgresClient({ failOnQuery: "UPDATE" });
+    const store = await createPostgresRuntimeStoreForTest({
+      client: writeFailure.client,
+      schema: "runtime",
+      table: "runtime_documents",
+      documentId: "runtime-data-test"
+    });
+    await expect(store.save()).rejects.toThrow("failed to persist RuntimeData");
   });
 
   it("keeps runtime data after restart through the default server startup path", async () => {
