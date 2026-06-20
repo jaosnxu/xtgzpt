@@ -1,6 +1,6 @@
 # BUSINESS IMPLEMENTATION PLAN
 
-本文件定义 `xtgzpt` 从当前 DEV-015 状态走向生产级第一版的阶段计划。
+本文件定义 `xtgzpt` 从当前 DEV-018 后状态走向受控生产发布的阶段计划。
 
 ## 1. 当前完成状态
 
@@ -34,6 +34,10 @@
 | AUDIT-015 | DEV-015 审计 | 已完成，当前沙箱无 Node/npm，需可用环境复核本地 gate |
 | DEV-016 | AI 框架中心和 AI Run 生产化 | 已完成，当前沙箱无 Node/npm，需可用环境复核本地 gate |
 | AUDIT-016 | DEV-016 审计 | 已完成，当前沙箱无 Node/npm，需可用环境复核本地 gate |
+| DEV-017 | 全链路响应式和页面状态验收 | 已完成，外部 verifier 已复核本地 gate 和浏览器 DOM 验证；1440 截图受当前 in-app browser 约束 |
+| AUDIT-017 | DEV-017 审计 | 已完成 |
+| DEV-018 | 生产上线准备 | 已完成生产 readiness 文档和安全占位符；真实生产部署、production smoke、备份恢复演练和 release signoff 仍需 release window 执行 |
+| AUDIT-018 | DEV-018 审计 | 已完成，本地完整 gate 通过；待 PR required checks / release operator 执行外部门槛 |
 
 ## 2. 总体阶段顺序
 
@@ -406,6 +410,13 @@
 - 俄文长度不破坏布局。
 - 无权限、空、错误、加载、AI 中状态都可见。
 
+当前状态：
+
+- 已完成。
+- Dashboard、Workbench、Projects、Tasks、Chat、Knowledge、Contracts、Approvals、System Settings 和 Login/menu flow 已完成页面状态和响应式收口。
+- 外部 verifier 已记录 `git diff --check`、无 AI center 一级菜单扫描、`npm run lint`、`npm run typecheck`、`npm run test`、`npm run build`、`npm run smoke:api`、`npm audit --audit-level=low` 通过。
+- Browser DOM 验证覆盖当前可用 1280 和 960 viewports；请求的 1440 viewport 受当前 in-app browser 限制约束到 1280，但 CSS/content max-width 仍按 1440 office layout 设计。
+
 ## 13. DEV-018 生产上线准备
 
 目标：
@@ -430,3 +441,11 @@
 - 生产密钥不在仓库。
 - 数据可备份和恢复。
 - P0 测试为 0 失败。
+
+当前状态：
+
+- 已完成生产上线准备材料，不等同于已经生产上线。
+- `docs/operations/PRODUCTION_READINESS_RUNBOOK.md` 已覆盖配置、GitHub Secrets / Variables、migration、运行数据备份、恢复演练、日志、健康检查、production smoke、安全审计、回滚、运维交接和 release signoff。
+- `.env.example` 仅保留 placeholder，未提交真实 secret、真实生产 URL、生产数据库连接串、JWT secret、私钥或 token。
+- DEV-018 本地 gate 已通过：`git diff --check`、secret 占位符检查、`npm run lint`、`npm run typecheck`、`npm run test`、`npm run build`、`npm run smoke:api`、`npm audit --audit-level=low`。
+- 真实生产部署、真实 production smoke、真实备份和隔离恢复演练、真实生产 secrets 注入、release signoff 和 PR required checks 仍是外部门槛。
