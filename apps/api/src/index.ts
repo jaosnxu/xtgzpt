@@ -1,6 +1,10 @@
+import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { createHash, randomUUID } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { AiProviderError, fallbackAiFrameworkVersion, generateAiDraftContent } from "./ai-provider";
 import { loadLocalEnv } from "./env";
 import {
@@ -95,6 +99,8 @@ import {
 } from "@xtgzpt/shared";
 
 loadLocalEnv();
+
+const moduleDir = dirname(fileURLToPath(import.meta.url));
 
 interface LoginBody {
   username?: string;
@@ -1047,7 +1053,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
   function reviewsForContract(contractId: string) {
     return contractReviews
       .filter((review) => review.contractId === contractId)
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+      .sort((left, right) => right.version - left.version || right.createdAt.localeCompare(left.createdAt));
   }
 
   function currentContractVersion(contract: ContractRecord) {
@@ -6184,6 +6190,29 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       status: availableModules.includes(moduleKey as ModuleKey) ? "available" : "not_implemented"
     };
   });
+
+  if (process.env.NODE_ENV !== "test" && process.env.XTGZPT_SERVE_WEB === "true") {
+    const webDistPath = process.env.XTGZPT_WEB_DIST_DIR ?? resolve(moduleDir, "../../web/dist");
+    const indexHtmlPath = resolve(webDistPath, "index.html");
+
+    if (existsSync(indexHtmlPath)) {
+      void server.register(fastifyStatic, {
+        root: webDistPath,
+        decorateReply: false,
+        wildcard: false
+      });
+
+      server.setNotFoundHandler((request, reply) => {
+        if (request.method === "GET" || request.method === "HEAD") {
+          return reply.type("text/html").send(readFileSync(indexHtmlPath, "utf8"));
+        }
+
+        return reply.code(404).send({ error: "not_found" });
+      });
+    } else {
+      server.log.warn({ webDistPath }, "XTGZPT_SERVE_WEB=true but frontend dist was not found");
+    }
+  }
 
   return server;
 }
