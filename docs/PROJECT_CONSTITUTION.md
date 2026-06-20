@@ -52,6 +52,7 @@
 - `DEV-020` 已新增 API runtime store mode selection、PostgreSQL adapter/cutover boundary、配置校验和 migration 边界，但未执行真实 PostgreSQL 生产写入或切流。
 - `AUDIT-021` 已完成 DEV-020 后项目状态和生产准备审计，确认下一阶段应进入真实 PostgreSQL runtime adapter。
 - `DEV-021` 已新增 driver-backed PostgreSQL runtime adapter、连接池入口、RuntimeData document 初始化/读取/写入、checksum 条件更新和 mocked PostgreSQL adapter 测试；仍未执行真实生产切流。
+- `DEV-022` 已完成 release gate / production cutover audit 文档收口，确认代码和 runbook 具备进入外部 release gate 的材料，但 branch protection、production environment protection、真实生产 secrets 注入、备份恢复演练、production smoke 和 release signoff 仍必须在外部发布流程完成。
 - 仍未达到“已经生产上线”状态。
 
 当前允许：
@@ -179,7 +180,7 @@ AI 严禁：
 
 ## 8. 数据与生产持久化标准
 
-当前 API runtime 已具备显式 store mode selection：测试默认 `memory`，本地和非测试默认 `file`，并继续支持 `XTGZPT_RUNTIME_DATA_FILE`；生产可通过 `XTGZPT_RUNTIME_STORE_MODE=postgres` 选择 PostgreSQL boundary，并要求 `XTGZPT_RUNTIME_DATABASE_URL` 或 `DATABASE_URL` 等配置通过校验。PostgreSQL 兼容 migration 资产已覆盖当前核心对象，并新增 `runtime_data_documents` cutover boundary。当前事实仍不是最终生产数据库标准：DEV-020 只建立 adapter/cutover 边界和安全失败策略，尚未执行 driver-backed PostgreSQL live writes、连接池、事务、线上备份恢复和生产数据切流。
+当前 API runtime 已具备显式 store mode selection：测试默认 `memory`，本地和非测试默认 `file`，并继续支持 `XTGZPT_RUNTIME_DATA_FILE`；生产可通过 `XTGZPT_RUNTIME_STORE_MODE=postgres` 选择 PostgreSQL adapter，并要求 `XTGZPT_RUNTIME_DATABASE_URL` 或 `DATABASE_URL` 等配置通过校验。PostgreSQL 兼容 migration 资产已覆盖当前核心对象，并新增 `runtime_data_documents` cutover boundary。DEV-021 已完成 driver-backed PostgreSQL RuntimeData document read/write、连接池入口和 checksum 条件更新；当前事实仍不是最终生产切流完成：真实生产 secrets 注入、生产库备份、file-to-postgres 回填、隔离恢复演练、production smoke、branch protection / required checks 外部证据和 release signoff 仍未执行。
 
 生产标准必须满足：
 
@@ -272,4 +273,4 @@ AI 严禁：
 - 真实 production smoke test
 - 真实备份和隔离恢复演练
 - release signoff
-- API runtime 完成 driver-backed PostgreSQL live writes、连接池、事务和生产数据库切流
+- API runtime 真实生产 PostgreSQL cutover、file-to-postgres 回填、生产库恢复演练和切流后观察窗口

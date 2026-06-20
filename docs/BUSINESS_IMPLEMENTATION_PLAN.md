@@ -40,10 +40,11 @@
 | AUDIT-018 | DEV-018 审计 | 已完成，本地完整 gate 通过；待 PR required checks / release operator 执行外部门槛 |
 | DEV-019 | DEV-018 后项目记忆和状态对齐 | 已完成，仅文档和 runtime memory 对齐 |
 | AUDIT-019 | DEV-019 审计 | 已完成 |
-| DEV-020 | API runtime PostgreSQL adapter/cutover boundary | 已完成 runtime store mode selection、PostgreSQL config validation、adapter boundary 和 migration boundary；真实 driver-backed writes / cutover 仍未执行 |
+| DEV-020 | API runtime PostgreSQL adapter/cutover boundary | 已完成 runtime store mode selection、PostgreSQL config validation、adapter boundary 和 migration boundary；DEV-020 本身不含真实 PostgreSQL 写入 adapter，DEV-021 已补齐 adapter，真实生产 cutover 仍未执行 |
 | AUDIT-020 | DEV-020 审计 | 已完成，本地 gate 全部通过 |
 | AUDIT-021 | 项目状态和生产准备审计 | 已完成，确认下一阶段应进入 DEV-021 真实 PostgreSQL runtime adapter |
 | DEV-021 | 真实 PostgreSQL runtime adapter | 已完成 driver-backed RuntimeData read/write、checksum 条件更新、pg 连接池入口、mocked PostgreSQL adapter 测试和 runbook 更新；真实生产切流仍未执行 |
+| DEV-022 | release gate / production cutover audit | 已完成文档和 runtime memory 收口；确认外部 branch protection、required checks、environment protection、生产 secrets、备份恢复演练、production smoke 和 release signoff 仍是切流前硬门槛 |
 
 ## 2. 总体阶段顺序
 
@@ -65,6 +66,7 @@
 14. AUDIT-021 项目状态和生产准备审计
 15. DEV-021 真实 PostgreSQL runtime adapter
 16. DEV-022 release gate / production cutover audit
+17. 外部 release window：branch protection / required checks / environment protection / backup restore / production smoke / signoff 后才允许 cutover
 
 ## 3. GOV-001 项目宪法和标准收口
 
@@ -500,7 +502,7 @@
 
 - 已完成 code/docs boundary。
 - PostgreSQL adapter 当前以安全失败方式阻止 live write，避免误把 boundary 当成真实生产切流。
-- 后续仍需 driver-backed PostgreSQL adapter、连接池、事务、数据迁移/回填、备份恢复演练和生产 cutover signoff。
+- DEV-021 已补齐 driver-backed PostgreSQL adapter、连接池入口和 checksum 条件更新；后续仍需真实数据迁移/回填、备份恢复演练和生产 cutover signoff。
 
 ## 16. AUDIT-021 项目状态和生产准备审计
 
@@ -562,6 +564,8 @@
 
 ## 18. DEV-022 release gate / production cutover audit
 
+状态：已完成。
+
 目标：
 
 - 在任何真实生产切流前完成 release gate 审计。
@@ -573,6 +577,7 @@
 - file runtime 到 PostgreSQL runtime 的回填计划。
 - 生产备份、恢复演练、rollback 计划和 smoke 账号。
 - 是否允许生产切流的明确结论。
+- README、项目宪法、技术标准、测试标准、业务计划、backlog、runbook 和 runtime memory 的生产切流口径对齐。
 
 不做：
 
@@ -581,6 +586,7 @@
 - 不新增一级菜单。
 - 不提交真实生产 secrets。
 - 不在未签字 release window 内执行真实生产写入或生产切流。
+- 不连接或写入真实生产数据库。
 
 验收：
 
@@ -589,3 +595,9 @@
 - PostgreSQL 写入失败必须安全失败，不得静默回退导致数据分叉。
 - 迁移/回填/回滚文档明确。
 - `npm run lint`、`npm run typecheck`、`npm run test`、`npm run build`、`npm run smoke:api`、`npm audit --audit-level=low` 和 `git diff --check` 全部通过。
+
+当前结论：
+
+- 文档、runtime memory、structured-data 和本地 verifier gate 审计通过。
+- 允许进入 PR / release operator 外部门槛复核。
+- 不允许直接生产切流；必须先取得 GitHub required checks、branch protection、review approval、production environment approval、真实 secrets 已配置但不外泄的证明、备份和隔离恢复演练、production smoke、rollback 目标和第 13 节 signoff。

@@ -11,5 +11,5 @@ CREATE TABLE IF NOT EXISTS runtime_data_documents (
 CREATE INDEX IF NOT EXISTS runtime_data_documents_updated_idx
   ON runtime_data_documents(updated_at DESC);
 
-COMMENT ON TABLE runtime_data_documents IS 'DEV-020 PostgreSQL runtime store cutover boundary for the current RuntimeData JSON shape. This is a configuration and adapter boundary only, not a production data seed.';
-COMMENT ON COLUMN runtime_data_documents.runtime_data IS 'Serialized RuntimeData document containing the current API runtime arrays until a fully driver-backed PostgreSQL cutover is implemented.';
+COMMENT ON TABLE runtime_data_documents IS 'PostgreSQL runtime store cutover boundary for the current RuntimeData JSON shape. DEV-021 added driver-backed adapter support; production cutover still requires release signoff and is not a production data seed.';
+COMMENT ON COLUMN runtime_data_documents.runtime_data IS 'Serialized RuntimeData document containing the current API runtime arrays for the driver-backed PostgreSQL adapter until object-level relational repositories replace the document boundary.';

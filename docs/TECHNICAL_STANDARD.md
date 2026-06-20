@@ -130,6 +130,7 @@ API 必须遵守：
 - DEV-020 已新增 runtime store mode selection：`memory`、`file`、`postgres`。测试默认 `memory`；本地和非测试默认 `file`，并可用 `XTGZPT_RUNTIME_DATA_FILE` 指向持久化文件；生产可通过 `XTGZPT_RUNTIME_STORE_MODE=postgres` 进入 PostgreSQL adapter/cutover boundary。
 - DEV-021 已将 PostgreSQL runtime boundary 升级为 driver-backed adapter：通过 `pg` 连接池读取/初始化 `runtime_data_documents` 文档，通过 checksum 条件更新写回当前 `RuntimeData` JSON shape，并在并发覆盖或读写失败时显式失败，不静默回退到 file/memory。
 - `0011_runtime_store_cutover_boundary.sql` 仍是当前 RuntimeData document 边界；DEV-021 未执行生产切流、未提交生产 secrets、未演练生产备份恢复。
+- DEV-022 已完成 release gate audit 文档收口，确认本地代码门禁和 runbook 材料可支撑外部 release gate，但不能替代 GitHub branch protection / required checks、production environment approval、真实 secrets 注入、真实备份恢复演练、production smoke 和 release signoff。
 - 仍未完成真实生产数据切流、生产备份恢复演练、真实生产 smoke signoff 和生产发布。
 
 生产目标：
