@@ -1,0 +1,435 @@
+{
+  "schema_version": "loop.run_summary.v1",
+  "task_id": "TASK-XTGZPT-DEV-018-CONTINUATION-2-CODEX-1",
+  "goal": "Finish xtgzpt DEV-018 production readiness docs in the existing DEV-018 worktree with a compact writer prompt.",
+  "scope": {
+    "include": [
+      "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-018-CODEX-1/WT-BA65B369"
+    ],
+    "exclude": [
+      "real production writes",
+      "real deployment",
+      "real secrets",
+      "business feature changes",
+      "new top-level menu"
+    ]
+  },
+  "acceptance": [
+    "Executed through codex_executor in the existing isolated DEV-018 worktree.",
+    "Create DEV-018/AUDIT-018 docs and one production readiness runbook/checklist.",
+    "Use placeholders only; commit no secrets or production URLs.",
+    "Record prior DEV-018 writer stalls as Loop executor observations.",
+    "Run git diff --check and document intended gates."
+  ],
+  "status": "running",
+  "current_stage": "executing",
+  "created_at": "2026-06-20T10:50:10.502228+00:00",
+  "updated_at": "2026-06-20T10:50:10.514285+00:00",
+  "heartbeat_at": "2026-06-20T10:50:10.514285+00:00",
+  "attempt_count": 5,
+  "retry_count": 0,
+  "repair_count": 0,
+  "workflow": {
+    "architecture": "graph_runtime",
+    "type": "durable_workflow",
+    "writer": "writer",
+    "reviewer": "reviewer",
+    "verifier": "verifier"
+  },
+  "project_memory_index": {
+    "root": "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-018-CODEX-1/WT-BA65B369",
+    "index_path": "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-018-CODEX-1/WT-BA65B369/docs/loop/00_MEMORY_INDEX.md",
+    "status": "available",
+    "loaded_files": [
+      "PROJECT_INTAKE.md",
+      "README.md",
+      "docs/BUSINESS_IMPLEMENTATION_PLAN.md",
+      "docs/PROJECT_CONSTITUTION.md",
+      "docs/TECHNICAL_STANDARD.md",
+      "docs/TEST_ACCEPTANCE_STANDARD.md",
+      "docs/dev-log/AUDIT-003.md",
+      "docs/dev-log/AUDIT-004.md",
+      "docs/dev-log/AUDIT-005.md",
+      "docs/dev-log/AUDIT-008.md",
+      "docs/dev-log/AUDIT-009.md",
+      "docs/dev-log/AUDIT-010.md",
+      "docs/dev-log/AUDIT-011.md",
+      "docs/dev-log/AUDIT-012.md",
+      "docs/dev-log/AUDIT-013.md",
+      "docs/dev-log/AUDIT-014.md",
+      "docs/dev-log/AUDIT-015.md",
+      "docs/dev-log/AUDIT-016.md",
+      "docs/dev-log/AUDIT-017.md",
+      "docs/dev-log/AUDIT-LOOP-001.md",
+      "docs/dev-log/DEV-004.md",
+      "docs/dev-log/DEV-005.md",
+      "docs/dev-log/DEV-006.md",
+      "docs/dev-log/DEV-007.md",
+      "docs/dev-log/DEV-008.md",
+      "docs/dev-log/DEV-009.md",
+      "docs/dev-log/DEV-010.md",
+      "docs/dev-log/DEV-011.md",
+      "docs/dev-log/DEV-012.md",
+      "docs/dev-log/DEV-013.md",
+      "docs/dev-log/DEV-014.md",
+      "docs/dev-log/DEV-015.md",
+      "docs/dev-log/DEV-016.md",
+      "docs/dev-log/DEV-017.md",
+      "docs/dev-readiness/00_DEV_READINESS_OVERVIEW.md",
+      "docs/dev-readiness/01_DEVELOPMENT_PRD.md",
+      "docs/dev-readiness/02_PERMISSION_MATRIX.md",
+      "docs/dev-readiness/03_OBJECTS_AND_STATE_MACHINES.md",
+      "docs/dev-readiness/04_API_DRAFT.md",
+      "docs/dev-readiness/06_AUDIT_LOG_MATRIX.md",
+      "docs/dev-readiness/08_TEST_CASES_AND_ACCEPTANCE.md",
+      "docs/dev-readiness/10_DEVELOPMENT_BACKLOG.md",
+      "docs/loop/00_MEMORY_INDEX.md",
+      "docs/loop/01_OPERATING_RULES.md",
+      "docs/loop/02_INTENT_DEBT.md",
+      "docs/loop/04_GITHUB_BRANCH_PROTECTION.md",
+      "docs/loop/05_EXTERNAL_LOOP_SYSTEM.md"
+    ],
+    "missing_files": [],
+    "rejected_files": []
+  },
+  "stages": [
+    {
+      "stage": "intake",
+      "status": "done",
+      "summary": "Accepted goal and initialized task context.",
+      "failure_type": null,
+      "next_state": "understanding",
+      "timestamp": "2026-06-20T10:47:58.050531+00:00"
+    },
+    {
+      "stage": "understanding",
+      "status": "done",
+      "summary": "Parsed task scope, acceptance, available resources, and repository memory.",
+      "failure_type": null,
+      "next_state": "planning",
+      "timestamp": "2026-06-20T10:47:58.052126+00:00"
+    },
+    {
+      "stage": "planning",
+      "status": "done",
+      "summary": "Built minimal execution plan from current goal.",
+      "failure_type": null,
+      "next_state": "routing",
+      "timestamp": "2026-06-20T10:47:58.054088+00:00"
+    },
+    {
+      "stage": "routing",
+      "status": "done",
+      "summary": "Selected candidate skills and connectors for the task.",
+      "failure_type": null,
+      "next_state": "preflight",
+      "timestamp": "2026-06-20T10:47:58.056130+00:00"
+    },
+    {
+      "stage": "preflight",
+      "status": "done",
+      "summary": "Preflight gate passed.",
+      "failure_type": null,
+      "next_state": "executing",
+      "timestamp": "2026-06-20T10:47:58.057788+00:00"
+    },
+    {
+      "stage": "intake",
+      "status": "done",
+      "summary": "Accepted goal and initialized task context.",
+      "failure_type": null,
+      "next_state": "understanding",
+      "timestamp": "2026-06-20T10:50:10.506085+00:00"
+    },
+    {
+      "stage": "understanding",
+      "status": "done",
+      "summary": "Parsed task scope, acceptance, available resources, and repository memory.",
+      "failure_type": null,
+      "next_state": "planning",
+      "timestamp": "2026-06-20T10:50:10.508076+00:00"
+    },
+    {
+      "stage": "planning",
+      "status": "done",
+      "summary": "Built minimal execution plan from current goal.",
+      "failure_type": null,
+      "next_state": "routing",
+      "timestamp": "2026-06-20T10:50:10.510088+00:00"
+    },
+    {
+      "stage": "routing",
+      "status": "done",
+      "summary": "Selected candidate skills and connectors for the task.",
+      "failure_type": null,
+      "next_state": "preflight",
+      "timestamp": "2026-06-20T10:50:10.512256+00:00"
+    },
+    {
+      "stage": "preflight",
+      "status": "done",
+      "summary": "Preflight gate passed.",
+      "failure_type": null,
+      "next_state": "executing",
+      "timestamp": "2026-06-20T10:50:10.514285+00:00"
+    }
+  ],
+  "gates": {
+    "preflight_gate": {
+      "status": "passed",
+      "reason": "preflight checks passed",
+      "contracts": [
+        {
+          "name": "git",
+          "standard_name": "vcs_adapter",
+          "target": "git",
+          "mode": "read_write",
+          "risk_level": "medium",
+          "auth_requirements": [],
+          "capabilities": [
+            "status",
+            "diff",
+            "branch",
+            "commit_context"
+          ]
+        },
+        {
+          "name": "codex_executor",
+          "standard_name": "codex_writer_executor",
+          "target": "codex",
+          "mode": "read_write",
+          "risk_level": "high",
+          "auth_requirements": [
+            "codex_login"
+          ],
+          "capabilities": [
+            "non_interactive_code_writer",
+            "local_diff_generation",
+            "self_contained_task_execution"
+          ]
+        }
+      ],
+      "auth_resolution": {
+        "git": [],
+        "codex_executor": [
+          {
+            "requirement": "codex_login",
+            "source": "missing",
+            "env": null,
+            "available": false
+          }
+        ]
+      },
+      "missing_auth": [
+        {
+          "connector": "codex_executor",
+          "requirement": "codex_login",
+          "source": "missing",
+          "env": null,
+          "available": false
+        }
+      ],
+      "tool_policy": {
+        "status": "passed",
+        "reason": "tool policy passed",
+        "decisions": [
+          {
+            "connector": "git",
+            "target": "git",
+            "mode": "read_write",
+            "risk_level": "medium",
+            "decision": "allowed",
+            "reason": "connector is allowed by policy",
+            "failure_type": null
+          },
+          {
+            "connector": "codex_executor",
+            "target": "codex",
+            "mode": "read_write",
+            "risk_level": "high",
+            "decision": "allowed",
+            "reason": "connector is explicitly approved",
+            "failure_type": null
+          }
+        ],
+        "failure_type": null
+      },
+      "failure_type": null
+    }
+  },
+  "issues": {
+    "count": 5,
+    "items": [
+      {
+        "id": "ISSUE-001",
+        "title": "Executed through codex_executor in the existing isolated DEV-018 worktree.",
+        "status": "ready",
+        "priority": 1,
+        "goal": "Finish xtgzpt DEV-018 production readiness docs in the existing DEV-018 worktree with a compact writer prompt.",
+        "acceptance": [
+          "Executed through codex_executor in the existing isolated DEV-018 worktree."
+        ],
+        "scope": {
+          "include": [
+            "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-018-CODEX-1/WT-BA65B369"
+          ],
+          "exclude": [
+            "real production writes",
+            "real deployment",
+            "real secrets",
+            "business feature changes",
+            "new top-level menu"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-002",
+        "title": "Create DEV-018/AUDIT-018 docs and one production readiness runbook/checklist...",
+        "status": "ready",
+        "priority": 2,
+        "goal": "Finish xtgzpt DEV-018 production readiness docs in the existing DEV-018 worktree with a compact writer prompt.",
+        "acceptance": [
+          "Create DEV-018/AUDIT-018 docs and one production readiness runbook/checklist."
+        ],
+        "scope": {
+          "include": [
+            "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-018-CODEX-1/WT-BA65B369"
+          ],
+          "exclude": [
+            "real production writes",
+            "real deployment",
+            "real secrets",
+            "business feature changes",
+            "new top-level menu"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-003",
+        "title": "Use placeholders only; commit no secrets or production URLs.",
+        "status": "ready",
+        "priority": 3,
+        "goal": "Finish xtgzpt DEV-018 production readiness docs in the existing DEV-018 worktree with a compact writer prompt.",
+        "acceptance": [
+          "Use placeholders only; commit no secrets or production URLs."
+        ],
+        "scope": {
+          "include": [
+            "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-018-CODEX-1/WT-BA65B369"
+          ],
+          "exclude": [
+            "real production writes",
+            "real deployment",
+            "real secrets",
+            "business feature changes",
+            "new top-level menu"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-004",
+        "title": "Record prior DEV-018 writer stalls as Loop executor observations.",
+        "status": "ready",
+        "priority": 4,
+        "goal": "Finish xtgzpt DEV-018 production readiness docs in the existing DEV-018 worktree with a compact writer prompt.",
+        "acceptance": [
+          "Record prior DEV-018 writer stalls as Loop executor observations."
+        ],
+        "scope": {
+          "include": [
+            "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-018-CODEX-1/WT-BA65B369"
+          ],
+          "exclude": [
+            "real production writes",
+            "real deployment",
+            "real secrets",
+            "business feature changes",
+            "new top-level menu"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      },
+      {
+        "id": "ISSUE-005",
+        "title": "Run git diff --check and document intended gates.",
+        "status": "ready",
+        "priority": 5,
+        "goal": "Finish xtgzpt DEV-018 production readiness docs in the existing DEV-018 worktree with a compact writer prompt.",
+        "acceptance": [
+          "Run git diff --check and document intended gates."
+        ],
+        "scope": {
+          "include": [
+            "/private/tmp/loop-worktrees/TASK-XTGZPT-DEV-018-CODEX-1/WT-BA65B369"
+          ],
+          "exclude": [
+            "real production writes",
+            "real deployment",
+            "real secrets",
+            "business feature changes",
+            "new top-level menu"
+          ]
+        },
+        "verification": {
+          "required": true,
+          "signals": [
+            "review_gate",
+            "verification_gate"
+          ]
+        }
+      }
+    ]
+  },
+  "failures": [],
+  "intent_debt": null,
+  "repair_queue": {
+    "queued": false
+  },
+  "verification": {
+    "ci_setup": null,
+    "ci_summary": null,
+    "eval_summary": null,
+    "artifact_types": {
+      "repository_memory_context": 1,
+      "project_memory_index_context": 1,
+      "issue_backlog": 1,
+      "tool_contracts": 1,
+      "missing_auth": 1,
+      "tool_policy": 1
+    },
+    "reports_count": 10,
+    "trace_count": 41
+  },
+  "worktrees": [
+    "WT-C4E7D5B2"
+  ],
+  "subagents": [],
+  "next_action": "Continue from stage executing."
+}
