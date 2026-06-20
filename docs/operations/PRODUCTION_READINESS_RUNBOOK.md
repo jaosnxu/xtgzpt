@@ -31,7 +31,8 @@
 | 响应式 | 1440 / 1280 / 960 核心页面验收通过 | DEV-017 / release checklist |
 | 权限 | 菜单、数据、操作、审批、文件、AI 权限矩阵通过 | release checklist |
 | 审计 | 关键动作审计矩阵通过 | release checklist |
-| 数据库 | migration 计划、备份、恢复演练和回滚/补偿方案完成 | 本 runbook |
+| 运行数据 | 当前 API runtime data file 路径、备份、恢复演练和回滚/补偿方案完成 | 本 runbook |
+| 数据库资产 | 如本次 release 执行 PostgreSQL migration，migration 计划、备份、恢复演练和回滚/补偿方案完成 | 本 runbook |
 | secrets | 生产 secrets 仅存在于 GitHub Secrets 或部署平台 secret store | GitHub / platform audit |
 | smoke | 使用调用方提供的生产 base URL 和测试账号完成 production smoke | release checklist |
 | signoff | 技术、产品、运维、安全负责人签字 | 本 runbook 第 13 节 |
@@ -47,16 +48,15 @@
 | `NODE_ENV` | variable | 运行环境 | `production` |
 | `APP_BASE_URL` | variable | Web 公开入口，占位符由环境提供 | `<PRODUCTION_WEB_BASE_URL>` |
 | `API_BASE_URL` | variable | API 公开入口，占位符由环境提供 | `<PRODUCTION_API_BASE_URL>` |
-| `DATABASE_URL` | secret | PostgreSQL 兼容数据库连接串 | `<PRODUCTION_DATABASE_URL>` |
+| `XTGZPT_RUNTIME_DATA_FILE` | variable | 当前 API runtime data file 绝对路径；必须位于持久化磁盘或挂载卷 | `<PERSISTENT_RUNTIME_DATA_FILE>` |
 | `DATABASE_MIGRATION_LOCK_ID` | variable | migration 锁标识，避免并发执行 | `<MIGRATION_LOCK_ID>` |
-| `JWT_SECRET` | secret | 认证签名密钥 | `<PRODUCTION_JWT_SECRET>` |
 | `ARK_API_KEY` | secret | 火山方舟 / 豆包 API key | `<ARK_API_KEY>` |
 | `ARK_BASE_URL` | variable | AI provider API base URL | `<ARK_BASE_URL>` |
 | `ARK_MODEL` | variable | AI provider model | `<ARK_MODEL>` |
 | `ARK_AI_MAX_TOKENS` | variable | AI 单次最大输出 token | `<ARK_AI_MAX_TOKENS>` |
 | `LOG_LEVEL` | variable | 日志级别 | `info` |
 | `AUDIT_RETENTION_DAYS` | variable | 审计日志保留策略，按法规和公司制度确定 | `<AUDIT_RETENTION_DAYS>` |
-| `BACKUP_BUCKET` | secret 或 variable | 数据库备份目标位置 | `<BACKUP_STORAGE_TARGET>` |
+| `BACKUP_BUCKET` | secret 或 variable | 运行数据和数据库备份目标位置 | `<BACKUP_STORAGE_TARGET>` |
 
 配置检查：
 
@@ -64,10 +64,18 @@
 printenv NODE_ENV
 printenv APP_BASE_URL
 printenv API_BASE_URL
+printenv XTGZPT_RUNTIME_DATA_FILE
 printenv LOG_LEVEL
 ```
 
 不得在终端、CI log 或 issue 中打印 secret 值。需要确认 secret 是否存在时，只记录“已配置 / 未配置”。
+
+当前 DEV-018 代码边界：
+
+- API 运行时持久化通过 `createRuntimeStore(resolveRuntimeStoreOptions(...))` 读取 `XTGZPT_RUNTIME_DATA_FILE`；未设置时使用应用目录下默认 JSON 文件。
+- API 当前不读取 `DATABASE_URL` 作为 runtime persistence；PostgreSQL migration 资产只能作为数据库上线准备项单独验收，不能证明 live API 已使用 PostgreSQL。
+- API 当前不读取 `JWT_SECRET`；登录 token 为 `dev-session` 前缀并存放在进程内 `Map`，进程重启后 session 失效。
+- 不得把数据库 migration、数据库备份或 JWT rotation 作为当前 API runtime production signoff，除非代码和测试已经证明 API 消费相应配置。
 
 ## 4. GitHub Secrets 和 Variables 占位符
 
@@ -75,8 +83,9 @@ Repository 或 Environment 级配置：
 
 | GitHub 名称 | 类型 | 必需 | 用途 |
 | --- | --- | --- | --- |
-| `PRODUCTION_DATABASE_URL` | Secret | 是 | migration、API 数据库连接 |
-| `PRODUCTION_JWT_SECRET` | Secret | 是 | 生产认证签名 |
+| `XTGZPT_RUNTIME_DATA_FILE` | Variable | 是 | 当前 API runtime data file 持久化路径 |
+| `PRODUCTION_DATABASE_URL` | Secret | 仅 migration/restore gate 需要 | PostgreSQL migration 和隔离恢复演练；当前 API runtime 不读取 |
+| `PRODUCTION_JWT_SECRET` | Secret | 否，预留 | JWT 签名密钥预留；当前 API 不读取，不得作为 release gate |
 | `ARK_API_KEY` | Secret | 按 AI live gate 需要 | live Ark test 和生产 AI provider |
 | `PRODUCTION_SMOKE_USERNAME` | Secret | 是 | production smoke 专用低权限测试账号 |
 | `PRODUCTION_SMOKE_PASSWORD` | Secret | 是 | production smoke 专用低权限测试账号密码 |
@@ -110,6 +119,8 @@ Repository 或 Environment 级配置：
 - `0008_contract_closure.sql`
 - `0009_approval_closure.sql`
 - `0010_ai_framework_run_productionization.sql`
+
+注意：当前 API runtime 不使用 `DATABASE_URL` 连接 PostgreSQL。以下 migration 步骤只适用于“本次 release 明确包含 PostgreSQL 数据库资产上线或演练”的场景，不能替代 `XTGZPT_RUNTIME_DATA_FILE` 的运行数据备份和恢复验收。
 
 上线前确认：
 
@@ -149,7 +160,18 @@ psql "$DATABASE_URL" --set ON_ERROR_STOP=on --command "select count(*) from audi
 
 ### 6.1 备份
 
-备份必须在 migration 和 deploy 前执行。
+当前 API 运行数据文件备份必须在 deploy 前执行。
+
+```bash
+export XTGZPT_RUNTIME_DATA_FILE="<PERSISTENT_RUNTIME_DATA_FILE>"
+export BACKUP_FILE="xtgzpt-runtime-<ENVIRONMENT>-<YYYYMMDDHHMMSS>-<GIT_COMMIT_SHA>.json"
+
+test -f "$XTGZPT_RUNTIME_DATA_FILE"
+cp "$XTGZPT_RUNTIME_DATA_FILE" "$BACKUP_FILE"
+shasum -a 256 "$BACKUP_FILE"
+```
+
+如果本次 release 执行 PostgreSQL migration，还必须在 migration 前执行数据库备份。
 
 ```bash
 export DATABASE_URL="<PRODUCTION_DATABASE_URL>"
@@ -179,7 +201,17 @@ shasum -a 256 "$BACKUP_FILE"
 
 ### 6.2 恢复演练
 
-每次生产上线前必须在隔离恢复库演练一次恢复，不得直接在生产库演练。
+每次生产上线前必须在隔离环境演练当前 API runtime data file 恢复，不得直接覆盖生产运行文件。
+
+```bash
+export BACKUP_FILE="<RUNTIME_BACKUP_FILE>"
+export RESTORE_RUNTIME_DATA_FILE="<RESTORE_TARGET_RUNTIME_DATA_FILE>"
+
+cp "$BACKUP_FILE" "$RESTORE_RUNTIME_DATA_FILE"
+node -e 'JSON.parse(require("node:fs").readFileSync(process.env.RESTORE_RUNTIME_DATA_FILE, "utf8")); console.log("runtime data json ok")'
+```
+
+如果本次 release 执行 PostgreSQL migration，还必须在隔离恢复库演练一次数据库恢复，不得直接在生产库演练。
 
 ```bash
 export RESTORE_DATABASE_URL="<RESTORE_TARGET_DATABASE_URL>"
@@ -193,7 +225,7 @@ pg_restore "$BACKUP_FILE" \
   --no-acl
 ```
 
-恢复后检查：
+数据库恢复后检查（仅本次 release 执行 PostgreSQL migration 时）：
 
 ```bash
 psql "$RESTORE_DATABASE_URL" --set ON_ERROR_STOP=on --command "select count(*) from audit_logs;"
@@ -203,10 +235,10 @@ psql "$RESTORE_DATABASE_URL" --set ON_ERROR_STOP=on --command "select count(*) f
 
 验收：
 
-- 恢复库可连接。
-- 关键表存在。
-- 行数检查与备份时间点预期一致。
-- 审计日志未丢失。
+- runtime data file 可恢复到隔离路径。
+- runtime data file JSON parse 通过。
+- 如本次 release 执行 PostgreSQL migration，恢复库可连接。
+- 如本次 release 执行 PostgreSQL migration，关键表存在，行数检查与备份时间点预期一致，审计日志未丢失。
 - 恢复演练结果写入 release checklist。
 
 ## 7. 日志和审计
@@ -252,7 +284,7 @@ curl -fsS "<PRODUCTION_API_BASE_URL>/health"
 健康检查失败处理：
 
 1. 停止 release。
-2. 检查部署版本、环境变量、数据库连接、应用日志。
+2. 检查部署版本、环境变量、`XTGZPT_RUNTIME_DATA_FILE` 可读写性、应用日志。
 3. 如 deploy 已切流，执行第 11 节 rollback。
 4. 记录 incident 和 release checklist。
 
@@ -345,7 +377,9 @@ curl -fsS "<PRODUCTION_API_BASE_URL>/health"
 
 ### 11.2 数据库回滚或补偿
 
-数据库优先采用补偿 migration，避免直接恢复覆盖生产新写入。
+当前 API runtime data file 回滚必须先确认 release window 内没有不可丢失的新生产写入，或业务负责人签字接受恢复点。允许回滚时，将第 6.1 节的 runtime backup 恢复到 `XTGZPT_RUNTIME_DATA_FILE` 指向的持久化路径，并补跑只读 smoke。
+
+如果本次 release 执行 PostgreSQL migration，数据库优先采用补偿 migration，避免直接恢复覆盖生产新写入。
 
 允许恢复备份的条件：
 
@@ -369,8 +403,9 @@ curl -fsS "<PRODUCTION_API_BASE_URL>/health"
 上线前交接：
 
 - 当前 release SHA
-- migration 文件列表和执行状态
-- 备份文件名、校验和、恢复演练结果
+- runtime data file 路径、备份文件名、校验和、恢复演练结果
+- migration 文件列表和执行状态（如本次 release 执行 migration）
+- 数据库备份文件名、校验和、恢复演练结果（如本次 release 执行 migration）
 - GitHub Secrets / Variables 已配置证明
 - smoke 账号权限说明
 - 健康检查地址占位符
@@ -381,7 +416,7 @@ curl -fsS "<PRODUCTION_API_BASE_URL>/health"
 
 上线后观察窗口：
 
-- 前 30 分钟：持续观察 health、API 错误率、登录失败、权限拒绝异常、数据库连接错误。
+- 前 30 分钟：持续观察 health、API 错误率、登录失败、权限拒绝异常、runtime data file 读写错误；如执行数据库 migration，同时观察 migration job 和数据库连接错误。
 - 前 2 小时：每 30 分钟复核错误日志、审计写入、AI provider failure。
 - 前 24 小时：记录 P0/P1 事件和补救动作。
 
