@@ -34,4 +34,11 @@ describe("frontend production copy", () => {
     expect(appSource).toContain("relatedObjectLabel");
     expect(appSource).not.toMatch(/finance|ERP|procurement|inventory|mobile/i);
   });
+
+  it("keeps browser session recovery for refreshed deep links", () => {
+    expect(appSource).toContain("xtgzpt.session.v1");
+    expect(appSource).toContain("readStoredSession");
+    expect(appSource).toContain("writeStoredSession");
+    expect(appSource).toContain("登录已过期，请重新登录");
+  });
 });
