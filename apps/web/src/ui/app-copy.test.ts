@@ -13,6 +13,8 @@ describe("frontend production copy", () => {
     expect(appSource).not.toContain("正在请求 API");
     expect(appSource).not.toContain("通过 API 读取");
     expect(appSource).not.toContain("访问边界");
+    expect(appSource).not.toContain("页面状态");
+    expect(appSource).not.toContain("前端请求");
   });
 
   it("keeps settings structured as production governance modules", () => {
@@ -32,6 +34,7 @@ describe("frontend production copy", () => {
     expect(appSource).toContain("displayStatus");
     expect(appSource).toContain("displayPriority");
     expect(appSource).toContain("relatedObjectLabel");
+    expect(appSource).toContain('assigned_organizations: "授权组织"');
     expect(appSource).not.toMatch(/finance|ERP|procurement|inventory|mobile/i);
   });
 
