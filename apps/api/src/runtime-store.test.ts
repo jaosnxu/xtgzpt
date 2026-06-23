@@ -48,6 +48,13 @@ function createMockPostgresClient(options: { failOnQuery?: string; staleOnUpdate
       if (options.failOnQuery && sql.includes(options.failOnQuery)) {
         throw new Error(`mock query failure:${options.failOnQuery}`);
       }
+      if (
+        sql.includes("CREATE SCHEMA") ||
+        sql.includes("CREATE TABLE") ||
+        sql.includes("CREATE INDEX")
+      ) {
+        return { rows: [], rowCount: 0 };
+      }
       if (sql.includes("INSERT INTO")) {
         if (document.runtime_data === undefined) {
           document.runtime_data = JSON.parse(params[1] as string);
@@ -232,7 +239,7 @@ describe("runtime persistence store", () => {
     ).toThrow("safe PostgreSQL identifier");
   });
 
-  it("initializes a missing PostgreSQL runtime document and persists RuntimeData", async () => {
+  it("bootstraps a missing PostgreSQL runtime table and persists RuntimeData", async () => {
     const postgres = createMockPostgresClient();
     const store = await createPostgresRuntimeStoreForTest({
       client: postgres.client,
@@ -265,6 +272,9 @@ describe("runtime persistence store", () => {
         ]
       })
     );
+    expect(postgres.queries.some((query) => query.sql.includes("CREATE SCHEMA IF NOT EXISTS \"runtime\""))).toBe(true);
+    expect(postgres.queries.some((query) => query.sql.includes("CREATE TABLE IF NOT EXISTS \"runtime\".\"runtime_documents\""))).toBe(true);
+    expect(postgres.queries.some((query) => query.sql.includes("CREATE INDEX IF NOT EXISTS \"runtime_documents_updated_idx\""))).toBe(true);
     expect(postgres.queries.some((query) => query.sql.includes("INSERT INTO \"runtime\".\"runtime_documents\""))).toBe(true);
     expect(postgres.queries.some((query) => query.sql.includes("UPDATE \"runtime\".\"runtime_documents\""))).toBe(true);
   });
