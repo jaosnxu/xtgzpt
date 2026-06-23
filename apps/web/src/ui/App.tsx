@@ -158,9 +158,215 @@ const moduleStatus: Record<ModuleKey, { stage: string; summary: string }> = {
   }
 };
 
+const moduleRoutes: Record<ModuleKey, string> = {
+  dashboard: "/dashboard",
+  workbench: "/dashboard/workbench",
+  projects: "/dashboard/projects",
+  tasks: "/dashboard/tasks",
+  chat: "/dashboard/chat",
+  knowledge: "/dashboard/knowledge",
+  contracts: "/dashboard/contracts",
+  approvals: "/dashboard/approvals",
+  settings: "/dashboard/settings"
+};
+
+function moduleFromPath(pathname: string): ModuleKey {
+  const match = Object.entries(moduleRoutes)
+    .sort((first, second) => second[1].length - first[1].length)
+    .find(([, route]) => pathname === route || pathname.startsWith(`${route}/`));
+
+  return (match?.[0] as ModuleKey | undefined) ?? "dashboard";
+}
+
+const statusLabels: Record<string, string> = {
+  active: "进行中",
+  archived: "已归档",
+  available: "可处理",
+  blocked: "已阻塞",
+  cancelled: "已取消",
+  completed: "已完成",
+  confirmed: "已确认",
+  disabled: "已停用",
+  draft: "草稿",
+  edited: "已编辑",
+  expired: "已过期",
+  in_progress: "进行中",
+  info: "提醒",
+  not_active: "未启用",
+  pending: "待处理",
+  processing: "审批中",
+  published: "已发布",
+  rejected: "已驳回",
+  returned: "已退回",
+  revision_required: "待修改",
+  risk_pending_confirm: "待确认风险",
+  sent: "已发送",
+  submitted: "待确认",
+  submitted_for_review: "待审核",
+  todo: "待处理",
+  transferred: "已转交",
+  withdrawn: "已撤回",
+  warning: "风险提醒",
+  approval_pending: "待审批",
+  execution_tracking: "执行跟踪",
+  approved: "已通过",
+  adopted: "已采用",
+  changed: "已调整",
+  ok: "正常",
+  AI_Generating: "生成中",
+  AI_Failed: "生成失败"
+};
+
+const priorityLabels: Record<string, string> = {
+  low: "低",
+  medium: "普通",
+  high: "高",
+  urgent: "紧急"
+};
+
+const sourceTypeLabels: Record<string, string> = {
+  ai_draft: "智能草稿",
+  chat_message: "聊天消息",
+  project_memory: "项目记忆",
+  manual: "人工录入",
+  upload: "上传文件",
+  paste: "粘贴文本",
+  revision: "修改版本"
+};
+
+const objectTypeLabels: Record<string, string> = {
+  project: "项目",
+  task: "任务",
+  chat_thread: "会话",
+  contract: "合同",
+  approval: "审批",
+  knowledge_item: "知识",
+  project_memory: "项目记忆",
+  ai_draft: "智能草稿"
+};
+
+const aiDraftKindLabels: Record<string, string> = {
+  chat_summary: "会话摘要",
+  task_draft: "任务草稿",
+  knowledge_draft: "知识草稿"
+};
+
+const scenarioLabels: Record<string, string> = {
+  chat_summary: "会话摘要",
+  task_draft: "任务草稿",
+  knowledge_query: "知识检索",
+  contract_review: "合同审查",
+  approval_suggestion: "审批建议",
+  risk_hint: "风险提示",
+  read_ai_runs: "运行记录"
+};
+
+const entryMethodLabels: Record<string, string> = {
+  upload: "上传",
+  paste: "粘贴",
+  revision: "修改"
+};
+
+const executionEventLabels: Record<string, string> = {
+  reminder: "提醒",
+  milestone: "里程碑",
+  note: "记录"
+};
+
+const approvalActionLabels: Record<string, string> = {
+  approve: "同意",
+  reject: "驳回",
+  return: "退回",
+  transfer: "转交",
+  "add-sign": "加签"
+};
+
+const resultWritebackLabels: Record<string, string> = {
+  "contract.approved": "合同已通过",
+  "contract.rejected": "合同已驳回",
+  "contract.returned": "合同已退回"
+};
+
+const dataScopeLabels: Record<string, string> = {
+  all: "全部数据",
+  all_organizations: "全部组织",
+  authorized_organizations: "授权组织",
+  own_organization: "本组织",
+  own_records: "本人相关",
+  project_member: "参与项目"
+};
+
+function displayStatus(value: string | null | undefined): string {
+  if (!value) {
+    return "未设置";
+  }
+
+  return statusLabels[value] ?? cleanDisplayText(value);
+}
+
+function displayPriority(value: string | null | undefined): string {
+  if (!value) {
+    return "普通";
+  }
+
+  return priorityLabels[value] ?? cleanDisplayText(value);
+}
+
+function displaySourceType(value: string | null | undefined): string {
+  if (!value) {
+    return "来源";
+  }
+
+  return sourceTypeLabels[value] ?? objectTypeLabels[value] ?? cleanDisplayText(value);
+}
+
+function displayAiKind(value: string | null | undefined): string {
+  if (!value) {
+    return "智能建议";
+  }
+
+  return aiDraftKindLabels[value] ?? scenarioLabels[value] ?? cleanDisplayText(value);
+}
+
+function displayEntryMethod(value: string | null | undefined): string {
+  if (!value) {
+    return "未设置";
+  }
+
+  return entryMethodLabels[value] ?? displaySourceType(value);
+}
+
+function displayApprovalAction(value: string | null | undefined): string {
+  if (!value) {
+    return "待处理";
+  }
+
+  return approvalActionLabels[value] ?? displayStatus(value);
+}
+
+function displayResultWriteback(value: string | null | undefined): string {
+  if (!value) {
+    return "待处理";
+  }
+
+  return resultWritebackLabels[value] ?? displayStatus(value);
+}
+
+function displayDataScope(value: string | null | undefined): string {
+  if (!value) {
+    return "未设置";
+  }
+
+  return dataScopeLabels[value] ?? cleanDisplayText(value);
+}
+
+function displaySourceEvidence(sourceType: string, fallback?: string | null): string {
+  return fallback ? `${displaySourceType(sourceType)}：${fallback}` : displaySourceType(sourceType);
+}
+
 export function App() {
   const [session, setSession] = useState<SessionState | null>(null);
-  const [activeModule, setActiveModule] = useState<ModuleKey>("dashboard");
+  const [activeModule, setActiveModule] = useState<ModuleKey>(() => moduleFromPath(window.location.pathname));
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -217,6 +423,17 @@ export function App() {
   const [approvalTargetUserId, setApprovalTargetUserId] = useState("user-approver");
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const activeUser = session?.user ?? null;
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    const nextPath = moduleRoutes[activeModule];
+    if (window.location.pathname !== nextPath) {
+      window.history.replaceState(null, "", nextPath);
+    }
+  }, [activeModule, session]);
 
   function showActionFeedback(message: string) {
     setActionMessage(message);
@@ -640,6 +857,7 @@ export function App() {
     }
 
     setSession((await response.json()) as SessionState);
+    setActiveModule(moduleFromPath(window.location.pathname));
   }
 
   async function createProject() {
@@ -1132,7 +1350,13 @@ export function App() {
               <Search size={17} />
               <input placeholder="搜索项目、任务、合同" />
             </label>
-            <button className="text-button" onClick={() => setSession(null)}>
+            <button
+              className="text-button"
+              onClick={() => {
+                setSession(null);
+                window.history.replaceState(null, "", "/login");
+              }}
+            >
               退出
             </button>
             <button className="icon-button notification-button" aria-label="通知" onClick={() => setShowNotifications((value) => !value)}>
@@ -1503,7 +1727,7 @@ function DashboardView({
         <MetricCard title="合同 / 审批" value={`${activeContracts.length}/${activeApprovals.length}`} helper="未完结合同与审批" />
       </section>
 
-      <PageStateNotice state="loading" title="正在加载首页工作入口" body="工作台、项目、任务、聊天和知识数据正在通过 API 读取。" active={isLoading} />
+      <PageStateNotice state="loading" title="正在加载首页工作入口" body="正在同步工作台、项目、任务、聊天和知识数据。" active={isLoading} />
       <PageStateNotice state="error" title="首页数据加载失败" body={error ?? ""} active={Boolean(error)} />
 
       <section className="content-grid">
@@ -1579,7 +1803,7 @@ function WorkbenchView({
         <MetricCard title="待审批 / 合同" value={`${summary?.pendingApprovalCount ?? 0}/${summary?.contractConfirmationCount ?? 0}`} helper="当前节点 / 合同确认" />
       </section>
 
-      <PageStateNotice state="loading" title="正在加载我的工作台" body="正在从 API 读取本人工作入口。" active={isLoading} />
+      <PageStateNotice state="loading" title="正在加载我的工作台" body="正在同步本人待办、任务和确认事项。" active={isLoading} />
       <PageStateNotice state="error" title="工作台加载失败" body={error ?? ""} active={Boolean(error)} />
       <PageStateNotice
         state="empty"
@@ -1681,7 +1905,7 @@ function WorkbenchSection({
                 <strong>{item.title}</strong>
                 <small>{item.description}</small>
               </div>
-              <span className="status-pill">{item.status}</span>
+              <span className="status-pill">{displayStatus(item.status)}</span>
               <span className="count-pill">{platformModules.find((module) => module.key === item.module)?.name ?? item.module}</span>
             </button>
           ))
@@ -1729,7 +1953,7 @@ function ProjectHealthPanel({
                 <strong>{project.title}</strong>
                 <small>{organizationName(project.organizationId)} · {project.memberUserIds.length} 成员</small>
               </span>
-              <span className="status-pill">{project.status}</span>
+              <span className="status-pill">{displayStatus(project.status)}</span>
               <span className="count-pill">{project.taskCount} 任务</span>
             </button>
           ))
@@ -1779,7 +2003,7 @@ function ContractApprovalPanel({
               <strong>{contract.title}</strong>
               <small>v{contract.currentVersion} · {organizationName(contract.organizationId)}</small>
             </span>
-            <span className="status-pill">{contract.status}</span>
+            <span className="status-pill">{displayStatus(contract.status)}</span>
             <span className="count-pill">{contract.reviews.length} 审查</span>
           </button>
         ))}
@@ -1789,7 +2013,7 @@ function ContractApprovalPanel({
               <strong>{approval.title}</strong>
               <small>当前处理人：{approval.currentApprover?.displayName ?? "无"}</small>
             </span>
-            <span className="status-pill">{approval.status}</span>
+            <span className="status-pill">{displayStatus(approval.status)}</span>
             <span className="count-pill">{approval.nodes.length} 节点</span>
           </button>
         ))}
@@ -1832,7 +2056,7 @@ function SystemNoticePanel({
               <strong>{notification.title}</strong>
               <small>{notification.body}</small>
             </span>
-            <span className="status-pill">{notification.severity}</span>
+            <span className="status-pill">{displayPriority(notification.severity)}</span>
             <span className="count-pill">{platformModules.find((module) => module.key === notification.module)?.name ?? notification.module}</span>
           </button>
         ))}
@@ -1965,8 +2189,38 @@ function PageStateGrid({ states }: { states: PageStateDescriptor[] }) {
   );
 }
 
-function cleanDisplayText(value: string) {
-  return value.replace(/DEV-\d+/g, "当前阶段");
+function cleanDisplayText(value: string): string {
+  let next: string = value
+    .replace(/DEV-\d+/g, "当前阶段")
+    .replace(/\b(project|task|chat|message|ai-draft|knowledge|contract|approval|file)-[a-f0-9-]{12,}\b/gi, "业务记录")
+    .replace(/\bsmoke\b/gi, "测试")
+    .replace(/\blegal human approve\b/gi, "法务人工同意")
+    .replace(/\bfinal human approve\b/gi, "最终人工同意")
+    .replace(/\bhuman approve\b/gi, "人工同意")
+    .replace(/approval_page_([a-z-]+)_human_action/gi, (_, action: string) => `页面人工${approvalActionLabels[action] ?? "处理"}`)
+    .replace(/contract_page_human_risk_confirmation/gi, "页面人工确认合同风险")
+    .replace(/contract_page_revision_after_risk_confirmation/gi, "风险确认后提交修改版本")
+    .replace(/contract_page_bounded_approval_handoff/gi, "页面人工提交审批")
+    .replace(/\bAPI\b/g, "系统服务");
+
+  const replacements = {
+    ...statusLabels,
+    ...priorityLabels,
+    ...sourceTypeLabels,
+    ...objectTypeLabels,
+    ...aiDraftKindLabels,
+    ...scenarioLabels,
+    ...entryMethodLabels,
+    ...approvalActionLabels,
+    ...resultWritebackLabels,
+    ...dataScopeLabels
+  };
+
+  for (const [raw, label] of Object.entries(replacements)) {
+    next = next.replace(new RegExp(`\\b${raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g"), label);
+  }
+
+  return next;
 }
 
 function displayPolicyVersion(value: string) {
@@ -1980,7 +2234,7 @@ function NoPermissionView({ moduleName }: { moduleName: string }) {
         <PageStateNotice active state="no-permission" title="无权限访问" body={`${moduleName} 不在当前账号的菜单权限内。`} />
         <p className="eyebrow">权限裁剪</p>
         <h2>{moduleName}</h2>
-        <p>系统不会通过前端隐藏代替后端校验；无权限访问由 API 返回拒绝并写入审计。</p>
+        <p>系统会同时裁剪菜单和数据范围；无权限访问会被拒绝并写入审计。</p>
       </div>
     </section>
   );
@@ -2049,7 +2303,7 @@ function SettingsView({
         <SettingsItem title="用户账号" value={`${seedUsers.length} 个账号`} enabled={canManageRoles(activeUser.role)} />
         <SettingsItem title="角色体系" value={`${Object.keys(rolePolicies).length} 类角色`} enabled={canManageRoles(activeUser.role)} />
         <SettingsItem title="菜单访问" value={`${visibleModuleCount} 个菜单`} enabled />
-        <SettingsItem title="数据范围" value={permissions.data.scope} enabled />
+        <SettingsItem title="数据范围" value={displayDataScope(permissions.data.scope)} enabled />
         <SettingsItem title="操作权限" value={`${permissions.operation.length} 项规则`} enabled />
         <SettingsItem title="审批权限" value={`${permissions.approval.length} 项规则`} enabled />
         <SettingsItem title="文件权限" value={`${permissions.file.length} 项规则`} enabled />
@@ -2067,7 +2321,7 @@ function SettingsView({
         <SettingsModuleCard
           title="角色与数据范围"
           body="按角色控制菜单、数据范围和业务动作。系统管理员不默认拥有全部业务数据。"
-          stats={[`${Object.keys(rolePolicies).length} 角色`, permissions.data.scope]}
+          stats={[`${Object.keys(rolePolicies).length} 角色`, displayDataScope(permissions.data.scope)]}
         />
         <SettingsModuleCard
           title="审批与文件"
@@ -2142,8 +2396,8 @@ function AiGovernancePanel({
       <PageStateNotice
         active={!canReadRuns}
         state="no-permission"
-        title="无 AI Run 读取权限"
-        body="当前账号不能读取 AI Run 证据；后端仍会按权限记录运行审计。"
+        title="无智能运行记录读取权限"
+        body="当前账号不能读取智能运行证据；系统仍会按权限记录审计。"
       />
       {canConfigure ? (
         <div className="ai-framework-list">
@@ -2154,7 +2408,7 @@ function AiGovernancePanel({
                 <article className="ai-framework-row" key={framework.id}>
                   <div>
                     <strong>{framework.name}</strong>
-                    <small>{framework.scenario} · {framework.status}</small>
+                    <small>{displayAiKind(framework.scenario)} · {displayStatus(framework.status)}</small>
                     <small>{activeVersion?.boundaryPolicy ?? "AI 只能输出建议、提醒和草稿。"}</small>
                   </div>
                   <span className="status-pill">{activeVersion?.version ?? "未配置"}</span>
@@ -2172,22 +2426,22 @@ function AiGovernancePanel({
           recentRuns.map((run) => (
             <article className="ai-run-row" key={run.id}>
               <div>
-                <strong>{run.scenario}</strong>
-                <small>{run.frameworkVersion} · {run.sourceObjectType}:{run.sourceObjectId}</small>
+                <strong>{displayAiKind(run.scenario)}</strong>
+                <small>{run.frameworkVersion} · 来源：{displaySourceType(run.sourceObjectType)}</small>
                 <small>
-                  证据 {run.sourceEvidence.length} · 决策 {run.decisions.map((decision) => decision.decision).join(" / ") || "未处理"}
+                  证据 {run.sourceEvidence.length} · 决策 {run.decisions.map((decision) => displayStatus(decision.decision)).join(" / ") || "未处理"}
                 </small>
               </div>
-              <span className="status-pill">{run.status}</span>
-              <span className="count-pill">{run.failureClass ?? "ok"}</span>
+              <span className="status-pill">{displayStatus(run.status)}</span>
+              <span className="count-pill">{run.failureClass ? displayStatus(run.failureClass) : "正常"}</span>
             </article>
           ))
         ) : (
           <PageStateNotice
             active={canReadRuns}
             state="empty"
-            title="暂无 AI Run"
-            body="生成草稿、知识问答或合同审查后会显示输入/输出快照、来源证据和人工决策。"
+            title="暂无智能运行记录"
+            body="生成草稿、知识问答或合同审查后会显示来源证据和人工决策。"
           />
         )}
       </div>
@@ -2322,7 +2576,7 @@ function ProjectTaskView({
                   <strong>{project.title}</strong>
                   <small>{organizationName(project.organizationId)} · {userName(project.ownerUserId)}</small>
                 </span>
-                <span className="status-pill">{project.status}</span>
+                <span className="status-pill">{displayStatus(project.status)}</span>
                 <span className="count-pill">{project.taskCount} 任务</span>
               </button>
             ))
@@ -2339,7 +2593,7 @@ function ProjectTaskView({
             <h2>{selectedProject?.title ?? "未选择项目"}</h2>
             <p>{selectedProject?.summary ?? "选择项目后查看成员、任务和状态。"}</p>
           </div>
-          {selectedProject ? <span className="status-pill strong">{selectedProject.status}</span> : null}
+          {selectedProject ? <span className="status-pill strong">{displayStatus(selectedProject.status)}</span> : null}
         </div>
         {selectedProject ? (
           <>
@@ -2463,8 +2717,8 @@ function ProjectTaskView({
                     </span>
                     <span>{userName(task.assigneeUserId)}</span>
                     <span>{userName(task.confirmerUserId)}</span>
-                    <span className={`status-pill ${task.priority}`}>{task.priority}</span>
-                    <span className="status-pill">{task.status}</span>
+                    <span className={`status-pill ${task.priority}`}>{displayPriority(task.priority)}</span>
+                    <span className="status-pill">{displayStatus(task.status)}</span>
                   </button>
                 ))
               ) : (
@@ -2563,7 +2817,7 @@ function TaskDetailPanel({
           <h2>{task.title}</h2>
           <p>{task.description}</p>
         </div>
-        <span className="status-pill strong">{task.status}</span>
+        <span className="status-pill strong">{displayStatus(task.status)}</span>
       </div>
       <div className="detail-grid">
         <SettingsItem title="创建人" value={userName(task.creatorUserId)} enabled />
@@ -2614,7 +2868,7 @@ function TaskDetailPanel({
             task.activities.map((activity) => (
               <article className="timeline-row" key={activity.id}>
                 <strong>{activityLabel(activity.activityType)}</strong>
-                <p>{activity.note}</p>
+                <p>{cleanDisplayText(activity.note)}</p>
                 <small>{userName(activity.actorUserId)} · {new Date(activity.createdAt).toLocaleString("zh-CN")}</small>
               </article>
             ))
@@ -2709,7 +2963,7 @@ function ProjectFilePanel({
                   {file.mimeType} · {file.sizeBytes} bytes · 版本历史 v1 当前
                 </small>
               </div>
-              <span className="status-pill">{file.status}</span>
+              <span className="status-pill">{displayStatus(file.status)}</span>
               <div className="file-actions">
                 <button className="icon-button" disabled={file.status === "archived"} onClick={() => onPreviewFile(file)} title="预览">
                   <Eye size={16} />
@@ -2749,6 +3003,40 @@ function organizationName(organizationId: string) {
 
 function userName(userId: string) {
   return seedUsers.find((user) => user.id === userId)?.displayName ?? userId;
+}
+
+function projectName(projects: ProjectSummary[], projectId: string | null | undefined) {
+  if (!projectId) {
+    return "无项目";
+  }
+
+  return projects.find((project) => project.id === projectId)?.title ?? "授权项目";
+}
+
+function relatedObjectLabel({
+  objectId,
+  objectType,
+  projects,
+  tasks
+}: {
+  objectId: string | null | undefined;
+  objectType: string | null | undefined;
+  projects: ProjectSummary[];
+  tasks: TaskRecord[];
+}) {
+  if (!objectType || !objectId) {
+    return "未关联业务对象";
+  }
+
+  if (objectType === "project") {
+    return `关联项目：${projectName(projects, objectId)}`;
+  }
+
+  if (objectType === "task") {
+    return `关联任务：${tasks.find((task) => task.id === objectId)?.title ?? "授权任务"}`;
+  }
+
+  return `关联${objectTypeLabels[objectType] ?? "业务对象"}`;
 }
 
 function taskActionButtons(task: TaskRecord, onTaskStatusChange: (task: TaskRecord, status: TaskRecord["status"]) => void) {
@@ -2879,7 +3167,7 @@ function ChatView({
                   <strong>{thread.title}</strong>
                   <small>{organizationName(thread.organizationId)} · {thread.memberUserIds.length} 成员</small>
                 </span>
-                <span className="status-pill">{thread.status}</span>
+                <span className="status-pill">{displayStatus(thread.status)}</span>
                 <span className="count-pill">{thread.messageCount} 消息</span>
               </button>
             ))
@@ -2902,9 +3190,12 @@ function ChatView({
             <div className="relationship-bar">
               <span>
                 <Link size={15} />
-                {selectedThread.relatedObjectType
-                  ? `${selectedThread.relatedObjectType}:${selectedThread.relatedObjectId}`
-                  : "未关联业务对象"}
+                {relatedObjectLabel({
+                  objectId: selectedThread.relatedObjectId,
+                  objectType: selectedThread.relatedObjectType,
+                  projects,
+                  tasks
+                })}
               </span>
               {relatedProject ? (
                 <button className="secondary-button compact-button" onClick={() => onOpenRelatedObject("project", relatedProject.id, "projects")}>
@@ -2952,7 +3243,7 @@ function ChatView({
                     <span>
                       <strong>{message.content}</strong>
                     </span>
-                    <span className="status-pill">{message.status}</span>
+                    <span className="status-pill">{displayStatus(message.status)}</span>
                     <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
                     <span className="muted-text">原始消息</span>
                   </div>
@@ -3004,8 +3295,8 @@ function ChatView({
                   <strong>{draft.title}</strong>
                   <small>{draft.content}</small>
                 </span>
-                <span className="status-pill">{draft.kind}</span>
-                <span className="status-pill">{draft.status}</span>
+                <span className="status-pill">{displayAiKind(draft.kind)}</span>
+                <span className="status-pill">{displayStatus(draft.status)}</span>
                 <span className="count-pill">{draft.sourceMessageIds.length} 来源</span>
                 <button className="secondary-button compact-button" disabled={!canConfirmDraft(draft)} onClick={() => onConfirmDraft(draft)}>
                   确认入库
@@ -3113,10 +3404,10 @@ function KnowledgeView({
                   <strong>{item.title}</strong>
                   <small>{item.content}</small>
                   <small>
-                    证据：{item.sourceEvidence.map((evidence) => `${evidence.sourceType}:${evidence.sourceId}`).join(" / ")}
+                    证据：{item.sourceEvidence.map((evidence) => displaySourceEvidence(evidence.sourceType, evidence.title)).join(" / ")}
                   </small>
                 </span>
-                <span className="status-pill">{item.type}</span>
+                <span className="status-pill">{displaySourceType(item.type)}</span>
                 <span className="count-pill">{item.relevanceScore} 分</span>
               </div>
             ))
@@ -3143,7 +3434,7 @@ function KnowledgeView({
                   <small>{item.content}</small>
                   <small>版本 v{item.currentVersion} · 作者 {userName(item.creatorUserId)} · 提交 {item.submittedAt ? new Date(item.submittedAt).toLocaleString() : "未提交"}</small>
                 </span>
-                <span className="status-pill">{item.status}</span>
+                <span className="status-pill">{displayStatus(item.status)}</span>
                 <span className="count-pill">{item.sourceEvidence.length} 证据</span>
                 <div className="file-actions">
                   <button className="secondary-button compact-button" disabled={!canReviewKnowledge} onClick={() => onPublishKnowledge(item)}>
@@ -3156,7 +3447,7 @@ function KnowledgeView({
               </div>
             ))
           ) : (
-            <PageStateNotice active={!isLoading} state="empty" title="暂无待审核知识" body="AI 知识草稿确认后会进入 submitted_for_review，不会自动发布。" />
+            <PageStateNotice active={!isLoading} state="empty" title="暂无待审核知识" body="AI 知识草稿确认后会进入人工审核，不会自动发布。" />
           )}
         </div>
       </div>
@@ -3166,7 +3457,7 @@ function KnowledgeView({
           <div>
             <p className="eyebrow">版本与证据</p>
             <h2>知识条目</h2>
-            <p>显示 draft / submitted_for_review / published / rejected / archived 状态、版本历史和来源证据。</p>
+            <p>显示草稿、待审核、已发布、已驳回、已归档状态、版本历史和来源证据。</p>
           </div>
         </div>
         <div className="record-list">
@@ -3177,13 +3468,13 @@ function KnowledgeView({
                   <strong>{item.title}</strong>
                   <small>{item.content}</small>
                   <small>
-                    证据：{item.sourceEvidence.map((evidence) => `${evidence.sourceType}:${evidence.sourceId}`).join(" / ")}
+                    证据：{item.sourceEvidence.map((evidence) => displaySourceEvidence(evidence.sourceType, evidence.title)).join(" / ")}
                   </small>
                   <small>
-                    版本：{(item.versions ?? []).map((version) => `v${version.version} ${version.status}`).join(" · ") || `v${item.currentVersion}`}
+                    版本：{(item.versions ?? []).map((version) => `v${version.version} ${displayStatus(version.status)}`).join(" · ") || `v${item.currentVersion}`}
                   </small>
                 </span>
-                <span className="status-pill">{item.status}</span>
+                <span className="status-pill">{displayStatus(item.status)}</span>
                 <span className="count-pill">{item.sourceMessageIds.length} 来源</span>
                 <div className="file-actions">
                   <button
@@ -3244,7 +3535,7 @@ function KnowledgeView({
                   <strong>{item.title}</strong>
                   <small>{item.content}</small>
                 </span>
-                <span className="status-pill">{item.projectId ?? "无项目"}</span>
+                <span className="status-pill">{projectName(projects, item.projectId)}</span>
                 <span className="count-pill">{item.sourceMessageIds.length} 来源</span>
               </div>
             ))
@@ -3400,7 +3691,7 @@ function ContractView({
                   <strong>{contract.title}</strong>
                   <small>v{contract.currentVersion} · {organizationName(contract.organizationId)}</small>
                 </span>
-                <span className="status-pill">{contract.status}</span>
+                <span className="status-pill">{displayStatus(contract.status)}</span>
                 <span className="count-pill">{contract.reviews.length} 审查</span>
               </button>
             ))
@@ -3417,7 +3708,7 @@ function ContractView({
             <h2>{selectedContract?.title ?? "未选择合同"}</h2>
             <p>AI 只列风险、标注原文和给 A/B/C 方案，不确认风险、不选择方案、不提交审批。</p>
           </div>
-          {selectedContract ? <span className="status-pill strong">{selectedContract.status}</span> : null}
+          {selectedContract ? <span className="status-pill strong">{displayStatus(selectedContract.status)}</span> : null}
         </div>
         {selectedContract ? (
           <>
@@ -3435,8 +3726,8 @@ function ContractView({
             />
             <div className="detail-grid">
               <SettingsItem title="当前版本" value={`v${selectedContract.currentVersion}`} enabled />
-              <SettingsItem title="入口来源" value={latestVersion?.entryMethod ?? "-"} enabled />
-              <SettingsItem title="执行状态" value={selectedContract.executionStatus} enabled />
+              <SettingsItem title="入口来源" value={displayEntryMethod(latestVersion?.entryMethod)} enabled />
+              <SettingsItem title="执行状态" value={displayStatus(selectedContract.executionStatus)} enabled />
               <SettingsItem title="审批边界" value={selectedContract.approvalHandoffId ? "已提交" : "未提交"} enabled />
             </div>
             <div className="action-row">
@@ -3465,7 +3756,7 @@ function ContractView({
             {latestReview ? (
               <div className="contract-review">
                 <div className="section-title">
-                  <strong>{latestReview.reviewType === "second" ? "二次审查" : "初次审查"} · {latestReview.riskLevel}</strong>
+                  <strong>{latestReview.reviewType === "second" ? "二次审查" : "初次审查"} · {displayPriority(latestReview.riskLevel)}</strong>
                   <span>{latestReview.frameworkVersion}</span>
                 </div>
                 <p>{latestReview.summary}</p>
@@ -3480,7 +3771,7 @@ function ContractView({
                         <small>B：{risk.options.B}</small>
                         <small>C：{risk.options.C}</small>
                       </div>
-                      <span className={`status-pill ${risk.severity}`}>{risk.severity}</span>
+                      <span className={`status-pill ${risk.severity}`}>{displayPriority(risk.severity)}</span>
                       <span className="count-pill">{risk.humanConfirmed ? `人工选择 ${risk.selectedOption}` : "待人工确认"}</span>
                     </article>
                   ))}
@@ -3531,9 +3822,9 @@ function ContractView({
                   <span>
                     <strong>v{version.version} · {version.title}</strong>
                     <small>{version.originalText}</small>
-                    <small>来源：{version.sourceEvidence.map((source) => `${source.sourceType}:${source.fileName ?? source.sourceId}`).join(" / ")}</small>
+                    <small>来源：{version.sourceEvidence.map((source) => displaySourceEvidence(source.sourceType, source.fileName)).join(" / ")}</small>
                   </span>
-                  <span className="status-pill">{version.entryMethod}</span>
+                  <span className="status-pill">{displayEntryMethod(version.entryMethod)}</span>
                 </div>
               ))}
             </div>
@@ -3552,9 +3843,9 @@ function ContractView({
                 <div className="record-row" key={handoff.id}>
                   <span>
                     <strong>审批边界提交</strong>
-                    <small>{handoff.reason}</small>
+                    <small>{cleanDisplayText(handoff.reason)}</small>
                   </span>
-                  <span className="status-pill">{handoff.status}</span>
+                  <span className="status-pill">{displayStatus(handoff.status)}</span>
                   <span className="count-pill">{handoff.approvalEngineImplemented ? "已创建审批" : "边界记录"}</span>
                   <button
                     className="secondary-button compact-button"
@@ -3571,8 +3862,8 @@ function ContractView({
                     <strong>{event.title}</strong>
                     <small>{event.notes}</small>
                   </span>
-                  <span className="status-pill">{event.eventType}</span>
-                  <span className="count-pill">{event.status}</span>
+                  <span className="status-pill">{executionEventLabels[event.eventType] ?? displaySourceType(event.eventType)}</span>
+                  <span className="count-pill">{displayStatus(event.status)}</span>
                 </div>
               ))}
             </div>
@@ -3651,7 +3942,7 @@ function ApprovalView({
                   <strong>{approval.title}</strong>
                   <small>{approval.sourceSummary.title} · 当前：{approval.currentApprover?.displayName ?? "无"}</small>
                 </span>
-                <span className="status-pill">{approval.status}</span>
+                <span className="status-pill">{displayStatus(approval.status)}</span>
                 <span className="count-pill">{approval.nodes.length} 节点</span>
               </button>
             ))
@@ -3668,7 +3959,7 @@ function ApprovalView({
             <h2>{selectedApproval?.title ?? "未选择审批"}</h2>
             <p>同意、驳回、退回、转交和加签都必须由当前节点人类处理人执行。</p>
           </div>
-          {selectedApproval ? <span className="status-pill strong">{selectedApproval.status}</span> : null}
+          {selectedApproval ? <span className="status-pill strong">{displayStatus(selectedApproval.status)}</span> : null}
         </div>
 
         {selectedApproval ? (
@@ -3681,14 +3972,14 @@ function ApprovalView({
             />
             <div className="detail-grid">
               <SettingsItem title="来源对象" value={selectedApproval.sourceSummary.title} enabled />
-              <SettingsItem title="来源状态" value={selectedApproval.sourceSummary.status} enabled />
+              <SettingsItem title="来源状态" value={displayStatus(selectedApproval.sourceSummary.status)} enabled />
               <SettingsItem title="当前处理人" value={selectedApproval.currentApprover?.displayName ?? "无"} enabled={Boolean(selectedApproval.currentApprover)} />
-              <SettingsItem title="结果写回" value={selectedApproval.resultWritebackStatus ?? "待处理"} enabled={Boolean(selectedApproval.resultWritebackStatus)} />
+              <SettingsItem title="结果写回" value={displayResultWriteback(selectedApproval.resultWritebackStatus)} enabled={Boolean(selectedApproval.resultWritebackStatus)} />
             </div>
             <div className="relationship-bar">
               <span>
                 <Link size={15} />
-                {selectedApproval.sourceSummary.objectType}:{selectedApproval.sourceSummary.objectId}
+                来源{objectTypeLabels[selectedApproval.sourceSummary.objectType] ?? "业务对象"}：{selectedApproval.sourceSummary.title}
               </span>
               <button className="secondary-button compact-button" onClick={() => onOpenSourceContract(selectedApproval.sourceSummary.objectId)}>
                 返回来源合同
@@ -3705,9 +3996,9 @@ function ApprovalView({
             <div className="approval-current-node">
               <div>
                 <strong>{currentNode?.name ?? "无当前节点"}</strong>
-                <small>{currentNode ? `${userName(currentNode.approverUserId)} · ${currentNode.status}` : "审批已结束或无当前处理人"}</small>
+                <small>{currentNode ? `${userName(currentNode.approverUserId)} · ${displayStatus(currentNode.status)}` : "审批已结束或无当前处理人"}</small>
               </div>
-              <span className="status-pill">{currentNode?.status ?? selectedApproval.status}</span>
+              <span className="status-pill">{displayStatus(currentNode?.status ?? selectedApproval.status)}</span>
             </div>
 
             {isActionableApproval ? (
@@ -3765,7 +4056,7 @@ function ApprovalView({
                     <strong>{node.sequence}. {node.name}</strong>
                     <small>{userName(node.approverUserId)} · {node.decisionReason ?? "等待处理"}</small>
                   </span>
-                  <span className="status-pill">{node.status}</span>
+                  <span className="status-pill">{displayStatus(node.status)}</span>
                   <span className="count-pill">{node.decidedAt ? "已处理" : "待处理"}</span>
                 </div>
               ))}
@@ -3775,10 +4066,10 @@ function ApprovalView({
                 selectedApproval.actions.map((action) => (
                   <div className="record-row" key={action.id}>
                     <span>
-                      <strong>{action.action}</strong>
-                      <small>{userName(action.actorUserId)}{action.targetUserId ? ` -> ${userName(action.targetUserId)}` : ""} · {action.reason}</small>
+                      <strong>{displayApprovalAction(action.action)}</strong>
+                    <small>{userName(action.actorUserId)}{action.targetUserId ? ` -> ${userName(action.targetUserId)}` : ""} · {cleanDisplayText(action.reason)}</small>
                     </span>
-                    <span className="status-pill">{action.action}</span>
+                    <span className="status-pill">{displayApprovalAction(action.action)}</span>
                   </div>
                 ))
               ) : (
@@ -3872,8 +4163,8 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
         >
           <p className="eyebrow">协同工作平台</p>
           <h1>账号登录</h1>
-          <p className="login-copy">输入用户名和密码进入系统。登录必须由 API 签发会话。</p>
-          <PageStateNotice active={isSubmitting} state="loading" title="正在登录" body="正在请求 API 签发会话。" />
+          <p className="login-copy">输入用户名和密码进入系统。登录后将按角色进入对应工作区。</p>
+          <PageStateNotice active={isSubmitting} state="loading" title="正在登录" body="正在校验账号权限。" />
           <PageStateNotice active={Boolean(error)} state="error" title="登录失败" body={error ?? ""} />
           <label className="password-field">
             <span>用户名</span>
@@ -3893,9 +4184,9 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
           </button>
         </form>
         <div className="login-policy">
-          <h2>访问边界</h2>
+          <h2>账号安全</h2>
           <ul className="guard-list">
-            <li>认证由 API 签发会话</li>
+            <li>登录后按角色进入工作区</li>
             <li>菜单按角色裁剪</li>
             <li>业务数据按授权范围裁剪</li>
             <li>高权限账号不在登录页暴露</li>
