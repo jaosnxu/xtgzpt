@@ -5,14 +5,14 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AiProviderError, fallbackAiFrameworkVersion, generateAiDraftContent } from "./ai-provider";
-import { loadLocalEnv } from "./env";
+import { AiProviderError, fallbackAiFrameworkVersion, generateAiDraftContent } from "./ai-provider.js";
+import { loadLocalEnv } from "./env.js";
 import {
   createRuntimeStore,
   resolveRuntimeStoreOptions,
   type DeniedAccessEvent,
   type RuntimeStoreOptions
-} from "./runtime-store";
+} from "./runtime-store.js";
 import {
   canAccessFileAction,
   canAccessModule,

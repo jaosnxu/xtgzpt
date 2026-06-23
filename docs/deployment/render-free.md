@@ -42,7 +42,7 @@ npm ci --include=dev && VITE_API_BASE_URL= npm run build
 Start command:
 
 ```bash
-npm run start -w @xtgzpt/api
+npm run start:dist -w @xtgzpt/api
 ```
 
 ## Required Environment
@@ -64,6 +64,14 @@ After Render finishes deploying:
 2. Confirm `/health` returns `status: ok`.
 3. Log in with `admin / 113113`.
 4. Open dashboard, projects, tasks, chat, knowledge, contracts, approvals, and settings.
+
+Run the remote API smoke against the deployed URL:
+
+```bash
+SMOKE_BASE_URL="https://<render-service-url>" npm run smoke:api
+```
+
+The remote smoke uses the same account set as local smoke and verifies login, projects, tasks, chat, files, AI drafts, knowledge, contracts, approvals, permission gates, audit records, and AI source reuse.
 
 ## Free Tier Limits
 

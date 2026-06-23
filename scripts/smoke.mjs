@@ -1,10 +1,32 @@
-process.env.NODE_ENV = "test";
+const smokeBaseUrl = process.env.SMOKE_BASE_URL?.trim().replace(/\/$/, "");
 
-const { buildServer } = await import("../apps/api/src/index.ts");
+let server = null;
 
-const server = buildServer();
+if (!smokeBaseUrl) {
+  process.env.NODE_ENV = "test";
+  const { buildServer } = await import("../apps/api/src/index.ts");
+  server = buildServer();
+}
 
 async function inject(method, url, token, payload) {
+  if (smokeBaseUrl) {
+    const response = await fetch(`${smokeBaseUrl}${url}`, {
+      method,
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(payload ? { "content-type": "application/json" } : {})
+      },
+      body: payload ? JSON.stringify(payload) : undefined
+    });
+    const text = await response.text();
+    const body = text ? JSON.parse(text) : null;
+
+    return {
+      statusCode: response.status,
+      body
+    };
+  }
+
   const response = await server.inject({
     method,
     url,
@@ -404,5 +426,7 @@ try {
     )
   );
 } finally {
-  await server.close();
+  if (server) {
+    await server.close();
+  }
 }
