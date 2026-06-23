@@ -78,6 +78,31 @@ interface SessionState {
   permissions: PermissionSummary;
 }
 
+const sessionStorageKey = "xtgzpt.session.v1";
+
+function readStoredSession(): SessionState | null {
+  try {
+    const rawSession = window.sessionStorage.getItem(sessionStorageKey);
+    if (!rawSession) {
+      return null;
+    }
+
+    return JSON.parse(rawSession) as SessionState;
+  } catch {
+    window.sessionStorage.removeItem(sessionStorageKey);
+    return null;
+  }
+}
+
+function writeStoredSession(session: SessionState | null) {
+  if (!session) {
+    window.sessionStorage.removeItem(sessionStorageKey);
+    return;
+  }
+
+  window.sessionStorage.setItem(sessionStorageKey, JSON.stringify(session));
+}
+
 interface ProjectSummary extends ProjectRecord {
   taskCount: number;
 }
@@ -365,7 +390,7 @@ function displaySourceEvidence(sourceType: string, fallback?: string | null): st
 }
 
 export function App() {
-  const [session, setSession] = useState<SessionState | null>(null);
+  const [session, setSession] = useState<SessionState | null>(() => readStoredSession());
   const [activeModule, setActiveModule] = useState<ModuleKey>(() => moduleFromPath(window.location.pathname));
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
@@ -600,6 +625,13 @@ export function App() {
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        writeStoredSession(null);
+        setSession(null);
+        window.history.replaceState(null, "", "/login");
+        throw new Error("登录已过期，请重新登录");
+      }
+
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
       throw new Error(body?.error ?? "请求失败");
     }
@@ -856,7 +888,9 @@ export function App() {
       throw new Error("账号或密码错误");
     }
 
-    setSession((await response.json()) as SessionState);
+    const nextSession = (await response.json()) as SessionState;
+    writeStoredSession(nextSession);
+    setSession(nextSession);
     setActiveModule(moduleFromPath(window.location.pathname));
   }
 
@@ -1353,6 +1387,7 @@ export function App() {
             <button
               className="text-button"
               onClick={() => {
+                writeStoredSession(null);
                 setSession(null);
                 window.history.replaceState(null, "", "/login");
               }}
