@@ -451,6 +451,34 @@ function parseRuntimeDataDocument(value: unknown) {
   return normalizeRuntimeData(value);
 }
 
+async function ensurePostgresRuntimeTable(
+  connection: PostgresRuntimeConnectedClient,
+  config: PostgresRuntimeStoreConfig,
+  tableReference: string
+) {
+  if (config.schema !== "public") {
+    await connection.query(`CREATE SCHEMA IF NOT EXISTS ${quotePostgresIdentifier(config.schema)}`);
+  }
+
+  await connection.query(
+    `CREATE TABLE IF NOT EXISTS ${tableReference} (
+      document_id text PRIMARY KEY,
+      runtime_data jsonb NOT NULL,
+      runtime_schema_version integer NOT NULL DEFAULT 1,
+      checksum text,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      CONSTRAINT ${quotePostgresIdentifier(`${config.table}_runtime_data_object_check`)}
+        CHECK (jsonb_typeof(runtime_data) = 'object')
+    )`
+  );
+
+  await connection.query(
+    `CREATE INDEX IF NOT EXISTS ${quotePostgresIdentifier(`${config.table}_updated_idx`)}
+     ON ${tableReference}(updated_at DESC)`
+  );
+}
+
 export function createPostgresRuntimeStore(config: PostgresRuntimeStoreConfig): RuntimeStore {
   const state = emptyRuntimeData();
   const tableReference = postgresTableReference(config);
@@ -474,6 +502,7 @@ export function createPostgresRuntimeStore(config: PostgresRuntimeStoreConfig): 
     try {
       const client = await getClient();
       await withPostgresClient(client, async (connection) => {
+        await ensurePostgresRuntimeTable(connection, config, tableReference);
         await connection.query(
           `INSERT INTO ${tableReference} (document_id, runtime_data, runtime_schema_version, checksum)
            VALUES ($1, $2::jsonb, 1, $3)
