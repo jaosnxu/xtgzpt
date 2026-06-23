@@ -5,7 +5,7 @@ services:
     plan: free
     region: frankfurt
     buildCommand: npm ci --include=dev && VITE_API_BASE_URL= npm run build
-    startCommand: npm run start -w @xtgzpt/api
+    startCommand: npm run start:dist -w @xtgzpt/api
     healthCheckPath: /health
     autoDeployTrigger: checksPass
     envVars:
