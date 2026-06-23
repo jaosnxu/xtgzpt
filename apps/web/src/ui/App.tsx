@@ -315,6 +315,7 @@ const resultWritebackLabels: Record<string, string> = {
 const dataScopeLabels: Record<string, string> = {
   all: "全部数据",
   all_organizations: "全部组织",
+  assigned_organizations: "授权组织",
   authorized_organizations: "授权组织",
   own_organization: "本组织",
   own_records: "本人相关",
@@ -1708,12 +1709,11 @@ export function App() {
             aiError={aiGovernanceError}
             aiFrameworks={aiFrameworks}
             aiRuns={aiRuns}
-            pageStates={workbench?.pageStates ?? []}
             permissions={session.permissions}
             visibleModuleCount={visibleModules.length}
           />
         ) : (
-          <ModuleStatusView moduleKey={currentModule} moduleName={currentModuleName} pageStates={workbench?.pageStates ?? []} />
+          <ModuleStatusView moduleKey={currentModule} moduleName={currentModuleName} />
         )}
       </main>
     </div>
@@ -1899,11 +1899,15 @@ function WorkbenchView({
         <div className="panel state-panel">
           <div className="panel-header compact">
             <div>
-              <h2>页面状态</h2>
-              <p>核心页面按统一状态展示。</p>
+              <h2>系统提醒</h2>
+              <p>提醒只来自真实任务、审批、合同和权限事件。</p>
             </div>
           </div>
-          <PageStateGrid states={workbench?.pageStates ?? []} />
+          <div className="stage-checklist">
+            <span>待办提醒：按当前账号生成</span>
+            <span>权限提醒：无权限不展示业务数据</span>
+            <span>人工确认：AI 建议必须人工处理</span>
+          </div>
         </div>
       </section>
     </>
@@ -2207,23 +2211,6 @@ function PageStateNotice({
   );
 }
 
-function PageStateGrid({ states }: { states: PageStateDescriptor[] }) {
-  if (states.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="state-grid">
-      {states.map((state) => (
-        <div className={`state-chip ${state.status}`} key={state.key}>
-          <strong>{state.label}</strong>
-          <span>{cleanDisplayText(state.evidence)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function cleanDisplayText(value: string): string {
   let next: string = value
     .replace(/DEV-\d+/g, "当前阶段")
@@ -2301,7 +2288,6 @@ function SettingsView({
   aiError,
   aiFrameworks,
   aiRuns,
-  pageStates,
   permissions,
   visibleModuleCount
 }: {
@@ -2309,7 +2295,6 @@ function SettingsView({
   aiError: string | null;
   aiFrameworks: AiFrameworkWithVersions[];
   aiRuns: AiRunWithDetails[];
-  pageStates: PageStateDescriptor[];
   permissions: PermissionSummary;
   visibleModuleCount: number;
 }) {
@@ -2328,9 +2313,6 @@ function SettingsView({
         </button>
         <button className="secondary-button compact-button" onClick={() => document.getElementById("settings-ai-governance")?.scrollIntoView()}>
           AI 治理
-        </button>
-        <button className="secondary-button compact-button" onClick={() => document.getElementById("settings-page-state-governance")?.scrollIntoView()}>
-          运行状态
         </button>
       </div>
       <div className="settings-grid settings-module-grid" id="settings-permission-governance">
@@ -2376,15 +2358,6 @@ function SettingsView({
         canConfigure={permissions.ai.includes("configure_ai_frameworks")}
         canReadRuns={permissions.ai.includes("read_ai_runs")}
       />
-      <div id="settings-page-state-governance">
-        <div className="panel-header compact settings-subheader">
-          <div>
-            <h2>运行状态</h2>
-            <p>页面加载、空状态、错误、无权限、归档、过期和 AI 运行状态使用统一展示规则。</p>
-          </div>
-        </div>
-        <PageStateGrid states={pageStates} />
-      </div>
     </div>
   );
 }
@@ -4118,15 +4091,7 @@ function ApprovalView({
   );
 }
 
-function ModuleStatusView({
-  moduleKey,
-  moduleName,
-  pageStates
-}: {
-  moduleKey: ModuleKey;
-  moduleName: string;
-  pageStates: PageStateDescriptor[];
-}) {
+function ModuleStatusView({ moduleKey, moduleName }: { moduleKey: ModuleKey; moduleName: string }) {
   const status = moduleStatus[moduleKey];
 
   return (
@@ -4161,7 +4126,6 @@ function ModuleStatusView({
             <span>转交 / 加签：已接入，AI 不能自动审批</span>
           </div>
         ) : null}
-        <PageStateGrid states={pageStates} />
       </div>
     </section>
   );
