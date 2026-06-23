@@ -354,6 +354,34 @@ function displayAiKind(value: string | null | undefined): string {
   return aiDraftKindLabels[value] ?? scenarioLabels[value] ?? cleanDisplayText(value);
 }
 
+function displayAiBoundaryPolicy(value: string | null | undefined): string {
+  if (!value) {
+    return "AI 只能生成建议、摘要、提醒和草稿；所有正式业务动作必须由人工确认。";
+  }
+
+  if (/AI can analyze, summarize, remind, suggest, and draft/i.test(value)) {
+    return "AI 只能生成建议、摘要、提醒和草稿；所有正式业务动作必须由人工确认。";
+  }
+
+  return cleanDisplayText(value);
+}
+
+function displayAiFrameworkVersion(value: string | null | undefined): string {
+  if (!value) {
+    return "未配置";
+  }
+
+  if (/template/i.test(value)) {
+    return "内置草稿框架";
+  }
+
+  if (/ark|doubao/i.test(value)) {
+    return "豆包智能框架";
+  }
+
+  return cleanDisplayText(value);
+}
+
 function displayEntryMethod(value: string | null | undefined): string {
   if (!value) {
     return "未设置";
@@ -2417,9 +2445,9 @@ function AiGovernancePanel({
                   <div>
                     <strong>{framework.name}</strong>
                     <small>{displayAiKind(framework.scenario)} · {displayStatus(framework.status)}</small>
-                    <small>{activeVersion?.boundaryPolicy ?? "AI 只能输出建议、提醒和草稿。"}</small>
+                    <small>{displayAiBoundaryPolicy(activeVersion?.boundaryPolicy)}</small>
                   </div>
-                  <span className="status-pill">{activeVersion?.version ?? "未配置"}</span>
+                  <span className="status-pill">{displayAiFrameworkVersion(activeVersion?.version)}</span>
                   <span className="count-pill">重试 {activeVersion?.retryPolicy.maxRetries ?? 0}</span>
                 </article>
               );
@@ -2435,7 +2463,7 @@ function AiGovernancePanel({
             <article className="ai-run-row" key={run.id}>
               <div>
                 <strong>{displayAiKind(run.scenario)}</strong>
-                <small>{run.frameworkVersion} · 来源：{displaySourceType(run.sourceObjectType)}</small>
+                <small>{displayAiFrameworkVersion(run.frameworkVersion)} · 来源：{displaySourceType(run.sourceObjectType)}</small>
                 <small>
                   证据 {run.sourceEvidence.length} · 决策 {run.decisions.map((decision) => displayStatus(decision.decision)).join(" / ") || "未处理"}
                 </small>
