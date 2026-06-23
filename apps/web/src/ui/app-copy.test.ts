@@ -44,4 +44,12 @@ describe("frontend production copy", () => {
     expect(appSource).toContain("writeStoredSession");
     expect(appSource).toContain("登录已过期，请重新登录");
   });
+
+  it("keeps AI governance details mapped to business language", () => {
+    expect(appSource).toContain("displayAiBoundaryPolicy");
+    expect(appSource).toContain("displayAiFrameworkVersion");
+    expect(appSource).not.toContain("{activeVersion?.boundaryPolicy");
+    expect(appSource).not.toContain("{activeVersion?.version");
+    expect(appSource).not.toContain("{run.frameworkVersion}");
+  });
 });

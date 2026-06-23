@@ -498,7 +498,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         model: item.model,
         promptTemplate: item.promptTemplate,
         boundaryPolicy:
-          "AI can analyze, summarize, remind, suggest, and draft only; human confirmation is required for formal business actions.",
+          "AI 只能生成建议、摘要、提醒和草稿；所有正式业务动作必须由人工确认。",
         sourceEvidenceRequired: true,
         retryPolicy: defaultRetryPolicy,
         createdByUserId: "system",
