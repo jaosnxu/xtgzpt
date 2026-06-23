@@ -29,6 +29,8 @@ import type {
   KnowledgeVersionRecord,
   ProjectMemoryRecord,
   ProjectRecord,
+  TaskActivityRecord,
+  TaskCommentRecord,
   TaskRecord
 } from "@xtgzpt/shared";
 
@@ -72,6 +74,8 @@ export interface RuntimeData {
   files: FileAssetRecord[];
   fileVersions: FileVersionRecord[];
   fileObjectBindings: FileObjectBindingRecord[];
+  taskActivities: TaskActivityRecord[];
+  taskComments: TaskCommentRecord[];
 }
 
 export interface RuntimeStore {
@@ -149,7 +153,9 @@ function emptyRuntimeData(): RuntimeData {
     contractExecutionEvents: [],
     files: [],
     fileVersions: [],
-    fileObjectBindings: []
+    fileObjectBindings: [],
+    taskActivities: [],
+    taskComments: []
   };
 }
 
@@ -192,6 +198,31 @@ function normalizeKnowledgeItems(value: unknown): KnowledgeItemRecord[] {
   }));
 }
 
+function normalizeTasks(value: unknown): TaskRecord[] {
+  return arrayOrEmpty<Partial<TaskRecord>>(value).map((task) => {
+    const createdAt = task.createdAt ?? new Date(0).toISOString();
+    const updatedAt = task.updatedAt ?? createdAt;
+    return {
+      id: task.id ?? "task-unknown",
+      projectId: task.projectId ?? "",
+      title: task.title ?? "未命名任务",
+      description: task.description ?? "",
+      creatorUserId: task.creatorUserId ?? "",
+      assigneeUserId: task.assigneeUserId ?? "",
+      confirmerUserId: task.confirmerUserId ?? "",
+      priority: task.priority ?? "medium",
+      dueAt: task.dueAt ?? null,
+      status: task.status ?? "todo",
+      cancelReason: task.cancelReason ?? null,
+      completedAt: task.completedAt ?? (task.status === "completed" ? updatedAt : null),
+      confirmedAt: task.confirmedAt ?? (task.status === "completed" ? updatedAt : null),
+      returnedReason: task.returnedReason ?? null,
+      createdAt,
+      updatedAt
+    };
+  });
+}
+
 function normalizeRuntimeData(value: unknown): RuntimeData {
   const source = value && typeof value === "object" ? (value as Partial<RuntimeData>) : {};
 
@@ -199,7 +230,7 @@ function normalizeRuntimeData(value: unknown): RuntimeData {
     deniedAccessEvents: arrayOrEmpty<DeniedAccessEvent>(source.deniedAccessEvents),
     auditLogs: arrayOrEmpty<AuditLogEntry>(source.auditLogs),
     projects: arrayOrEmpty<ProjectRecord>(source.projects),
-    tasks: arrayOrEmpty<TaskRecord>(source.tasks),
+    tasks: normalizeTasks(source.tasks),
     chatThreads: arrayOrEmpty<ChatThreadRecord>(source.chatThreads),
     chatMessages: arrayOrEmpty<ChatMessageRecord>(source.chatMessages),
     aiDrafts: arrayOrEmpty<AiDraftRecord>(source.aiDrafts),
@@ -223,7 +254,9 @@ function normalizeRuntimeData(value: unknown): RuntimeData {
     contractExecutionEvents: arrayOrEmpty<ContractExecutionEventRecord>(source.contractExecutionEvents),
     files: arrayOrEmpty<FileAssetRecord>(source.files),
     fileVersions: arrayOrEmpty<FileVersionRecord>(source.fileVersions),
-    fileObjectBindings: arrayOrEmpty<FileObjectBindingRecord>(source.fileObjectBindings)
+    fileObjectBindings: arrayOrEmpty<FileObjectBindingRecord>(source.fileObjectBindings),
+    taskActivities: arrayOrEmpty<TaskActivityRecord>(source.taskActivities),
+    taskComments: arrayOrEmpty<TaskCommentRecord>(source.taskComments)
   };
 }
 

@@ -61,6 +61,7 @@ import {
   type ProjectMemoryRecord,
   type ProjectRecord,
   type PublicUser,
+  type TaskWithDetails,
   type TaskRecord,
   type WorkbenchItem,
   type WorkbenchNotification,
@@ -161,7 +162,10 @@ export function App() {
   const [session, setSession] = useState<SessionState | null>(null);
   const [activeModule, setActiveModule] = useState<ModuleKey>("dashboard");
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
-  const [tasks, setTasks] = useState<TaskRecord[]>([]);
+  const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [taskComment, setTaskComment] = useState("");
+  const [taskView, setTaskView] = useState<"all" | "mine" | "created" | "confirm" | "overdue" | "completed">("all");
   const [chatThreads, setChatThreads] = useState<ChatThreadSummary[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessageRecord[]>([]);
   const [aiDrafts, setAiDrafts] = useState<AiDraftRecord[]>([]);
@@ -250,6 +254,7 @@ export function App() {
 
     if (task) {
       setSelectedProjectId(task.projectId);
+      setSelectedTaskId(task.id);
     }
 
     navigateToModule("tasks", "已跳转到任务所在项目。");
@@ -401,11 +406,12 @@ export function App() {
 
     const [projectResult, taskResult] = await Promise.all([
       authorizedRequest<{ projects: ProjectSummary[] }>("/projects"),
-      authorizedRequest<{ tasks: TaskRecord[] }>("/tasks")
+      authorizedRequest<{ tasks: TaskWithDetails[] }>("/tasks")
     ]);
     setProjects(projectResult.projects);
     setTasks(taskResult.tasks);
     setSelectedProjectId((current) => current ?? projectResult.projects[0]?.id ?? null);
+    setSelectedTaskId((current) => current ?? taskResult.tasks[0]?.id ?? null);
   }
 
   async function refreshChatData(threadId = selectedThreadId) {
@@ -513,6 +519,7 @@ export function App() {
       setFilePreview(null);
       setKnowledgeResults([]);
       setSelectedProjectId(null);
+      setSelectedTaskId(null);
       setKnowledgeQueryProjectId(null);
       setSelectedThreadId(null);
       setSelectedContractId(null);
@@ -674,7 +681,7 @@ export function App() {
     setWorkError(null);
     const selectedProject = projects.find((project) => project.id === selectedProjectId);
     const assigneeUserId = selectedProject?.memberUserIds.includes("user-member") ? "user-member" : activeUser?.id;
-    await authorizedRequest<{ task: TaskRecord }>("/tasks", {
+    const result = await authorizedRequest<{ task: TaskWithDetails }>("/tasks", {
       method: "POST",
       body: JSON.stringify({
         projectId: selectedProjectId,
@@ -685,6 +692,7 @@ export function App() {
       })
     });
     setTaskTitle("");
+    setSelectedTaskId(result.task.id);
     await Promise.all([refreshWorkData(), refreshWorkbenchData()]);
   }
 
@@ -745,13 +753,36 @@ export function App() {
 
   async function changeTaskStatus(task: TaskRecord, status: TaskRecord["status"]) {
     setWorkError(null);
-    await authorizedRequest<{ task: TaskRecord }>(`/tasks/${task.id}/status`, {
+    await authorizedRequest<{ task: TaskWithDetails }>(`/tasks/${task.id}/status`, {
       method: "POST",
       body: JSON.stringify({
         status,
         reason: status === "cancelled" ? "前端取消任务" : undefined
       })
     });
+    await Promise.all([refreshWorkData(), refreshWorkbenchData()]);
+  }
+
+  async function returnTask(task: TaskRecord) {
+    setWorkError(null);
+    await authorizedRequest<{ task: TaskWithDetails }>(`/tasks/${task.id}/return`, {
+      method: "POST",
+      body: JSON.stringify({
+        reason: "需要负责人补充处理结果"
+      })
+    });
+    await Promise.all([refreshWorkData(), refreshWorkbenchData()]);
+  }
+
+  async function addTaskComment(task: TaskRecord) {
+    setWorkError(null);
+    await authorizedRequest(`/tasks/${task.id}/comments`, {
+      method: "POST",
+      body: JSON.stringify({
+        content: taskComment.trim() || "已记录人工协作说明。"
+      })
+    });
+    setTaskComment("");
     await Promise.all([refreshWorkData(), refreshWorkbenchData()]);
   }
 
@@ -1196,6 +1227,7 @@ export function App() {
             onOpenKnowledgeForProject={openKnowledgeWithProject}
             onOpenProjectTasks={(projectId) => openProject(projectId, "tasks")}
             onOpenTaskProject={(task) => openProject(task.projectId, "projects")}
+            onSelectTask={setSelectedTaskId}
             onProjectStatusChange={(project, status) => {
               void changeProjectStatus(project, status).catch((error) => {
                 setWorkError(error instanceof Error ? error.message : "项目状态变更失败");
@@ -1207,6 +1239,16 @@ export function App() {
                 setWorkError(error instanceof Error ? error.message : "任务状态变更失败");
               });
             }}
+            onTaskReturn={(task) => {
+              void returnTask(task).catch((error) => {
+                setWorkError(error instanceof Error ? error.message : "任务退回失败");
+              });
+            }}
+            onTaskComment={(task) => {
+              void addTaskComment(task).catch((error) => {
+                setWorkError(error instanceof Error ? error.message : "评论保存失败");
+              });
+            }}
             onUploadFile={() => {
               void uploadProjectFile().catch((error) => {
                 setFileError(error instanceof Error ? error.message : "文件上传失败");
@@ -1215,11 +1257,16 @@ export function App() {
             projectTitle={projectTitle}
             projects={projects}
             selectedProjectId={selectedProjectId}
+            selectedTaskId={selectedTaskId}
             setFileContent={setFileContent}
             setFileName={setFileName}
             setProjectTitle={setProjectTitle}
             setTaskTitle={setTaskTitle}
+            setTaskComment={setTaskComment}
+            setTaskView={setTaskView}
+            taskComment={taskComment}
             taskTitle={taskTitle}
+            taskView={taskView}
             tasks={tasks}
           />
         ) : currentModule === "chat" ? (
@@ -2170,19 +2217,27 @@ function ProjectTaskView({
   onOpenKnowledgeForProject,
   onOpenProjectTasks,
   onOpenTaskProject,
+  onSelectTask,
   onPreviewFile,
   onProjectStatusChange,
   onSelectProject,
+  onTaskComment,
+  onTaskReturn,
   onTaskStatusChange,
   onUploadFile,
   projectTitle,
   projects,
   selectedProjectId,
+  selectedTaskId,
   setFileContent,
   setFileName,
   setProjectTitle,
+  setTaskComment,
   setTaskTitle,
+  setTaskView,
+  taskComment,
   taskTitle,
+  taskView,
   tasks
 }: {
   activeUser: PublicUser;
@@ -2206,23 +2261,33 @@ function ProjectTaskView({
   onOpenKnowledgeForProject: (projectId: string | null) => void;
   onOpenProjectTasks: (projectId: string) => void;
   onOpenTaskProject: (task: TaskRecord) => void;
+  onSelectTask: (taskId: string) => void;
   onPreviewFile: (file: FileAssetRecord) => void;
   onProjectStatusChange: (project: ProjectSummary, status: ProjectRecord["status"]) => void;
   onSelectProject: (projectId: string) => void;
+  onTaskComment: (task: TaskRecord) => void;
+  onTaskReturn: (task: TaskRecord) => void;
   onTaskStatusChange: (task: TaskRecord, status: TaskRecord["status"]) => void;
   onUploadFile: () => void;
   projectTitle: string;
   projects: ProjectSummary[];
   selectedProjectId: string | null;
+  selectedTaskId: string | null;
   setFileContent: (value: string) => void;
   setFileName: (value: string) => void;
   setProjectTitle: (value: string) => void;
+  setTaskComment: (value: string) => void;
   setTaskTitle: (value: string) => void;
+  setTaskView: (value: "all" | "mine" | "created" | "confirm" | "overdue" | "completed") => void;
+  taskComment: string;
   taskTitle: string;
-  tasks: TaskRecord[];
+  taskView: "all" | "mine" | "created" | "confirm" | "overdue" | "completed";
+  tasks: TaskWithDetails[];
 }) {
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
   const selectedTasks = selectedProject ? tasks.filter((task) => task.projectId === selectedProject.id) : [];
+  const visibleTasks = filterTasksForView(selectedTasks, taskView, activeUser.id);
+  const selectedTask = selectedTasks.find((task) => task.id === selectedTaskId) ?? visibleTasks[0] ?? selectedTasks[0] ?? null;
   const canManageSelectedProject = selectedProject?.ownerUserId === activeUser.id || activeUser.role === "super_admin";
 
   return (
@@ -2349,8 +2414,8 @@ function ProjectTaskView({
         <div className="panel-header">
           <div>
             <p className="eyebrow">任务</p>
-            <h2>任务列表</h2>
-            <p>负责人提交完成后，必须由确认人或项目负责人确认。</p>
+            <h2>任务中心</h2>
+            <p>负责人提交完成后，必须由确认人或项目负责人确认；退回必须写明人工原因。</p>
           </div>
         </div>
         {canCreateTask && selectedProject ? (
@@ -2361,39 +2426,218 @@ function ProjectTaskView({
             </button>
           </div>
         ) : null}
-        <div className="task-table">
-          <div className="task-row task-head">
-            <span>任务</span>
-            <span>负责人</span>
-            <span>确认人</span>
-            <span>状态</span>
-            <span>操作</span>
+        <div className="task-center">
+          <div className="task-tabs" role="tablist" aria-label="任务筛选">
+            {taskTabItems.map((item) => (
+              <button
+                className={taskView === item.key ? "active" : ""}
+                key={item.key}
+                onClick={() => setTaskView(item.key)}
+                type="button"
+              >
+                {item.label}
+                <span>{filterTasksForView(selectedTasks, item.key, activeUser.id).length}</span>
+              </button>
+            ))}
           </div>
-          {selectedTasks.length > 0 ? (
-            selectedTasks.map((task) => (
-              <div className="task-row" key={task.id}>
-                <span>
-                  <strong>{task.title}</strong>
-                  <small>{task.description}</small>
-                </span>
-                <span>{userName(task.assigneeUserId)}</span>
-                <span>{userName(task.confirmerUserId)}</span>
-                <span className="status-pill">{task.status}</span>
-                <span className="task-actions">
-                  <button className="secondary-button compact-button" onClick={() => onOpenTaskProject(task)}>
-                    项目
-                  </button>
-                  {taskActionButtons(task, onTaskStatusChange)}
-                </span>
+          <div className="task-master-detail">
+            <div className="task-table">
+              <div className="task-row task-head">
+                <span>任务</span>
+                <span>负责人</span>
+                <span>确认人</span>
+                <span>优先级</span>
+                <span>状态</span>
               </div>
-            ))
-          ) : (
-            <PageStateNotice active={!isLoading} state="empty" title="当前项目没有任务" body="创建任务后会进入任务列表和工作台待办。" />
-          )}
+              {visibleTasks.length > 0 ? (
+                visibleTasks.map((task) => (
+                  <button
+                    className={selectedTask?.id === task.id ? "task-row task-select-row active" : "task-row task-select-row"}
+                    key={task.id}
+                    onClick={() => onSelectTask(task.id)}
+                    type="button"
+                  >
+                    <span>
+                      <strong>{task.title}</strong>
+                      <small>{task.description}</small>
+                    </span>
+                    <span>{userName(task.assigneeUserId)}</span>
+                    <span>{userName(task.confirmerUserId)}</span>
+                    <span className={`status-pill ${task.priority}`}>{task.priority}</span>
+                    <span className="status-pill">{task.status}</span>
+                  </button>
+                ))
+              ) : (
+                <PageStateNotice active={!isLoading} state="empty" title="当前筛选没有任务" body="切换筛选或创建任务后会显示在这里。" />
+              )}
+            </div>
+            <TaskDetailPanel
+              activeUser={activeUser}
+              onOpenTaskProject={onOpenTaskProject}
+              onTaskComment={onTaskComment}
+              onTaskReturn={onTaskReturn}
+              onTaskStatusChange={onTaskStatusChange}
+              setTaskComment={setTaskComment}
+              task={selectedTask}
+              taskComment={taskComment}
+            />
+          </div>
         </div>
       </div>
     </section>
   );
+}
+
+const taskTabItems: Array<{ key: "all" | "mine" | "created" | "confirm" | "overdue" | "completed"; label: string }> = [
+  { key: "all", label: "全部" },
+  { key: "mine", label: "我的" },
+  { key: "created", label: "我创建" },
+  { key: "confirm", label: "待确认" },
+  { key: "overdue", label: "已逾期" },
+  { key: "completed", label: "已完成" }
+];
+
+function filterTasksForView(
+  tasks: TaskWithDetails[],
+  view: "all" | "mine" | "created" | "confirm" | "overdue" | "completed",
+  userId: string
+) {
+  return tasks.filter((task) => {
+    if (view === "mine") {
+      return task.assigneeUserId === userId || task.confirmerUserId === userId;
+    }
+    if (view === "created") {
+      return task.creatorUserId === userId;
+    }
+    if (view === "confirm") {
+      return task.confirmerUserId === userId && task.status === "submitted";
+    }
+    if (view === "overdue") {
+      return Boolean(
+        task.dueAt &&
+        Date.parse(task.dueAt) < Date.now() &&
+        !["completed", "cancelled", "archived"].includes(task.status)
+      );
+    }
+    if (view === "completed") {
+      return task.status === "completed";
+    }
+    return true;
+  });
+}
+
+function TaskDetailPanel({
+  activeUser,
+  onOpenTaskProject,
+  onTaskComment,
+  onTaskReturn,
+  onTaskStatusChange,
+  setTaskComment,
+  task,
+  taskComment
+}: {
+  activeUser: PublicUser;
+  onOpenTaskProject: (task: TaskRecord) => void;
+  onTaskComment: (task: TaskRecord) => void;
+  onTaskReturn: (task: TaskRecord) => void;
+  onTaskStatusChange: (task: TaskRecord, status: TaskRecord["status"]) => void;
+  setTaskComment: (value: string) => void;
+  task: TaskWithDetails | null;
+  taskComment: string;
+}) {
+  if (!task) {
+    return (
+      <div className="task-detail">
+        <PageStateNotice active state="empty" title="未选择任务" body="选择任务后查看评论、活动和人工确认动作。" />
+      </div>
+    );
+  }
+
+  const canReturn = task.status === "submitted" && (task.confirmerUserId === activeUser.id || task.creatorUserId === activeUser.id);
+
+  return (
+    <aside className="task-detail">
+      <div className="panel-header compact">
+        <div>
+          <p className="eyebrow">任务详情</p>
+          <h2>{task.title}</h2>
+          <p>{task.description}</p>
+        </div>
+        <span className="status-pill strong">{task.status}</span>
+      </div>
+      <div className="detail-grid">
+        <SettingsItem title="创建人" value={userName(task.creatorUserId)} enabled />
+        <SettingsItem title="负责人" value={userName(task.assigneeUserId)} enabled />
+        <SettingsItem title="确认人" value={userName(task.confirmerUserId)} enabled />
+        <SettingsItem title="截止时间" value={task.dueAt ? new Date(task.dueAt).toLocaleDateString("zh-CN") : "未设置"} enabled />
+      </div>
+      {task.returnedReason ? (
+        <PageStateNotice active state="normal" title="任务已退回" body={task.returnedReason} />
+      ) : null}
+      <div className="action-row">
+        <button className="secondary-button" onClick={() => onOpenTaskProject(task)}>
+          <BriefcaseBusiness size={16} />
+          项目
+        </button>
+        {taskActionButtons(task, onTaskStatusChange)}
+        {canReturn ? (
+          <button className="secondary-button" onClick={() => onTaskReturn(task)}>
+            <XCircle size={16} />
+            退回
+          </button>
+        ) : null}
+      </div>
+      <div className="task-comment-box">
+        <input value={taskComment} onChange={(event) => setTaskComment(event.target.value)} placeholder="添加评论" />
+        <button className="secondary-button" onClick={() => onTaskComment(task)}>
+          评论
+        </button>
+      </div>
+      <div className="task-detail-columns">
+        <div>
+          <h3>评论</h3>
+          {task.comments.length > 0 ? (
+            task.comments.map((comment) => (
+              <article className="timeline-row" key={comment.id}>
+                <strong>{userName(comment.authorUserId)}</strong>
+                <p>{comment.content}</p>
+                <small>{new Date(comment.createdAt).toLocaleString("zh-CN")}</small>
+              </article>
+            ))
+          ) : (
+            <p className="muted-text">暂无评论</p>
+          )}
+        </div>
+        <div>
+          <h3>活动</h3>
+          {task.activities.length > 0 ? (
+            task.activities.map((activity) => (
+              <article className="timeline-row" key={activity.id}>
+                <strong>{activityLabel(activity.activityType)}</strong>
+                <p>{activity.note}</p>
+                <small>{userName(activity.actorUserId)} · {new Date(activity.createdAt).toLocaleString("zh-CN")}</small>
+              </article>
+            ))
+          ) : (
+            <p className="muted-text">暂无活动</p>
+          )}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function activityLabel(type: string) {
+  const labels: Record<string, string> = {
+    created: "创建",
+    updated: "更新",
+    submitted: "提交",
+    confirmed: "确认",
+    returned: "退回",
+    commented: "评论",
+    status_changed: "状态变更"
+  };
+  return labels[type] ?? type;
 }
 
 function ProjectFilePanel({
@@ -3569,7 +3813,7 @@ function ModuleStatusView({
           active={moduleKey === "contracts" || moduleKey === "approvals"}
           state="empty"
           title="暂无可处理实例"
-          body="本阶段只展示工作入口、通知和状态，不创建完整合同或审批流程。"
+          body="没有可处理实例时保留入口、通知和状态提示，不创建合同或审批正式动作。"
         />
         <PageStateNotice
           active={moduleKey === "contracts"}

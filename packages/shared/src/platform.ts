@@ -88,6 +88,8 @@ export type AuditResult = "success" | "failure" | "denied";
 export type ProjectStatus = "draft" | "active" | "paused" | "completed" | "archived";
 
 export type TaskStatus = "draft" | "todo" | "in_progress" | "submitted" | "completed" | "blocked" | "cancelled" | "archived";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type TaskActivityType = "created" | "updated" | "submitted" | "confirmed" | "returned" | "commented" | "status_changed";
 
 export type ChatThreadStatus = "active" | "archived";
 
@@ -326,10 +328,39 @@ export interface TaskRecord {
   creatorUserId: string;
   assigneeUserId: string;
   confirmerUserId: string;
+  priority: TaskPriority;
+  dueAt: string | null;
   status: TaskStatus;
   cancelReason: string | null;
+  completedAt: string | null;
+  confirmedAt: string | null;
+  returnedReason: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TaskActivityRecord {
+  id: string;
+  taskId: string;
+  actorUserId: string;
+  activityType: TaskActivityType;
+  fromStatus: TaskStatus | null;
+  toStatus: TaskStatus | null;
+  note: string;
+  createdAt: string;
+}
+
+export interface TaskCommentRecord {
+  id: string;
+  taskId: string;
+  authorUserId: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface TaskWithDetails extends TaskRecord {
+  comments: TaskCommentRecord[];
+  activities: TaskActivityRecord[];
 }
 
 export interface ChatThreadRecord {

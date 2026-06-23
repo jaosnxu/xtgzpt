@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildServer } from "./index";
 import {
   createPostgresRuntimeStoreForTest,
+  createRuntimeStore,
   type PostgresRuntimeClient,
   type PostgresRuntimeQueryResult,
   resolvePostgresRuntimeStoreConfig,
@@ -95,6 +96,51 @@ afterEach(() => {
 });
 
 describe("runtime persistence store", () => {
+  it("normalizes legacy task records with DEV-025 collaboration fields", async () => {
+    const dataFilePath = createDataFilePath();
+    writeFileSync(
+      dataFilePath,
+      JSON.stringify({
+        projects: [],
+        tasks: [
+          {
+            id: "task-legacy",
+            projectId: "project-legacy",
+            title: "Legacy task",
+            description: "Created before DEV-025 fields existed.",
+            creatorUserId: "user-owner",
+            assigneeUserId: "user-member",
+            confirmerUserId: "user-owner",
+            status: "completed",
+            cancelReason: null,
+            createdAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-02T00:00:00.000Z"
+          }
+        ]
+      }),
+      "utf8"
+    );
+
+    const store = createRuntimeStore({
+      mode: "file",
+      dataFilePath
+    });
+    await store.ready;
+
+    expect(store.state.tasks[0]).toEqual(
+      expect.objectContaining({
+        id: "task-legacy",
+        priority: "medium",
+        dueAt: null,
+        completedAt: "2024-01-02T00:00:00.000Z",
+        confirmedAt: "2024-01-02T00:00:00.000Z",
+        returnedReason: null
+      })
+    );
+    expect(store.state.taskActivities).toEqual([]);
+    expect(store.state.taskComments).toEqual([]);
+  });
+
   it("resolves mode selection for test memory, local file fallback and explicit PostgreSQL", () => {
     expect(
       resolveRuntimeStoreOptions({}, { NODE_ENV: "development" }, "/tmp/xtgzpt/apps/api/dist")

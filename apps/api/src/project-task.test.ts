@@ -282,4 +282,207 @@ describe("project and task loop", () => {
       })
     );
   });
+
+  it("filters tasks and records comments, activity, submit, return, confirm, and forbidden actors", async () => {
+    const server = buildServer();
+    const ownerToken = await loginOnServer(server, "owner");
+    const memberToken = await loginOnServer(server, "member");
+    const adminToken = await loginOnServer(server, "admin");
+
+    const createProject = await server.inject({
+      method: "POST",
+      url: "/projects",
+      headers: {
+        authorization: `Bearer ${ownerToken}`
+      },
+      payload: {
+        title: "DEV-025 任务中心",
+        organizationId: "org-product"
+      }
+    });
+    const projectId = createProject.json().project.id as string;
+
+    await server.inject({
+      method: "POST",
+      url: `/projects/${projectId}/members`,
+      headers: {
+        authorization: `Bearer ${ownerToken}`
+      },
+      payload: {
+        userId: "user-member"
+      }
+    });
+
+    const createTask = await server.inject({
+      method: "POST",
+      url: "/tasks",
+      headers: {
+        authorization: `Bearer ${ownerToken}`
+      },
+      payload: {
+        projectId,
+        title: "需要评论和确认的任务",
+        assigneeUserId: "user-member",
+        confirmerUserId: "user-owner",
+        priority: "high",
+        dueAt: "2020-01-01T00:00:00.000Z"
+      }
+    });
+    const taskId = createTask.json().task.id as string;
+
+    const overdue = await server.inject({
+      method: "GET",
+      url: "/tasks?view=overdue",
+      headers: {
+        authorization: `Bearer ${memberToken}`
+      }
+    });
+    const created = await server.inject({
+      method: "GET",
+      url: "/tasks?view=created",
+      headers: {
+        authorization: `Bearer ${ownerToken}`
+      }
+    });
+    const comment = await server.inject({
+      method: "POST",
+      url: `/tasks/${taskId}/comments`,
+      headers: {
+        authorization: `Bearer ${memberToken}`
+      },
+      payload: {
+        content: "已完成初步处理，等待确认。"
+      }
+    });
+    const inProgress = await server.inject({
+      method: "POST",
+      url: `/tasks/${taskId}/status`,
+      headers: {
+        authorization: `Bearer ${memberToken}`
+      },
+      payload: {
+        status: "in_progress"
+      }
+    });
+    const submitted = await server.inject({
+      method: "POST",
+      url: `/tasks/${taskId}/submit`,
+      headers: {
+        authorization: `Bearer ${memberToken}`
+      },
+      payload: {
+        reason: "负责人提交人工完成结果"
+      }
+    });
+    const confirmQueue = await server.inject({
+      method: "GET",
+      url: "/tasks?view=confirm",
+      headers: {
+        authorization: `Bearer ${ownerToken}`
+      }
+    });
+    const forbiddenReturn = await server.inject({
+      method: "POST",
+      url: `/tasks/${taskId}/return`,
+      headers: {
+        authorization: `Bearer ${adminToken}`
+      },
+      payload: {
+        reason: "越权退回"
+      }
+    });
+    const returned = await server.inject({
+      method: "POST",
+      url: `/tasks/${taskId}/return`,
+      headers: {
+        authorization: `Bearer ${ownerToken}`
+      },
+      payload: {
+        reason: "需要补充交付说明"
+      }
+    });
+    const resubmitted = await server.inject({
+      method: "POST",
+      url: `/tasks/${taskId}/submit`,
+      headers: {
+        authorization: `Bearer ${memberToken}`
+      },
+      payload: {
+        reason: "补充后再次提交"
+      }
+    });
+    const forbiddenConfirm = await server.inject({
+      method: "POST",
+      url: `/tasks/${taskId}/confirm`,
+      headers: {
+        authorization: `Bearer ${memberToken}`
+      },
+      payload: {
+        reason: "负责人不能代替确认人确认"
+      }
+    });
+    const confirmed = await server.inject({
+      method: "POST",
+      url: `/tasks/${taskId}/confirm`,
+      headers: {
+        authorization: `Bearer ${ownerToken}`
+      },
+      payload: {
+        reason: "确认完成"
+      }
+    });
+    const activity = await server.inject({
+      method: "GET",
+      url: `/tasks/${taskId}/activity`,
+      headers: {
+        authorization: `Bearer ${ownerToken}`
+      }
+    });
+
+    expect(createTask.statusCode).toBe(201);
+    expect(createTask.json().task).toEqual(
+      expect.objectContaining({
+        priority: "high",
+        dueAt: "2020-01-01T00:00:00.000Z",
+        completedAt: null,
+        confirmedAt: null,
+        returnedReason: null
+      })
+    );
+    expect(overdue.json().tasks).toEqual(expect.arrayContaining([expect.objectContaining({ id: taskId })]));
+    expect(created.json().tasks).toEqual(expect.arrayContaining([expect.objectContaining({ id: taskId })]));
+    expect(comment.statusCode).toBe(201);
+    expect(comment.json().task.comments).toEqual(
+      expect.arrayContaining([expect.objectContaining({ content: "已完成初步处理，等待确认。" })])
+    );
+    expect(inProgress.statusCode).toBe(200);
+    expect(submitted.statusCode).toBe(200);
+    expect(submitted.json().task.status).toBe("submitted");
+    expect(submitted.json().task.completedAt).toEqual(expect.any(String));
+    expect(confirmQueue.json().tasks).toEqual(expect.arrayContaining([expect.objectContaining({ id: taskId })]));
+    expect(forbiddenReturn.statusCode).toBe(404);
+    expect(returned.statusCode).toBe(200);
+    expect(returned.json().task).toEqual(
+      expect.objectContaining({
+        status: "in_progress",
+        returnedReason: "需要补充交付说明"
+      })
+    );
+    expect(resubmitted.statusCode).toBe(200);
+    expect(forbiddenConfirm.statusCode).toBe(403);
+    expect(forbiddenConfirm.json()).toEqual({ error: "confirmation_required" });
+    expect(confirmed.statusCode).toBe(200);
+    expect(confirmed.json().task.status).toBe("completed");
+    expect(confirmed.json().task.confirmedAt).toEqual(expect.any(String));
+    expect(activity.statusCode).toBe(200);
+    expect(activity.json().activities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ activityType: "created" }),
+        expect.objectContaining({ activityType: "commented" }),
+        expect.objectContaining({ activityType: "submitted" }),
+        expect.objectContaining({ activityType: "returned" }),
+        expect.objectContaining({ activityType: "confirmed" })
+      ])
+    );
+  });
 });

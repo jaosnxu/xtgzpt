@@ -87,9 +87,13 @@ import {
   type ProjectMemoryRecord,
   type ProjectRecord,
   type ProjectStatus,
+  type TaskActivityRecord,
+  type TaskCommentRecord,
+  type TaskPriority,
   type ResourceAccessContext,
   type TaskRecord,
   type TaskStatus,
+  type TaskWithDetails,
   type UserAccount,
   type WorkbenchItem,
   type WorkbenchNotification,
@@ -127,11 +131,17 @@ interface CreateTaskBody {
   description?: string;
   assigneeUserId?: string;
   confirmerUserId?: string;
+  priority?: TaskPriority;
+  dueAt?: string | null;
 }
 
 interface TaskStatusBody {
   status?: TaskStatus;
   reason?: string;
+}
+
+interface TaskCommentBody {
+  content?: string;
 }
 
 interface CreateChatThreadBody {
@@ -305,6 +315,7 @@ const contractFrameworkVersion = "contract-review-local-v1.0.0";
 
 const supportedContractExecutionEventTypes: ContractExecutionEventType[] = ["reminder", "record", "status_update"];
 const contractNoBodyActionRoutePattern = /^\/contracts\/[^/?]+\/(?:ai-review|second-review)(?:\?|$)/;
+const supportedTaskPriorities: TaskPriority[] = ["low", "medium", "high", "urgent"];
 
 function nowIso() {
   return new Date().toISOString();
@@ -313,6 +324,15 @@ function nowIso() {
 function textOrDefault(value: string | undefined, fallback: string) {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : fallback;
+}
+
+function nullableIsoString(value: string | null | undefined) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? undefined : new Date(timestamp).toISOString();
 }
 
 function isFileSourceObjectType(value: unknown): value is FileSourceObjectType {
@@ -379,7 +399,9 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     contractExecutionEvents,
     files,
     fileVersions,
-    fileObjectBindings
+    fileObjectBindings,
+    taskActivities,
+    taskComments
   } = store.state;
   const server = Fastify({
     logger: true
@@ -556,6 +578,37 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     auditLogs.push(entry);
     await store.save();
     return entry;
+  }
+
+  function appendTaskActivity({
+    task,
+    actorUserId,
+    activityType,
+    fromStatus,
+    toStatus,
+    note,
+    timestamp = nowIso()
+  }: {
+    task: TaskRecord;
+    actorUserId: string;
+    activityType: TaskActivityRecord["activityType"];
+    fromStatus: TaskStatus | null;
+    toStatus: TaskStatus | null;
+    note: string;
+    timestamp?: string;
+  }) {
+    const activity: TaskActivityRecord = {
+      id: `task-activity-${randomUUID()}`,
+      taskId: task.id,
+      actorUserId,
+      activityType,
+      fromStatus,
+      toStatus,
+      note,
+      createdAt: timestamp
+    };
+    taskActivities.push(activity);
+    return activity;
   }
 
   function activeAiFrameworkForScenario(scenario: AiScenario) {
@@ -934,6 +987,60 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       }
 
       return canReadProject(user, project);
+    });
+  }
+
+  function taskWithDetails(task: TaskRecord): TaskWithDetails {
+    return {
+      ...task,
+      comments: taskComments.filter((comment) => comment.taskId === task.id),
+      activities: taskActivities.filter((activity) => activity.taskId === task.id)
+    };
+  }
+
+  function isTaskOverdue(task: TaskRecord) {
+    return Boolean(
+      task.dueAt &&
+      Date.parse(task.dueAt) < Date.now() &&
+      !["completed", "cancelled", "archived"].includes(task.status)
+    );
+  }
+
+  function filterVisibleTasks(user: UserAccount, items: TaskRecord[], filters: Record<string, unknown>) {
+    const view = typeof filters.view === "string" ? filters.view : "all";
+    const status = typeof filters.status === "string" ? filters.status : null;
+    const projectId = typeof filters.projectId === "string" ? filters.projectId : null;
+
+    return items.filter((task) => {
+      if (projectId && task.projectId !== projectId) {
+        return false;
+      }
+
+      if (status && task.status !== status) {
+        return false;
+      }
+
+      if (view === "mine") {
+        return task.assigneeUserId === user.id || task.confirmerUserId === user.id;
+      }
+
+      if (view === "created") {
+        return task.creatorUserId === user.id;
+      }
+
+      if (view === "confirm") {
+        return task.confirmerUserId === user.id && task.status === "submitted";
+      }
+
+      if (view === "overdue") {
+        return isTaskOverdue(task);
+      }
+
+      if (view === "completed") {
+        return task.status === "completed";
+      }
+
+      return view === "all";
     });
   }
 
@@ -3171,15 +3278,16 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     };
   });
 
-  server.get("/tasks", async (request, reply) => {
+  server.get<{ Querystring: Record<string, string | undefined> }>("/tasks", async (request, reply) => {
     const user = await requireMenuAccess(request, reply, "tasks");
 
     if (!user) {
       return;
     }
 
+    const visibleTasks = visibleTasksForUser(user);
     return {
-      tasks: visibleTasksForUser(user)
+      tasks: filterVisibleTasks(user, visibleTasks, request.query).map(taskWithDetails)
     };
   });
 
@@ -3224,9 +3332,19 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     const assigneeUserId = request.body?.assigneeUserId ?? user.id;
     const confirmerUserId = request.body?.confirmerUserId ?? project.ownerUserId;
     const participants = new Set([project.ownerUserId, ...project.memberUserIds]);
+    const priority = request.body?.priority ?? "medium";
+    const dueAt = nullableIsoString(request.body?.dueAt);
 
     if (!participants.has(assigneeUserId) || !participants.has(confirmerUserId)) {
       return reply.code(400).send({ error: "invalid_task_participant" });
+    }
+
+    if (!supportedTaskPriorities.includes(priority)) {
+      return reply.code(400).send({ error: "invalid_task_priority" });
+    }
+
+    if (dueAt === undefined) {
+      return reply.code(400).send({ error: "invalid_due_at" });
     }
 
     const timestamp = nowIso();
@@ -3238,13 +3356,27 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       creatorUserId: user.id,
       assigneeUserId,
       confirmerUserId,
+      priority,
+      dueAt,
       status: "todo",
       cancelReason: null,
+      completedAt: null,
+      confirmedAt: null,
+      returnedReason: null,
       createdAt: timestamp,
       updatedAt: timestamp
     };
 
     tasks.push(task);
+    appendTaskActivity({
+      task,
+      actorUserId: user.id,
+      activityType: "created",
+      fromStatus: null,
+      toStatus: "todo",
+      note: "任务已由人工创建。",
+      timestamp
+    });
     await store.save();
     await recordAudit({
       request,
@@ -3258,7 +3390,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     });
 
     return reply.code(201).send({
-      task
+      task: taskWithDetails(task)
     });
   });
 
@@ -3284,7 +3416,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     return {
-      task: visibleTask.task,
+      task: taskWithDetails(visibleTask.task),
       project: projectWithTaskCount(visibleTask.project)
     };
   });
@@ -3318,6 +3450,14 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     }
 
     if (!canChangeTaskStatus(user, task, project, nextStatus)) {
+      await recordDeniedAccess({
+        request,
+        user,
+        dimension: "operation",
+        action: "complete_task",
+        resourceType: "task",
+        reason: "forbidden"
+      });
       return reply.code(403).send({ error: nextStatus === "completed" ? "confirmation_required" : "forbidden" });
     }
 
@@ -3325,9 +3465,24 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
       return reply.code(400).send({ error: "cancel_reason_required" });
     }
 
+    const previousStatus = task.status;
+    const timestamp = nowIso();
     task.status = nextStatus;
     task.cancelReason = nextStatus === "cancelled" ? request.body.reason?.trim() ?? null : task.cancelReason;
-    task.updatedAt = nowIso();
+    task.completedAt = nextStatus === "submitted" ? timestamp : task.completedAt;
+    task.confirmedAt = nextStatus === "completed" ? timestamp : task.confirmedAt;
+    task.returnedReason = nextStatus === "in_progress" ? null : task.returnedReason;
+    task.updatedAt = timestamp;
+    appendTaskActivity({
+      task,
+      actorUserId: user.id,
+      activityType:
+        nextStatus === "submitted" ? "submitted" : nextStatus === "completed" ? "confirmed" : "status_changed",
+      fromStatus: previousStatus,
+      toStatus: nextStatus,
+      note: request.body.reason?.trim() ?? `状态变更为 ${nextStatus}`,
+      timestamp
+    });
     await store.save();
     await recordAudit({
       request,
@@ -3341,8 +3496,298 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
     });
 
     return {
-      task
+      task: taskWithDetails(task)
     };
+  });
+
+  server.post<{ Body: TaskStatusBody; Params: { id: string } }>("/tasks/:id/submit", async (request, reply) => {
+    const user = await requireUser(request, reply);
+
+    if (!user) {
+      return;
+    }
+
+    const visibleTask = findVisibleTask(user, request.params.id);
+
+    if (!visibleTask) {
+      await recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "task",
+        reason: "task:submit",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    const { task, project } = visibleTask;
+
+    if (!allowedTaskTransitions[task.status].includes("submitted")) {
+      return reply.code(400).send({ error: "invalid_status_transition" });
+    }
+
+    if (!canChangeTaskStatus(user, task, project, "submitted")) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    const previousStatus = task.status;
+    const timestamp = nowIso();
+    task.status = "submitted";
+    task.completedAt = timestamp;
+    task.updatedAt = timestamp;
+    appendTaskActivity({
+      task,
+      actorUserId: user.id,
+      activityType: "submitted",
+      fromStatus: previousStatus,
+      toStatus: "submitted",
+      note: request.body?.reason?.trim() ?? "负责人提交完成结果",
+      timestamp
+    });
+    await store.save();
+    await recordAudit({
+      request,
+      user,
+      action: "task.submitted",
+      objectType: "task",
+      objectId: task.id,
+      organizationId: project.organizationId,
+      reason: request.body?.reason?.trim() ?? "task_submitted",
+      result: "success"
+    });
+
+    return {
+      task: taskWithDetails(task)
+    };
+  });
+
+  server.post<{ Body: TaskStatusBody; Params: { id: string } }>("/tasks/:id/confirm", async (request, reply) => {
+    const user = await requireUser(request, reply);
+
+    if (!user) {
+      return;
+    }
+
+    const visibleTask = findVisibleTask(user, request.params.id);
+
+    if (!visibleTask) {
+      await recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "task",
+        reason: "task:confirm",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    const { task, project } = visibleTask;
+
+    if (!allowedTaskTransitions[task.status].includes("completed")) {
+      return reply.code(400).send({ error: "invalid_status_transition" });
+    }
+
+    if (!canChangeTaskStatus(user, task, project, "completed")) {
+      await recordDeniedAccess({
+        request,
+        user,
+        dimension: "operation",
+        action: "complete_task",
+        resourceType: "task",
+        reason: "forbidden"
+      });
+      return reply.code(403).send({ error: "confirmation_required" });
+    }
+
+    const previousStatus = task.status;
+    const timestamp = nowIso();
+    task.status = "completed";
+    task.confirmedAt = timestamp;
+    task.updatedAt = timestamp;
+    appendTaskActivity({
+      task,
+      actorUserId: user.id,
+      activityType: "confirmed",
+      fromStatus: previousStatus,
+      toStatus: "completed",
+      note: request.body?.reason?.trim() ?? "确认人确认完成",
+      timestamp
+    });
+    await store.save();
+    await recordAudit({
+      request,
+      user,
+      action: "task.confirmed",
+      objectType: "task",
+      objectId: task.id,
+      organizationId: project.organizationId,
+      reason: request.body?.reason?.trim() ?? "task_confirmed",
+      result: "success"
+    });
+
+    return {
+      task: taskWithDetails(task)
+    };
+  });
+
+  server.post<{ Body: TaskStatusBody; Params: { id: string } }>("/tasks/:id/return", async (request, reply) => {
+    const user = await requireUser(request, reply);
+
+    if (!user) {
+      return;
+    }
+
+    const visibleTask = findVisibleTask(user, request.params.id);
+
+    if (!visibleTask) {
+      await recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "task",
+        reason: "task:return",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    const { task, project } = visibleTask;
+    const reason = request.body?.reason?.trim();
+
+    if (task.status !== "submitted") {
+      return reply.code(409).send({ error: "task_not_submitted" });
+    }
+
+    if (task.confirmerUserId !== user.id && project.ownerUserId !== user.id) {
+      await recordDeniedAccess({
+        request,
+        user,
+        dimension: "operation",
+        action: "return_task",
+        resourceType: "task",
+        reason: "forbidden"
+      });
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    if (!reason) {
+      return reply.code(400).send({ error: "return_reason_required" });
+    }
+
+    const previousStatus = task.status;
+    const timestamp = nowIso();
+    task.status = "in_progress";
+    task.returnedReason = reason;
+    task.updatedAt = timestamp;
+    appendTaskActivity({
+      task,
+      actorUserId: user.id,
+      activityType: "returned",
+      fromStatus: previousStatus,
+      toStatus: "in_progress",
+      note: reason,
+      timestamp
+    });
+    await store.save();
+    await recordAudit({
+      request,
+      user,
+      action: "task.returned",
+      objectType: "task",
+      objectId: task.id,
+      organizationId: project.organizationId,
+      reason,
+      result: "success"
+    });
+
+    return {
+      task: taskWithDetails(task)
+    };
+  });
+
+  server.get<{ Params: { id: string } }>("/tasks/:id/activity", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "tasks");
+
+    if (!user) {
+      return;
+    }
+
+    const visibleTask = findVisibleTask(user, request.params.id);
+
+    if (!visibleTask) {
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    return {
+      activities: taskActivities.filter((activity) => activity.taskId === visibleTask.task.id),
+      comments: taskComments.filter((comment) => comment.taskId === visibleTask.task.id)
+    };
+  });
+
+  server.post<{ Body: TaskCommentBody; Params: { id: string } }>("/tasks/:id/comments", async (request, reply) => {
+    const user = await requireMenuAccess(request, reply, "tasks");
+
+    if (!user) {
+      return;
+    }
+
+    const visibleTask = findVisibleTask(user, request.params.id);
+
+    if (!visibleTask) {
+      await recordAudit({
+        request,
+        user,
+        action: "access.forbidden",
+        objectType: "task",
+        reason: "task:comment",
+        result: "denied"
+      });
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    const content = request.body?.content?.trim();
+
+    if (!content) {
+      return reply.code(400).send({ error: "comment_required" });
+    }
+
+    const timestamp = nowIso();
+    const comment: TaskCommentRecord = {
+      id: `task-comment-${randomUUID()}`,
+      taskId: visibleTask.task.id,
+      authorUserId: user.id,
+      content,
+      createdAt: timestamp
+    };
+    taskComments.push(comment);
+    appendTaskActivity({
+      task: visibleTask.task,
+      actorUserId: user.id,
+      activityType: "commented",
+      fromStatus: visibleTask.task.status,
+      toStatus: visibleTask.task.status,
+      note: content,
+      timestamp
+    });
+    visibleTask.task.updatedAt = timestamp;
+    await store.save();
+    await recordAudit({
+      request,
+      user,
+      action: "task.commented",
+      objectType: "task",
+      objectId: visibleTask.task.id,
+      organizationId: visibleTask.project.organizationId,
+      reason: "task_comment_added",
+      result: "success"
+    });
+
+    return reply.code(201).send({
+      comment,
+      task: taskWithDetails(visibleTask.task)
+    });
   });
 
   server.get("/chat/threads", async (request, reply) => {
@@ -3935,13 +4380,27 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
         creatorUserId: user.id,
         assigneeUserId,
         confirmerUserId,
+        priority: "medium",
+        dueAt: null,
         status: "todo",
         cancelReason: null,
+        completedAt: null,
+        confirmedAt: null,
+        returnedReason: null,
         createdAt: timestamp,
         updatedAt: timestamp
       };
 
       tasks.push(task);
+      appendTaskActivity({
+        task,
+        actorUserId: user.id,
+        activityType: "created",
+        fromStatus: null,
+        toStatus: "todo",
+        note: "AI 草稿经人工确认后创建正式任务。",
+        timestamp
+      });
       draft.status = "confirmed";
       draft.confirmedByUserId = user.id;
       draft.confirmedAt = timestamp;
@@ -3975,7 +4434,7 @@ export function buildServer(options: RuntimeStoreOptions = {}) {
 
       return reply.code(201).send({
         draft,
-        task
+        task: taskWithDetails(task)
       });
     }
 

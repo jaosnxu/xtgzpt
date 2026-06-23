@@ -17,4 +17,13 @@ describe("frontend production copy", () => {
     expect(appSource).toContain("审批与文件");
     expect(appSource).toContain("审计与运行");
   });
+
+  it("keeps task center and AI boundary language user-facing", () => {
+    for (const label of ["全部", "我的", "我创建", "待确认", "已逾期", "已完成"]) {
+      expect(appSource).toContain(label);
+    }
+
+    expect(appSource).toContain("AI 输出必须人工确认后才能进入正式对象。");
+    expect(appSource).not.toMatch(/finance|ERP|procurement|inventory|mobile/i);
+  });
 });

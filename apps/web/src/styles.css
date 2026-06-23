@@ -1067,6 +1067,56 @@ button.workbench-row:disabled {
   overflow: auto;
 }
 
+.task-center {
+  display: grid;
+  gap: 14px;
+}
+
+.task-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.task-tabs button {
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #344054;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.task-tabs button.active {
+  border-color: #1f7a8c;
+  background: #eef6f6;
+  color: #175b66;
+}
+
+.task-tabs span {
+  min-width: 24px;
+  min-height: 24px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #175b66;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+}
+
+.task-master-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
+  gap: 14px;
+  align-items: start;
+}
+
 .task-row {
   display: grid;
   grid-template-columns: minmax(220px, 1.4fr) 0.7fr 0.7fr 0.55fr 0.8fr;
@@ -1076,6 +1126,22 @@ button.workbench-row:disabled {
   padding: 10px 14px;
   border-top: 1px solid var(--panel-border);
   font-size: 14px;
+}
+
+.task-select-row {
+  width: 100%;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  background: #ffffff;
+  color: #17202a;
+  text-align: left;
+  cursor: pointer;
+}
+
+.task-select-row.active,
+.task-select-row:hover {
+  background: #f3fbfb;
 }
 
 .task-row:first-child {
@@ -1093,6 +1159,73 @@ button.workbench-row:disabled {
 .compact-button {
   height: 34px;
   padding: 0 10px;
+}
+
+.status-pill.urgent {
+  background: #fff1f3;
+  color: #c01048;
+}
+
+.task-detail {
+  min-height: 360px;
+  padding: 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: #fbfcfe;
+  display: grid;
+  gap: 12px;
+}
+
+.task-comment-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.task-comment-box input {
+  height: 44px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: 0;
+}
+
+.task-detail-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.task-detail-columns h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.timeline-row {
+  min-height: 72px;
+  margin-bottom: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.timeline-row strong,
+.timeline-row small {
+  display: block;
+}
+
+.timeline-row p {
+  margin: 5px 0;
+  color: #344054;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.timeline-row small {
+  color: #667085;
+  font-size: 12px;
 }
 
 .empty-state,
@@ -1455,6 +1588,7 @@ button.workbench-row:disabled {
   .content-grid,
   .contract-workspace,
   .project-workspace,
+  .task-master-detail,
   .workbench-layout,
   .approval-workspace {
     grid-template-columns: 1fr;
@@ -1555,6 +1689,8 @@ button.workbench-row:disabled {
   .content-grid,
   .contract-workspace,
   .project-workspace,
+  .task-master-detail,
+  .task-detail-columns,
   .workbench-layout,
   .settings-grid,
   .settings-module-grid,
@@ -1572,6 +1708,7 @@ button.workbench-row:disabled {
   .workbench-row,
   .notification-item,
   .inline-form,
+  .task-comment-box,
   .file-upload-box,
   .file-row,
   .detail-grid {
